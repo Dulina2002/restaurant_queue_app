@@ -1,7 +1,11 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../models/user_profile.dart';
+import '../models/user_role.dart';
+import 'auth_service.dart';
 
 class SupabaseService {
   final SupabaseClient _client = Supabase.instance.client;
+  final AuthService _auth = AuthService();
 
   // Realtime subscription for a restaurant's queue
   Stream<List<Map<String, dynamic>>> listenToQueue(String restaurantId) {
@@ -24,58 +28,37 @@ class SupabaseService {
 
   // Get active restaurants
   Future<List<Map<String, dynamic>>> getRestaurants() async {
-    final response = await _client
-        .from('restaurants')
-        .select()
-        .eq('is_active', true);
-    return List<Map<String, dynamic>>.from(response);
-  }
-
-  // --- Authentication ---
-
-  // Sign In
-  Future<AuthResponse> signIn(String email, String password) async {
-    return await _client.auth.signInWithPassword(
-      email: email,
-      password: password,
-    );
-  }
-
-  // Sign Up with Role
-  Future<AuthResponse> signUp(String email, String password, String fullName, String role) async {
-    final response = await _client.auth.signUp(
-      email: email,
-      password: password,
-    );
-
-    if (response.user != null) {
-      // Insert profile data
-      await _client.from('profiles').insert({
-        'id': response.user!.id,
-        'full_name': fullName,
-        'role': role.toLowerCase(), // Ensure lowercase matching schema
-      });
+    try {
+      final response = await _client
+          .from('restaurants')
+          .select()
+          .eq('is_active', true);
+      return List<Map<String, dynamic>>.from(response);
+    } catch (_) {
+      return [];
     }
-
-    return response;
   }
 
-  // Sign Out
+  // --- Authentication Wrappers ---
+
+  Future<UserProfile> signIn(String email, String password) async {
+    return await _auth.signIn(email: email, password: password);
+  }
+
+  Future<UserProfile> signUp(String email, String password, String fullName, [String role = 'customer']) async {
+    return await _auth.signUp(
+      email: email,
+      password: password,
+      fullName: fullName,
+      role: UserRole.fromString(role),
+    );
+  }
+
   Future<void> signOut() async {
-    await _client.auth.signOut();
+    await _auth.signOut();
   }
 
-  // Get current user's profile
-  Future<Map<String, dynamic>?> getCurrentUserProfile() async {
-    final user = _client.auth.currentUser;
-    if (user == null) return null;
-
-    final response = await _client
-        .from('profiles')
-        .select('role, full_name')
-        .eq('id', user.id)
-        .maybeSingle();
-
-    return response;
+  Future<UserProfile?> getCurrentUserProfile() async {
+    return await _auth.getCurrentUserProfile();
   }
 }
