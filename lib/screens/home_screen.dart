@@ -22,9 +22,9 @@ class HomeScreen extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.05),
+                      color: Colors.white.withValues(alpha: 0.05),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.white.withOpacity(0.1)),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
                     ),
                     child: Row(
                       children: [
@@ -50,7 +50,12 @@ class HomeScreen extends StatelessWidget {
                     ),
                   ),
                   TextButton(
-                    onPressed: () {},
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const SignInScreen()),
+                      );
+                    },
                     style: TextButton.styleFrom(
                       foregroundColor: Colors.white70,
                       padding: EdgeInsets.zero,
@@ -130,11 +135,11 @@ class HomeScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    const Text(
+                    Text(
                       'Reserve tables with certainty.\nWait in virtual queues with freedom.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: Colors.white70,
+                        color: Colors.white.withValues(alpha: 0.7),
                         fontSize: 14,
                         height: 1.5,
                       ),
@@ -175,14 +180,14 @@ class HomeScreen extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: const Color(0xFF162C1E),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white.withOpacity(0.05)),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
                 ),
                 child: Row(
                   children: [
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.05),
+                        color: Colors.white.withValues(alpha: 0.05),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(Icons.show_chart, color: Colors.greenAccent, size: 20),
@@ -204,7 +209,7 @@ class HomeScreen extends StatelessWidget {
                           Text(
                             '84 tables seated • Avg wait time 12 mins',
                             style: TextStyle(
-                              color: Colors.white.withOpacity(0.6),
+                              color: Colors.white.withValues(alpha: 0.6),
                               fontSize: 12,
                             ),
                           ),
@@ -214,7 +219,7 @@ class HomeScreen extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: Colors.greenAccent.withOpacity(0.1),
+                        color: Colors.greenAccent.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: const Text(
@@ -234,7 +239,12 @@ class HomeScreen extends StatelessWidget {
 
               // Buttons
               ElevatedButton(
-                onPressed: () {},
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const SignInScreen()),
+                  );
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFF27B50),
                   foregroundColor: Colors.white,
@@ -267,7 +277,7 @@ class HomeScreen extends StatelessWidget {
                       onPressed: () => _showHowItWorksDialog(context),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.white,
-                        side: BorderSide(color: Colors.white.withOpacity(0.2)),
+                        side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -287,7 +297,7 @@ class HomeScreen extends StatelessWidget {
                       },
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.white,
-                        side: BorderSide(color: Colors.white.withOpacity(0.2)),
+                        side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -296,33 +306,6 @@ class HomeScreen extends StatelessWidget {
                       child: const Text('Sign In'),
                     ),
                   ),
-                ],
-              ),
-
-              const SizedBox(height: 40),
-
-              // Demo Launch
-              Center(
-                child: Text(
-                  'OR DEMO QUICK-LAUNCH AS',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.4),
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.0,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Row(
-                children: [
-                  _DemoButton(title: 'Customer', isSelected: true),
-                  SizedBox(width: 8),
-                  _DemoButton(title: 'Receptionist'),
-                  SizedBox(width: 8),
-                  _DemoButton(title: 'Manager'),
-                  SizedBox(width: 8),
-                  _DemoButton(title: 'Admin'),
                 ],
               ),
             ],
@@ -360,7 +343,7 @@ class _FeatureCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: const Color(0xFF162C1E),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white.withOpacity(0.05)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
         ),
         child: Column(
           children: [
@@ -380,46 +363,11 @@ class _FeatureCard extends StatelessWidget {
               subtitle,
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: Colors.white.withOpacity(0.5),
+                color: Colors.white.withValues(alpha: 0.5),
                 fontSize: 9,
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DemoButton extends StatelessWidget {
-  final String title;
-  final bool isSelected;
-
-  const _DemoButton({
-    required this.title,
-    this.isSelected = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? Colors.green.withOpacity(0.1) : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isSelected ? Colors.green : Colors.white.withOpacity(0.1),
-          ),
-        ),
-        child: Center(
-          child: Text(
-            title,
-            style: TextStyle(
-              color: isSelected ? Colors.green : Colors.white70,
-              fontSize: 10,
-            ),
-          ),
         ),
       ),
     );
