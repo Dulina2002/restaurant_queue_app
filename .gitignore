@@ -54,3 +54,7 @@ app.*.map.json
 windows/
 macos/
 linux/
+
+# Local flutter plugin tracking
+.flutter-plugins
+.flutter-plugins-dependencies
