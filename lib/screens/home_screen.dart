@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'how_it_works_screen.dart';
+import 'manager/manager_dashboard_screen.dart';
 import 'sign_in_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -307,6 +308,29 @@ class HomeScreen extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
+
+              const SizedBox(height: 14),
+              Center(
+                child: TextButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ManagerDashboardScreen(),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.dashboard_rounded, size: 16, color: Color(0xFFF27B50)),
+                  label: const Text(
+                    'Open Manager Portal',
+                    style: TextStyle(
+                      color: Color(0xFFF27B50),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
