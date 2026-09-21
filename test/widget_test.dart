@@ -36,4 +36,30 @@ void main() {
     );
     expect(adminScreen, isA<AdminDashboardScreen>());
   });
+
+  testWidgets('ManagerDashboardScreen renders and navigates to EditProfileScreen', (tester) async {
+    const managerProfile = UserProfile(
+      id: 'mgr-1',
+      email: 'manager@dinequeue.com',
+      fullName: 'Ayesha Perera',
+      role: UserRole.manager,
+    );
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: ManagerDashboardScreen(profile: managerProfile),
+      ),
+    );
+
+    expect(find.text('Manager Dashboard'), findsOneWidget);
+    expect(find.text('Profile'), findsOneWidget);
+
+    // Tap Profile
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Edit Profile'), findsOneWidget);
+    expect(find.text('Full Name'), findsOneWidget);
+    expect(find.text('Save Changes'), findsOneWidget);
+  });
 }
