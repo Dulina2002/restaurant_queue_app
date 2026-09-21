@@ -49,3 +49,8 @@ app.*.map.json
 
 # Environment variables
 .env
+
+# Desktop platform runner folders
+windows/
+macos/
+linux/
