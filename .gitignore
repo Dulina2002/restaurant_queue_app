@@ -49,3 +49,12 @@ app.*.map.json
 
 # Environment variables
 .env
+
+# Desktop platform runner folders
+windows/
+macos/
+linux/
+
+# Local flutter plugin tracking
+.flutter-plugins
+.flutter-plugins-dependencies
