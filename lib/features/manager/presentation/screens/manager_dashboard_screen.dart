@@ -273,8 +273,6 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                       children: [
                         Expanded(
                           child: ElevatedButton.icon(
-                            onPressed: () {},
-                            icon: const Icon(Icons.cloud_upload_outlined, size: 16),
                             onPressed: () => QuickTurnTablesSheet.show(context),
                             icon: const Icon(Icons.bolt, size: 16),
                             label: const Text(
@@ -291,7 +289,6 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                         const SizedBox(width: 10),
                         Expanded(
                           child: OutlinedButton.icon(
-                            onPressed: () {},
                             onPressed: () => AiFloorOptimizerSheet.show(context),
                             icon: const Icon(Icons.tune, size: 16, color: AppColors.textPrimary),
                             label: const Text(
