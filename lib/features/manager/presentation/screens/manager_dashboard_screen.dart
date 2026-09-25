@@ -3,6 +3,8 @@ import '../../../../models/user_profile.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../profile/presentation/screens/edit_profile_screen.dart';
 import '../../data/models/manager_dashboard_model.dart';
+import '../widgets/ai_floor_optimizer_sheet.dart';
+import '../widgets/quick_turn_tables_sheet.dart';
 
 class ManagerDashboardScreen extends StatefulWidget {
   final UserProfile? profile;
@@ -271,8 +273,8 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                       children: [
                         Expanded(
                           child: ElevatedButton.icon(
-                            onPressed: () {},
-                            icon: const Icon(Icons.cloud_upload_outlined, size: 16),
+                            onPressed: () => QuickTurnTablesSheet.show(context),
+                            icon: const Icon(Icons.bolt, size: 16),
                             label: const Text(
                               'Quick Turn 2 Tables',
                               style: TextStyle(fontSize: 12),
@@ -287,7 +289,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                         const SizedBox(width: 10),
                         Expanded(
                           child: OutlinedButton.icon(
-                            onPressed: () {},
+                            onPressed: () => AiFloorOptimizerSheet.show(context),
                             icon: const Icon(Icons.tune, size: 16, color: AppColors.textPrimary),
                             label: const Text(
                               'Optimize Floor',
