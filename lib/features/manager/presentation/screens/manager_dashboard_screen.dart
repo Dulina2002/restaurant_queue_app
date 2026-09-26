@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../models/user_profile.dart';
+import '../../../../screens/home_screen.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../profile/presentation/screens/edit_profile_screen.dart';
 import '../../data/models/manager_dashboard_model.dart';
@@ -75,12 +76,22 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                         ),
                         Row(
                           children: [
-                            const Text(
-                              'DineQueue',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.primary,
+                            GestureDetector(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => const HomeScreen(),
+                                  ),
+                                );
+                              },
+                              child: const Text(
+                                'DineQueue',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.primary,
+                                ),
                               ),
                             ),
                             const SizedBox(width: 8),
