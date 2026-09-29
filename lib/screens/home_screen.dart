@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+
 import 'how_it_works_screen.dart';
 import 'sign_in_screen.dart';
+import 'admin_dashboard.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -20,7 +22,10 @@ class HomeScreen extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.05),
                       borderRadius: BorderRadius.circular(20),
@@ -65,7 +70,7 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ],
               ),
-              
+
               const SizedBox(height: 60),
 
               // Logo & Title
@@ -96,7 +101,10 @@ class HomeScreen extends StatelessWidget {
                         Positioned(
                           bottom: -10,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: const Color(0xFFF27B50),
                               borderRadius: BorderRadius.circular(10),
@@ -104,7 +112,11 @@ class HomeScreen extends StatelessWidget {
                             child: const Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.check, color: Colors.white, size: 12),
+                                Icon(
+                                  Icons.check,
+                                  color: Colors.white,
+                                  size: 12,
+                                ),
                                 SizedBox(width: 4),
                                 Text(
                                   'LIVE SYNC',
@@ -142,7 +154,7 @@ class HomeScreen extends StatelessWidget {
                   ],
                 ),
               ),
-              
+
               const SizedBox(height: 40),
 
               // Features
@@ -185,7 +197,11 @@ class HomeScreen extends StatelessWidget {
                         color: Colors.white.withOpacity(0.05),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.show_chart, color: Colors.greenAccent, size: 20),
+                      child: const Icon(
+                        Icons.show_chart,
+                        color: Colors.greenAccent,
+                        size: 20,
+                      ),
                     ),
                     const SizedBox(width: 16),
                     Expanded(
@@ -212,7 +228,10 @@ class HomeScreen extends StatelessWidget {
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.greenAccent.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(6),
@@ -250,7 +269,10 @@ class HomeScreen extends StatelessWidget {
                     SizedBox(width: 8),
                     Text(
                       'Explore & Reserve Tables',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     SizedBox(width: 8),
                     Icon(Icons.arrow_forward, size: 18),
@@ -282,7 +304,9 @@ class HomeScreen extends StatelessWidget {
                       onPressed: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (context) => const SignInScreen()),
+                          MaterialPageRoute(
+                            builder: (context) => const SignInScreen(),
+                          ),
                         );
                       },
                       style: OutlinedButton.styleFrom(
@@ -395,29 +419,38 @@ class _DemoButton extends StatelessWidget {
   final String title;
   final bool isSelected;
 
-  const _DemoButton({
-    required this.title,
-    this.isSelected = false,
-  });
+  const _DemoButton({required this.title, this.isSelected = false});
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? Colors.green.withOpacity(0.1) : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isSelected ? Colors.green : Colors.white.withOpacity(0.1),
+      child: GestureDetector(
+        onTap: () {
+          if (title == "Admin") {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const AdminDashboard()),
+            );
+          }
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? Colors.green.withOpacity(0.1)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isSelected ? Colors.green : Colors.white.withOpacity(0.1),
+            ),
           ),
-        ),
-        child: Center(
-          child: Text(
-            title,
-            style: TextStyle(
-              color: isSelected ? Colors.green : Colors.white70,
-              fontSize: 10,
+          child: Center(
+            child: Text(
+              title,
+              style: TextStyle(
+                color: isSelected ? Colors.green : Colors.white70,
+                fontSize: 10,
+              ),
             ),
           ),
         ),
