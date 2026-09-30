@@ -6,6 +6,8 @@ import '../../features/profile/presentation/screens/edit_profile_screen.dart';
 import 'widgets/filter_restaurants_sheet.dart';
 import 'widgets/customer_notifications_sheet.dart';
 import 'widgets/customer_bookings_view.dart';
+import 'widgets/customer_queue_view.dart';
+import '../../services/auth_service.dart';
 
 class CustomerDashboardScreen extends StatefulWidget {
   final UserProfile? profile;
@@ -51,10 +53,28 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
   String _selectedAvailability = 'Available Today';
   int _partySize = 2;
 
+  UserProfile? _currentProfile;
+
   @override
   void initState() {
     super.initState();
     _bottomNavIndex = widget.initialTabIndex;
+    _currentProfile = widget.profile;
+    _loadProfileAsync();
+  }
+
+  Future<void> _loadProfileAsync() async {
+    try {
+      final user = AuthService().currentUser;
+      if (user != null) {
+        final profile = await AuthService().getCurrentUserProfile();
+        if (profile != null && mounted) {
+          setState(() {
+            _currentProfile = profile;
+          });
+        }
+      }
+    } catch (_) {}
   }
 
   @override
@@ -128,6 +148,8 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
         );
       case 3:
         return _buildQueueView();
+      case 4:
+        return EditProfileScreen(profile: _currentProfile ?? widget.profile);
       case 0:
       default:
         return _buildHomeView(userName, initials);
@@ -136,13 +158,17 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final userName = (widget.profile?.fullName.isNotEmpty == true)
-        ? widget.profile!.fullName
-        : 'Ayesha Perera';
+    final resolvedProfile = _currentProfile ?? widget.profile;
+    final authMetaName = AuthService().currentUser?.userMetadata?['full_name'] as String?;
+    final userName = (resolvedProfile?.fullName.isNotEmpty == true)
+        ? resolvedProfile!.fullName
+        : (authMetaName != null && authMetaName.isNotEmpty)
+            ? authMetaName
+            : 'Ayesha Perera';
     final initials = _getInitials(userName);
 
     return Scaffold(
-      backgroundColor: _bottomNavIndex == 2 ? Colors.white : AppColors.background,
+      backgroundColor: (_bottomNavIndex == 2 || _bottomNavIndex == 3 || _bottomNavIndex == 4) ? Colors.white : AppColors.background,
       body: SafeArea(
         child: Column(
           children: [
@@ -523,86 +549,7 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
   // --- 2. VIRTUAL QUEUE VIEW SCREEN ---
   // ==========================================
   Widget _buildQueueView() {
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Live Queue Status',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF111827),
-              letterSpacing: -0.5,
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Track your active waitlist position in real time.',
-            style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
-          ),
-          const SizedBox(height: 24),
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF9FAFB),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFE5E7EB)),
-            ),
-            child: Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFECFDF5),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.people_alt_outlined,
-                    size: 36,
-                    color: Color(0xFF10B981),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'No Active Queues',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF111827),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'You are currently not waiting in line at any restaurant. Join a queue from the explore or home screen.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Color(0xFF6B7280),
-                    height: 1.4,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                ElevatedButton(
-                  onPressed: () => setState(() => _bottomNavIndex = 1),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0D3B2E),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  child: const Text('Browse Restaurants'),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+    return const CustomerQueueView();
   }
 
   // ==========================================
@@ -623,14 +570,7 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
               Row(
                 children: [
                   GestureDetector(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => EditProfileScreen(profile: widget.profile),
-                        ),
-                      );
-                    },
+                    onTap: () => setState(() => _bottomNavIndex = 4),
                     child: Container(
                       width: 44,
                       height: 44,
@@ -1322,18 +1262,7 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
   Widget _buildNavItem({required IconData icon, required String label, required int index}) {
     final isSelected = _bottomNavIndex == index;
     return GestureDetector(
-      onTap: () {
-        if (index == 4) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => EditProfileScreen(profile: widget.profile),
-            ),
-          );
-        } else {
-          setState(() => _bottomNavIndex = index);
-        }
-      },
+      onTap: () => setState(() => _bottomNavIndex = index),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [

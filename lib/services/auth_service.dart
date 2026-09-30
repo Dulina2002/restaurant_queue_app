@@ -8,13 +8,22 @@ class AuthService {
   factory AuthService() => _instance;
   AuthService._internal();
 
-  final SupabaseClient _client = Supabase.instance.client;
+  SupabaseClient? get _safeClient {
+    try {
+      return Supabase.instance.client;
+    } catch (_) {
+      return null;
+    }
+  }
 
-  User? get currentUser => _client.auth.currentUser;
-  Session? get currentSession => _client.auth.currentSession;
+  SupabaseClient get _client => Supabase.instance.client;
+
+  User? get currentUser => _safeClient?.auth.currentUser;
+  Session? get currentSession => _safeClient?.auth.currentSession;
   bool get isAuthenticated => currentUser != null;
 
-  Stream<AuthState> get onAuthStateChange => _client.auth.onAuthStateChange;
+  Stream<AuthState> get onAuthStateChange =>
+      _safeClient?.auth.onAuthStateChange ?? const Stream.empty();
 
   // --- Input Validation Helpers ---
 
