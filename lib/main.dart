@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'screens/auth_gate.dart';
+import 'screens/receptionist/receptionist_dashboard_screen.dart';
+import 'models/user_profile.dart';
+import 'models/user_role.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,7 +34,14 @@ class RestaurantQueueApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: const AuthGate(),
+      home: const ReceptionistDashboardScreen(
+        profile: UserProfile(
+          id: 'dummy',
+          email: 'dummy@test.com',
+          fullName: 'Ayesha',
+          role: UserRole.receptionist,
+        ),
+      ),
     );
   }
 }
