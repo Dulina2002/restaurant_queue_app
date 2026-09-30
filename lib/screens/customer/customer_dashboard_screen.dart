@@ -5,6 +5,7 @@ import '../home_screen.dart';
 import '../../features/profile/presentation/screens/edit_profile_screen.dart';
 import 'widgets/filter_restaurants_sheet.dart';
 import 'widgets/customer_notifications_sheet.dart';
+import 'widgets/customer_bookings_view.dart';
 
 class CustomerDashboardScreen extends StatefulWidget {
   final UserProfile? profile;
@@ -117,6 +118,22 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
     return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
   }
 
+  Widget _buildBody(String userName, String initials) {
+    switch (_bottomNavIndex) {
+      case 1:
+        return _buildExploreView();
+      case 2:
+        return CustomerBookingsView(
+          onExploreTap: () => setState(() => _bottomNavIndex = 1),
+        );
+      case 3:
+        return _buildQueueView();
+      case 0:
+      default:
+        return _buildHomeView(userName, initials);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final userName = (widget.profile?.fullName.isNotEmpty == true)
@@ -125,26 +142,24 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
     final initials = _getInitials(userName);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: _bottomNavIndex == 2 ? Colors.white : AppColors.background,
       body: SafeArea(
         child: Column(
           children: [
             Expanded(
-              child: _bottomNavIndex == 1
-                  ? _buildExploreView()
-                  : _buildHomeView(userName, initials),
+              child: _buildBody(userName, initials),
             ),
 
             // --- Bottom Navigation Bar ---
             Container(
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: const Color(0xFFF7FAF8),
                 border: const Border(
-                  top: BorderSide(color: AppColors.border, width: 1),
+                  top: BorderSide(color: Color(0xFFE5E7EB), width: 1),
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
+                    color: Colors.black.withValues(alpha: 0.03),
                     blurRadius: 10,
                     offset: const Offset(0, -2),
                   ),
@@ -154,10 +169,10 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _buildNavItem(icon: Icons.home_filled, label: 'Home', index: 0),
-                  _buildNavItem(icon: Icons.explore, label: 'Explore', index: 1),
-                  _buildNavItem(icon: Icons.calendar_month_outlined, label: 'Bookings', index: 2),
-                  _buildNavItem(icon: Icons.people_alt_outlined, label: 'Queue', index: 3),
+                  _buildNavItem(icon: Icons.home_outlined, label: 'Home', index: 0),
+                  _buildNavItem(icon: Icons.explore_outlined, label: 'Explore', index: 1),
+                  _buildNavItem(icon: Icons.calendar_month, label: 'Bookings', index: 2),
+                  _buildNavItem(icon: Icons.people_outline, label: 'Queue', index: 3),
                   _buildNavItem(icon: Icons.person_outline, label: 'Profile', index: 4),
                 ],
               ),
@@ -505,7 +520,93 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
   }
 
   // ==========================================
-  // --- 2. HOME VIEW SCREEN ---
+  // --- 2. VIRTUAL QUEUE VIEW SCREEN ---
+  // ==========================================
+  Widget _buildQueueView() {
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Live Queue Status',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF111827),
+              letterSpacing: -0.5,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Track your active waitlist position in real time.',
+            style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+          ),
+          const SizedBox(height: 24),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF9FAFB),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
+            ),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFECFDF5),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.people_alt_outlined,
+                    size: 36,
+                    color: Color(0xFF10B981),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'No Active Queues',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'You are currently not waiting in line at any restaurant. Join a queue from the explore or home screen.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFF6B7280),
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: () => setState(() => _bottomNavIndex = 1),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0D3B2E),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: const Text('Browse Restaurants'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ==========================================
+  // --- 3. HOME VIEW SCREEN ---
   // ==========================================
   Widget _buildHomeView(String userName, String initials) {
     return SingleChildScrollView(
