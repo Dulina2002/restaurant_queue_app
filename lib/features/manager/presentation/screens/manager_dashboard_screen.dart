@@ -194,7 +194,6 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                     if (_selectedTab == 1) ...[
                       const TablesTabWidget(),
                     ] else if (_selectedTab == 2) ...[
-                      _buildLiveMenuPlaceholder(),
                       const LiveMenuTabWidget(),
                     ] else ...[
                       // --- Executive KPIs Header & Time Filter ---
@@ -357,28 +356,6 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildLiveMenuPlaceholder() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
-      alignment: Alignment.center,
-      child: Column(
-        children: const [
-          Icon(Icons.restaurant_menu, size: 48, color: AppColors.textMuted),
-          SizedBox(height: 12),
-          Text(
-            'Live Menu Operations',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-          ),
-          SizedBox(height: 4),
-          Text(
-            'Dynamic item availability & pricing controls.',
-            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-          ),
-        ],
       ),
     );
   }
