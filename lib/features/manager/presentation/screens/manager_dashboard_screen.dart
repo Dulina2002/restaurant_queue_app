@@ -6,6 +6,8 @@ import '../../../profile/presentation/screens/edit_profile_screen.dart';
 import '../../data/models/manager_dashboard_model.dart';
 import '../widgets/ai_floor_optimizer_sheet.dart';
 import '../widgets/quick_turn_tables_sheet.dart';
+import '../widgets/tables_tab_widget.dart';
+import '../widgets/live_menu_tab_widget.dart';
 
 class ManagerDashboardScreen extends StatefulWidget {
   final UserProfile? profile;
@@ -157,6 +159,17 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                           ),
                         ),
                         Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE6F4EA),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Text(
+                            'OCEAN BISTRO',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.primary,
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
                             color: AppColors.skyTint,
@@ -189,6 +202,149 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                     ),
                     const SizedBox(height: 20),
 
+                    // --- Tab Content Switching ---
+                    if (_selectedTab == 1) ...[
+                      const TablesTabWidget(),
+                    ] else if (_selectedTab == 2) ...[
+                      const LiveMenuTabWidget(),
+                    ] else ...[
+                      // --- Executive KPIs Header & Time Filter ---
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Executive KPIs',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.all(3),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: AppColors.border),
+                            ),
+                            child: Row(
+                              children: [
+                                _buildTimeFilterPill('Today', 0),
+                                _buildTimeFilterPill('This Week', 1),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+
+                      // --- 2x2 KPI Cards Grid ---
+                      GridView.count(
+                        crossAxisCount: 2,
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        mainAxisSpacing: 12,
+                        crossAxisSpacing: 12,
+                        childAspectRatio: 1.4,
+                        children: [
+                          _KpiCardWidget(
+                            label: 'Total Bookings',
+                            value: _dashboardData.totalBookings,
+                            icon: Icons.smartphone,
+                            bgColor: AppColors.mintTint,
+                            iconColor: AppColors.primary,
+                            iconBgColor: Colors.white,
+                          ),
+                          _KpiCardWidget(
+                            label: 'Floor Turnover',
+                            value: _dashboardData.floorTurnover,
+                            icon: Icons.bolt,
+                            bgColor: AppColors.peachTint,
+                            iconColor: AppColors.accentOrange,
+                            iconBgColor: Colors.white,
+                          ),
+                          _KpiCardWidget(
+                            label: 'Avg Queue Wait',
+                            value: _dashboardData.avgQueueWait,
+                            icon: Icons.access_time_filled,
+                            bgColor: AppColors.amberTint,
+                            iconColor: AppColors.accentAmber,
+                            iconBgColor: Colors.white,
+                          ),
+                          GestureDetector(
+                            onTap: () => setState(() => _selectedTab = 1),
+                            child: _KpiCardWidget(
+                              label: 'Active Tables',
+                              value: _dashboardData.activeTables,
+                              icon: Icons.table_restaurant,
+                              bgColor: AppColors.skyTint,
+                              iconColor: AppColors.primary,
+                              iconBgColor: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+
+                      // --- Manager Fast Actions ---
+                      Row(
+                        children: const [
+                          Icon(Icons.bolt, size: 18, color: AppColors.accentOrange),
+                          SizedBox(width: 4),
+                          Text(
+                            'Manager Fast Actions',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () => QuickTurnTablesSheet.show(context),
+                              icon: const Icon(Icons.bolt, size: 16),
+                              label: const Text(
+                                'Quick Turn 2 Tables',
+                                style: TextStyle(fontSize: 12),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () => AiFloorOptimizerSheet.show(context),
+                              icon: const Icon(Icons.tune, size: 16, color: AppColors.textPrimary),
+                              label: const Text(
+                                'Optimize Floor',
+                                style: TextStyle(fontSize: 12, color: AppColors.textPrimary),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                side: const BorderSide(color: AppColors.border),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(24),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+
+                      // --- Hourly Velocity Chart ---
+                      _HourlyVelocityChartWidget(data: _dashboardData.hourlyVelocity),
+                    ],
                     // --- Executive KPIs Header & Time Filter ---
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
