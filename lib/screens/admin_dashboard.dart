@@ -34,6 +34,40 @@ class _AdminDashboardState extends State<AdminDashboard> {
     },
   ];
 
+  final List<Map<String, dynamic>> users = [
+    {
+      'name': 'Ayesha Perera',
+      'email': 'ayesha@email.com',
+      'role': 'Customer',
+      'suspended': false,
+    },
+    {
+      'name': 'David Fernando',
+      'email': 'david@oceanbistro.com',
+      'role': 'Receptionist',
+      'suspended': false,
+    },
+    {
+      'name': 'Chef Matteo',
+      'email': 'matteo@oceanbistro.com',
+      'role': 'Manager',
+      'suspended': false,
+    },
+    {
+      'name': 'Minoshi',
+      'email': 'admin@dinequeue.com',
+      'role': 'Admin',
+      'suspended': false,
+    },
+  ];
+
+  final List<String> userRoles = [
+    'Customer',
+    'Receptionist',
+    'Manager',
+    'Admin',
+  ];
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -137,7 +171,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         Expanded(
           child: _summaryCard(
             title: 'Platform Users',
-            value: '4',
+            value: users.length.toString(),
             icon: Icons.people,
             iconColor: const Color(0xFFF47B4A),
           ),
@@ -283,23 +317,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
         const SizedBox(height: 22),
 
         if (restaurants.isEmpty)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(30),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: const Column(
-              children: [
-                Icon(Icons.store_outlined, size: 45, color: Colors.grey),
-                SizedBox(height: 12),
-                Text(
-                  'No partner restaurants available.',
-                  style: TextStyle(color: Colors.grey),
-                ),
-              ],
-            ),
+          _emptyMessage(
+            Icons.store_outlined,
+            'No partner restaurants available.',
           ),
 
         ...List.generate(
@@ -322,7 +342,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         ? const Color(0xFF1B8F5A)
         : const Color(0xFFF47B4A);
 
-    final String details =
+    final details =
         '${restaurant['cuisine']} • ${restaurant['price']} • ${restaurant['address']}';
 
     return Container(
@@ -379,23 +399,17 @@ class _AdminDashboardState extends State<AdminDashboard> {
             runSpacing: 8,
             children: [
               TextButton.icon(
-                onPressed: () {
-                  _toggleRestaurantStatus(index);
-                },
+                onPressed: () => _toggleRestaurantStatus(index),
                 icon: const Icon(Icons.sync, size: 17),
                 label: const Text('Toggle Status'),
               ),
               TextButton.icon(
-                onPressed: () {
-                  _showEditRestaurantDialog(index);
-                },
+                onPressed: () => _showEditRestaurantDialog(index),
                 icon: const Icon(Icons.edit, size: 17),
                 label: const Text('Edit'),
               ),
               TextButton.icon(
-                onPressed: () {
-                  _showDeleteRestaurantDialog(index);
-                },
+                onPressed: () => _showDeleteRestaurantDialog(index),
                 icon: const Icon(
                   Icons.delete_outline,
                   color: Colors.deepOrange,
@@ -412,10 +426,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
       ),
     );
   }
-
-  // ============================================================
-  // ADD RESTAURANT
-  // ============================================================
 
   void _showAddPartnerDialog() {
     final nameController = TextEditingController();
@@ -442,58 +452,36 @@ class _AdminDashboardState extends State<AdminDashboard> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  TextField(
-                    controller: nameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Restaurant Name',
-                      hintText: 'e.g. Spice Garden',
-                      border: OutlineInputBorder(),
-                    ),
+                  _dialogTextField(
+                    nameController,
+                    'Restaurant Name',
+                    'e.g. Spice Garden',
                   ),
                   const SizedBox(height: 15),
-                  TextField(
-                    controller: cuisineController,
-                    decoration: const InputDecoration(
-                      labelText: 'Cuisine Type',
-                      hintText: 'e.g. Sri Lankan',
-                      border: OutlineInputBorder(),
-                    ),
+                  _dialogTextField(
+                    cuisineController,
+                    'Cuisine Type',
+                    'e.g. Sri Lankan',
                   ),
                   const SizedBox(height: 15),
-                  TextField(
-                    controller: priceController,
-                    decoration: const InputDecoration(
-                      labelText: 'Price Level',
-                      hintText: r'e.g. $$',
-                      border: OutlineInputBorder(),
-                    ),
+                  _dialogTextField(priceController, 'Price Level', r'e.g. $$'),
+                  const SizedBox(height: 15),
+                  _dialogTextField(
+                    addressController,
+                    'Address',
+                    'e.g. Colombo 03',
                   ),
                   const SizedBox(height: 15),
-                  TextField(
-                    controller: addressController,
-                    decoration: const InputDecoration(
-                      labelText: 'Address',
-                      hintText: 'e.g. Colombo 03',
-                      border: OutlineInputBorder(),
-                    ),
+                  _dialogTextField(
+                    phoneController,
+                    'Contact Number',
+                    '+94 77 123 4567',
                   ),
                   const SizedBox(height: 15),
-                  TextField(
-                    controller: phoneController,
-                    decoration: const InputDecoration(
-                      labelText: 'Contact Number',
-                      hintText: '+94 77 123 4567',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 15),
-                  TextField(
-                    controller: waitTimeController,
-                    decoration: const InputDecoration(
-                      labelText: 'Estimated Wait Time',
-                      hintText: 'e.g. 10m',
-                      border: OutlineInputBorder(),
-                    ),
+                  _dialogTextField(
+                    waitTimeController,
+                    'Estimated Wait Time',
+                    'e.g. 10m',
                   ),
                 ],
               ),
@@ -501,16 +489,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.pop(dialogContext);
-              },
+              onPressed: () => Navigator.pop(dialogContext),
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF00523D),
-                foregroundColor: Colors.white,
-              ),
+              style: _greenButtonStyle(),
               onPressed: () {
                 final name = nameController.text.trim();
                 final cuisine = cuisineController.text.trim();
@@ -541,7 +524,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 });
 
                 Navigator.pop(dialogContext);
-
                 _showMessage('$name added successfully');
               },
               child: const Text('Add Partner'),
@@ -552,30 +534,19 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  // ============================================================
-  // EDIT RESTAURANT
-  // ============================================================
-
   void _showEditRestaurantDialog(int index) {
     final restaurant = restaurants[index];
 
     final nameController = TextEditingController(text: restaurant['name']);
-
     final cuisineController = TextEditingController(
       text: restaurant['cuisine'],
     );
-
     final priceController = TextEditingController(text: restaurant['price']);
-
     final addressController = TextEditingController(
       text: restaurant['address'],
     );
-
     final phoneController = TextEditingController(text: restaurant['phone']);
-
-    final waitTimeController = TextEditingController(
-      text: restaurant['waitTime'],
-    );
+    final waitController = TextEditingController(text: restaurant['waitTime']);
 
     showDialog<void>(
       context: context,
@@ -594,69 +565,28 @@ class _AdminDashboardState extends State<AdminDashboard> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  TextField(
-                    controller: nameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Restaurant Name',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
+                  _dialogTextField(nameController, 'Restaurant Name', ''),
                   const SizedBox(height: 15),
-                  TextField(
-                    controller: cuisineController,
-                    decoration: const InputDecoration(
-                      labelText: 'Cuisine Type',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
+                  _dialogTextField(cuisineController, 'Cuisine Type', ''),
                   const SizedBox(height: 15),
-                  TextField(
-                    controller: priceController,
-                    decoration: const InputDecoration(
-                      labelText: 'Price Level',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
+                  _dialogTextField(priceController, 'Price Level', ''),
                   const SizedBox(height: 15),
-                  TextField(
-                    controller: addressController,
-                    decoration: const InputDecoration(
-                      labelText: 'Address',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
+                  _dialogTextField(addressController, 'Address', ''),
                   const SizedBox(height: 15),
-                  TextField(
-                    controller: phoneController,
-                    decoration: const InputDecoration(
-                      labelText: 'Contact Number',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
+                  _dialogTextField(phoneController, 'Contact Number', ''),
                   const SizedBox(height: 15),
-                  TextField(
-                    controller: waitTimeController,
-                    decoration: const InputDecoration(
-                      labelText: 'Estimated Wait Time',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
+                  _dialogTextField(waitController, 'Estimated Wait Time', ''),
                 ],
               ),
             ),
           ),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.pop(dialogContext);
-              },
+              onPressed: () => Navigator.pop(dialogContext),
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF00523D),
-                foregroundColor: Colors.white,
-              ),
+              style: _greenButtonStyle(),
               onPressed: () {
                 final name = nameController.text.trim();
                 final cuisine = cuisineController.text.trim();
@@ -669,30 +599,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 setState(() {
                   restaurants[index]['name'] = name;
                   restaurants[index]['cuisine'] = cuisine;
-
-                  restaurants[index]['price'] =
-                      priceController.text.trim().isEmpty
-                      ? r'$$'
-                      : priceController.text.trim();
-
-                  restaurants[index]['address'] =
-                      addressController.text.trim().isEmpty
-                      ? 'Address not provided'
-                      : addressController.text.trim();
-
-                  restaurants[index]['phone'] =
-                      phoneController.text.trim().isEmpty
-                      ? 'Not provided'
-                      : phoneController.text.trim();
-
-                  restaurants[index]['waitTime'] =
-                      waitTimeController.text.trim().isEmpty
-                      ? '0m'
-                      : waitTimeController.text.trim();
+                  restaurants[index]['price'] = priceController.text.trim();
+                  restaurants[index]['address'] = addressController.text.trim();
+                  restaurants[index]['phone'] = phoneController.text.trim();
+                  restaurants[index]['waitTime'] = waitController.text.trim();
                 });
 
                 Navigator.pop(dialogContext);
-
                 _showMessage('$name updated successfully');
               },
               child: const Text('Save Changes'),
@@ -703,12 +616,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  // ============================================================
-  // DELETE RESTAURANT
-  // ============================================================
-
   void _showDeleteRestaurantDialog(int index) {
-    final String restaurantName = restaurants[index]['name']!;
+    final name = restaurants[index]['name']!;
 
     showDialog<void>(
       context: context,
@@ -719,24 +628,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
             color: Colors.deepOrange,
             size: 45,
           ),
-          title: const Text(
-            'Delete Restaurant?',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF064632),
-            ),
-          ),
+          title: const Text('Delete Restaurant?', textAlign: TextAlign.center),
           content: Text(
-            'Are you sure you want to remove "$restaurantName" from the platform?\n\nThis action cannot be undone.',
+            'Are you sure you want to remove "$name" from the platform?\n\nThis action cannot be undone.',
             textAlign: TextAlign.center,
           ),
           actionsAlignment: MainAxisAlignment.center,
           actions: [
             OutlinedButton(
-              onPressed: () {
-                Navigator.pop(dialogContext);
-              },
+              onPressed: () => Navigator.pop(dialogContext),
               child: const Text('Cancel'),
             ),
             ElevatedButton.icon(
@@ -750,8 +650,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 });
 
                 Navigator.pop(dialogContext);
-
-                _showMessage('$restaurantName deleted');
+                _showMessage('$name deleted');
               },
               icon: const Icon(Icons.delete_outline),
               label: const Text('Delete'),
@@ -762,15 +661,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  // ============================================================
-  // TOGGLE RESTAURANT STATUS
-  // ============================================================
-
   void _toggleRestaurantStatus(int index) {
-    final String currentStatus = restaurants[index]['status']!;
-
     setState(() {
-      if (currentStatus == 'Tables Available') {
+      if (restaurants[index]['status'] == 'Tables Available') {
         restaurants[index]['status'] = 'Few Tables Left';
         restaurants[index]['waitTime'] = '15m';
       } else {
@@ -813,54 +706,49 @@ class _AdminDashboardState extends State<AdminDashboard> {
               ),
             ),
             ElevatedButton.icon(
-              onPressed: () {
-                _showMessage('New User clicked');
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF00523D),
-                foregroundColor: Colors.white,
-              ),
+              onPressed: _showAddUserDialog,
+              style: _greenButtonStyle(),
               icon: const Icon(Icons.person_add),
               label: const Text('New User'),
             ),
           ],
         ),
         const SizedBox(height: 20),
-        _userCard(
-          name: 'Ayesha Perera',
-          email: 'ayesha@email.com',
-          role: 'Customer',
-          initial: 'A',
-        ),
-        const SizedBox(height: 14),
-        _userCard(
-          name: 'David Fernando',
-          email: 'david@oceanbistro.com',
-          role: 'Receptionist',
-          initial: 'D',
-        ),
-        const SizedBox(height: 14),
-        _userCard(
-          name: 'Chef Matteo',
-          email: 'matteo@oceanbistro.com',
-          role: 'Manager',
-          initial: 'C',
+
+        if (users.isEmpty)
+          _emptyMessage(Icons.people_outline, 'No users available.'),
+
+        ...List.generate(
+          users.length,
+          (index) => Padding(
+            padding: const EdgeInsets.only(bottom: 14),
+            child: _userCard(index),
+          ),
         ),
       ],
     );
   }
 
-  Widget _userCard({
-    required String name,
-    required String email,
-    required String role,
-    required String initial,
-  }) {
+  Widget _userCard(int index) {
+    final user = users[index];
+
+    final String name = user['name'];
+    final String email = user['email'];
+    final String role = user['role'];
+    final bool suspended = user['suspended'];
+
+    final String initial = name.isNotEmpty
+        ? name.substring(0, 1).toUpperCase()
+        : '?';
+
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: suspended ? const Color(0xFFFFF8F5) : Colors.white,
         borderRadius: BorderRadius.circular(18),
+        border: suspended
+            ? Border.all(color: Colors.deepOrange.withOpacity(0.25))
+            : null,
       ),
       child: Column(
         children: [
@@ -886,7 +774,19 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         fontSize: 17,
                       ),
                     ),
+                    const SizedBox(height: 3),
                     Text(email, style: const TextStyle(color: Colors.grey)),
+                    if (suspended) ...[
+                      const SizedBox(height: 5),
+                      const Text(
+                        'Account Suspended',
+                        style: TextStyle(
+                          color: Colors.deepOrange,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -896,34 +796,374 @@ class _AdminDashboardState extends State<AdminDashboard> {
           const SizedBox(height: 12),
           Wrap(
             spacing: 10,
+            runSpacing: 5,
             children: [
               TextButton.icon(
-                onPressed: () {
-                  _showMessage('Change Role for $name');
-                },
+                onPressed: () => _showChangeRoleDialog(index),
                 icon: const Icon(Icons.admin_panel_settings_outlined, size: 18),
                 label: const Text('Change Role'),
               ),
               TextButton.icon(
-                onPressed: () {
-                  _showMessage('Suspend $name');
-                },
-                icon: const Icon(Icons.block, size: 18),
-                label: const Text('Suspend'),
+                onPressed: () => _toggleUserSuspension(index),
+                icon: Icon(
+                  suspended ? Icons.check_circle_outline : Icons.block,
+                  size: 18,
+                ),
+                label: Text(suspended ? 'Activate' : 'Suspend'),
               ),
-              IconButton(
-                onPressed: () {
-                  _showMessage('Delete $name');
-                },
+              TextButton.icon(
+                onPressed: () => _showDeleteUserDialog(index),
                 icon: const Icon(
                   Icons.delete_outline,
                   color: Colors.deepOrange,
+                  size: 18,
+                ),
+                label: const Text(
+                  'Delete',
+                  style: TextStyle(color: Colors.deepOrange),
                 ),
               ),
             ],
           ),
         ],
       ),
+    );
+  }
+
+  // ============================================================
+  // ADD USER
+  // ============================================================
+
+  void _showAddUserDialog() {
+    final nameController = TextEditingController();
+    final emailController = TextEditingController();
+
+    String selectedRole = 'Customer';
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text(
+                'Add New User',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF064632),
+                ),
+              ),
+              content: SizedBox(
+                width: 450,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _dialogTextField(
+                      nameController,
+                      'Full Name',
+                      'e.g. Nimal Perera',
+                    ),
+                    const SizedBox(height: 15),
+                    TextField(
+                      controller: emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: const InputDecoration(
+                        labelText: 'Email Address',
+                        hintText: 'name@email.com',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 15),
+                    DropdownButtonFormField<String>(
+                      value: selectedRole,
+                      decoration: const InputDecoration(
+                        labelText: 'User Role',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: userRoles.map((role) {
+                        return DropdownMenuItem<String>(
+                          value: role,
+                          child: Text(role),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        if (value != null) {
+                          setDialogState(() {
+                            selectedRole = value;
+                          });
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(dialogContext);
+                  },
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton.icon(
+                  style: _greenButtonStyle(),
+                  onPressed: () {
+                    final name = nameController.text.trim();
+                    final email = emailController.text.trim();
+
+                    if (name.isEmpty || email.isEmpty) {
+                      _showMessage('Please enter the user name and email.');
+                      return;
+                    }
+
+                    if (!email.contains('@')) {
+                      _showMessage('Please enter a valid email address.');
+                      return;
+                    }
+
+                    final emailExists = users.any(
+                      (user) =>
+                          user['email'].toString().toLowerCase() ==
+                          email.toLowerCase(),
+                    );
+
+                    if (emailExists) {
+                      _showMessage('A user with this email already exists.');
+                      return;
+                    }
+
+                    setState(() {
+                      users.add({
+                        'name': name,
+                        'email': email,
+                        'role': selectedRole,
+                        'suspended': false,
+                      });
+                    });
+
+                    Navigator.pop(dialogContext);
+
+                    _showMessage('$name added successfully');
+                  },
+                  icon: const Icon(Icons.person_add),
+                  label: const Text('Create User'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // ============================================================
+  // CHANGE USER ROLE
+  // ============================================================
+
+  void _showChangeRoleDialog(int index) {
+    String selectedRole = users[index]['role'];
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text(
+                'Change User Role',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF064632),
+                ),
+              ),
+              content: SizedBox(
+                width: 400,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      users[index]['name'],
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      users[index]['email'],
+                      style: const TextStyle(color: Colors.grey),
+                    ),
+                    const SizedBox(height: 20),
+                    DropdownButtonFormField<String>(
+                      value: selectedRole,
+                      decoration: const InputDecoration(
+                        labelText: 'Select Role',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: userRoles.map((role) {
+                        return DropdownMenuItem<String>(
+                          value: role,
+                          child: Text(role),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        if (value != null) {
+                          setDialogState(() {
+                            selectedRole = value;
+                          });
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(dialogContext);
+                  },
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  style: _greenButtonStyle(),
+                  onPressed: () {
+                    final String name = users[index]['name'];
+
+                    setState(() {
+                      users[index]['role'] = selectedRole;
+                    });
+
+                    Navigator.pop(dialogContext);
+
+                    _showMessage('$name role changed to $selectedRole');
+                  },
+                  child: const Text('Update Role'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // ============================================================
+  // SUSPEND / ACTIVATE USER
+  // ============================================================
+
+  void _toggleUserSuspension(int index) {
+    final bool currentlySuspended = users[index]['suspended'];
+
+    final String name = users[index]['name'];
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          icon: Icon(
+            currentlySuspended ? Icons.check_circle_outline : Icons.block,
+            color: currentlySuspended
+                ? const Color(0xFF1B8F5A)
+                : Colors.deepOrange,
+            size: 42,
+          ),
+          title: Text(
+            currentlySuspended ? 'Activate User?' : 'Suspend User?',
+            textAlign: TextAlign.center,
+          ),
+          content: Text(
+            currentlySuspended
+                ? 'Restore access for "$name"?'
+                : 'Suspend "$name" from accessing the platform?',
+            textAlign: TextAlign.center,
+          ),
+          actionsAlignment: MainAxisAlignment.center,
+          actions: [
+            OutlinedButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+              },
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: currentlySuspended
+                    ? const Color(0xFF00523D)
+                    : Colors.deepOrange,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () {
+                setState(() {
+                  users[index]['suspended'] = !currentlySuspended;
+                });
+
+                Navigator.pop(dialogContext);
+
+                _showMessage(
+                  currentlySuspended ? '$name activated' : '$name suspended',
+                );
+              },
+              child: Text(currentlySuspended ? 'Activate' : 'Suspend'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // ============================================================
+  // DELETE USER
+  // ============================================================
+
+  void _showDeleteUserDialog(int index) {
+    final String name = users[index]['name'];
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          icon: const Icon(
+            Icons.warning_amber_rounded,
+            color: Colors.deepOrange,
+            size: 45,
+          ),
+          title: const Text(
+            'Delete User?',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          content: Text(
+            'Are you sure you want to permanently delete "$name"?\n\nThis action cannot be undone.',
+            textAlign: TextAlign.center,
+          ),
+          actionsAlignment: MainAxisAlignment.center,
+          actions: [
+            OutlinedButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+              },
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.deepOrange,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () {
+                setState(() {
+                  users.removeAt(index);
+                });
+
+                Navigator.pop(dialogContext);
+
+                _showMessage('$name deleted');
+              },
+              icon: const Icon(Icons.delete_outline),
+              label: const Text('Delete'),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -1173,8 +1413,48 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   // ============================================================
-  // MESSAGE
+  // REUSABLE HELPERS
   // ============================================================
+
+  Widget _dialogTextField(
+    TextEditingController controller,
+    String label,
+    String hint,
+  ) {
+    return TextField(
+      controller: controller,
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint.isEmpty ? null : hint,
+        border: const OutlineInputBorder(),
+      ),
+    );
+  }
+
+  Widget _emptyMessage(IconData icon, String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(30),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, size: 45, color: Colors.grey),
+          const SizedBox(height: 12),
+          Text(message, style: const TextStyle(color: Colors.grey)),
+        ],
+      ),
+    );
+  }
+
+  ButtonStyle _greenButtonStyle() {
+    return ElevatedButton.styleFrom(
+      backgroundColor: const Color(0xFF00523D),
+      foregroundColor: Colors.white,
+    );
+  }
 
   void _showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
