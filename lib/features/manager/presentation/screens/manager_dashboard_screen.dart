@@ -7,6 +7,7 @@ import '../../data/models/manager_dashboard_model.dart';
 import '../widgets/ai_floor_optimizer_sheet.dart';
 import '../widgets/quick_turn_tables_sheet.dart';
 import '../widgets/tables_tab_widget.dart';
+import '../widgets/live_menu_tab_widget.dart';
 
 class ManagerDashboardScreen extends StatefulWidget {
   final UserProfile? profile;
@@ -194,6 +195,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                       const TablesTabWidget(),
                     ] else if (_selectedTab == 2) ...[
                       _buildLiveMenuPlaceholder(),
+                      const LiveMenuTabWidget(),
                     ] else ...[
                       // --- Executive KPIs Header & Time Filter ---
                       Row(
