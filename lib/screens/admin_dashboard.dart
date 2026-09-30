@@ -13,6 +13,27 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   final List<String> tabs = ['Restaurants', 'Users', 'Broadcasts', 'System'];
 
+  final List<Map<String, String>> restaurants = [
+    {
+      'name': 'Ocean Bistro',
+      'cuisine': 'Italian • Seafood',
+      'price': r'$$$',
+      'address': '42 Marine Drive',
+      'phone': '+94 11 257 8899',
+      'waitTime': '0m',
+      'status': 'Tables Available',
+    },
+    {
+      'name': 'The Mango Tree',
+      'cuisine': 'Indian • North Indian',
+      'price': r'$$',
+      'address': '82 Dharmapala',
+      'phone': '+94 11 762 0145',
+      'waitTime': '15m',
+      'status': 'Few Tables Left',
+    },
+  ];
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -49,6 +70,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
       ),
     );
   }
+
+  // ============================================================
+  // HEADER
+  // ============================================================
 
   Widget _buildHeader() {
     return Row(
@@ -93,13 +118,17 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
+  // ============================================================
+  // SUMMARY
+  // ============================================================
+
   Widget _buildSummaryCards() {
     return Row(
       children: [
         Expanded(
           child: _summaryCard(
             title: 'Restaurants',
-            value: '5',
+            value: restaurants.length.toString(),
             icon: Icons.store,
             iconColor: const Color(0xFF00735A),
           ),
@@ -162,6 +191,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
+  // ============================================================
+  // TABS
+  // ============================================================
+
   Widget _buildTabs() {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -202,7 +235,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  // ---------------- RESTAURANTS ----------------
+  // ============================================================
+  // RESTAURANTS
+  // ============================================================
 
   Widget _buildRestaurants() {
     return Column(
@@ -210,20 +245,20 @@ class _AdminDashboardState extends State<AdminDashboard> {
       children: [
         Row(
           children: [
-            const Expanded(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Partner Restaurants (5)',
-                    style: TextStyle(
+                    'Partner Restaurants (${restaurants.length})',
+                    style: const TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
                       color: Color(0xFF064632),
                     ),
                   ),
-                  SizedBox(height: 4),
-                  Text(
+                  const SizedBox(height: 4),
+                  const Text(
                     'Add, Edit, Update Status, or Remove',
                     style: TextStyle(color: Colors.grey),
                   ),
@@ -231,9 +266,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
               ),
             ),
             ElevatedButton.icon(
-              onPressed: () {
-                _showMessage('Add Partner clicked');
-              },
+              onPressed: _showAddPartnerDialog,
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF00523D),
                 foregroundColor: Colors.white,
@@ -248,35 +281,50 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ],
         ),
         const SizedBox(height: 22),
-        _restaurantCard(
-          name: 'Ocean Bistro',
-          details: r'Italian • Seafood • $$$ • 42 Marine Drive',
-          phone: '+94 11 257 8899',
-          waitTime: '0m',
-          status: 'Tables Available',
-          statusColor: const Color(0xFF1B8F5A),
-        ),
-        const SizedBox(height: 18),
-        _restaurantCard(
-          name: 'The Mango Tree',
-          details: r'Indian • North Indian • $$ • 82 Dharmapala',
-          phone: '+94 11 762 0145',
-          waitTime: '15m',
-          status: 'Few Tables Left',
-          statusColor: const Color(0xFFF47B4A),
+
+        if (restaurants.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(30),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: const Column(
+              children: [
+                Icon(Icons.store_outlined, size: 45, color: Colors.grey),
+                SizedBox(height: 12),
+                Text(
+                  'No partner restaurants available.',
+                  style: TextStyle(color: Colors.grey),
+                ),
+              ],
+            ),
+          ),
+
+        ...List.generate(
+          restaurants.length,
+          (index) => Padding(
+            padding: const EdgeInsets.only(bottom: 18),
+            child: _restaurantCard(index),
+          ),
         ),
       ],
     );
   }
 
-  Widget _restaurantCard({
-    required String name,
-    required String details,
-    required String phone,
-    required String waitTime,
-    required String status,
-    required Color statusColor,
-  }) {
+  Widget _restaurantCard(int index) {
+    final restaurant = restaurants[index];
+
+    final bool available = restaurant['status'] == 'Tables Available';
+
+    final Color statusColor = available
+        ? const Color(0xFF1B8F5A)
+        : const Color(0xFFF47B4A);
+
+    final String details =
+        '${restaurant['cuisine']} • ${restaurant['price']} • ${restaurant['address']}';
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -290,7 +338,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
             children: [
               Expanded(
                 child: Text(
-                  name,
+                  restaurant['name']!,
                   style: const TextStyle(
                     fontSize: 19,
                     fontWeight: FontWeight.bold,
@@ -308,7 +356,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   borderRadius: BorderRadius.circular(7),
                 ),
                 child: Text(
-                  status,
+                  restaurant['status']!,
                   style: TextStyle(
                     color: statusColor,
                     fontSize: 11,
@@ -322,33 +370,40 @@ class _AdminDashboardState extends State<AdminDashboard> {
           Text(details, style: const TextStyle(color: Colors.grey)),
           const SizedBox(height: 6),
           Text(
-            'Tel: $phone | Est Wait: $waitTime',
+            'Tel: ${restaurant['phone']} | Est Wait: ${restaurant['waitTime']}',
             style: const TextStyle(color: Colors.grey),
           ),
           const SizedBox(height: 18),
           Wrap(
-            spacing: 15,
+            spacing: 12,
+            runSpacing: 8,
             children: [
-              TextButton(
+              TextButton.icon(
                 onPressed: () {
-                  _showMessage('Status updated for $name');
+                  _toggleRestaurantStatus(index);
                 },
-                child: const Text('Toggle Status'),
+                icon: const Icon(Icons.sync, size: 17),
+                label: const Text('Toggle Status'),
               ),
               TextButton.icon(
                 onPressed: () {
-                  _showMessage('Edit $name');
+                  _showEditRestaurantDialog(index);
                 },
                 icon: const Icon(Icons.edit, size: 17),
                 label: const Text('Edit'),
               ),
-              IconButton(
+              TextButton.icon(
                 onPressed: () {
-                  _showMessage('Delete $name');
+                  _showDeleteRestaurantDialog(index);
                 },
                 icon: const Icon(
                   Icons.delete_outline,
                   color: Colors.deepOrange,
+                  size: 18,
+                ),
+                label: const Text(
+                  'Delete',
+                  style: TextStyle(color: Colors.deepOrange),
                 ),
               ),
             ],
@@ -358,7 +413,378 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  // ---------------- USERS ----------------
+  // ============================================================
+  // ADD RESTAURANT
+  // ============================================================
+
+  void _showAddPartnerDialog() {
+    final nameController = TextEditingController();
+    final cuisineController = TextEditingController();
+    final priceController = TextEditingController();
+    final addressController = TextEditingController();
+    final phoneController = TextEditingController();
+    final waitTimeController = TextEditingController();
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text(
+            'Add Partner Restaurant',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF064632),
+            ),
+          ),
+          content: SizedBox(
+            width: 450,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Restaurant Name',
+                      hintText: 'e.g. Spice Garden',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 15),
+                  TextField(
+                    controller: cuisineController,
+                    decoration: const InputDecoration(
+                      labelText: 'Cuisine Type',
+                      hintText: 'e.g. Sri Lankan',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 15),
+                  TextField(
+                    controller: priceController,
+                    decoration: const InputDecoration(
+                      labelText: 'Price Level',
+                      hintText: r'e.g. $$',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 15),
+                  TextField(
+                    controller: addressController,
+                    decoration: const InputDecoration(
+                      labelText: 'Address',
+                      hintText: 'e.g. Colombo 03',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 15),
+                  TextField(
+                    controller: phoneController,
+                    decoration: const InputDecoration(
+                      labelText: 'Contact Number',
+                      hintText: '+94 77 123 4567',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 15),
+                  TextField(
+                    controller: waitTimeController,
+                    decoration: const InputDecoration(
+                      labelText: 'Estimated Wait Time',
+                      hintText: 'e.g. 10m',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+              },
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00523D),
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () {
+                final name = nameController.text.trim();
+                final cuisine = cuisineController.text.trim();
+
+                if (name.isEmpty || cuisine.isEmpty) {
+                  _showMessage('Please enter restaurant name and cuisine.');
+                  return;
+                }
+
+                setState(() {
+                  restaurants.add({
+                    'name': name,
+                    'cuisine': cuisine,
+                    'price': priceController.text.trim().isEmpty
+                        ? r'$$'
+                        : priceController.text.trim(),
+                    'address': addressController.text.trim().isEmpty
+                        ? 'Address not provided'
+                        : addressController.text.trim(),
+                    'phone': phoneController.text.trim().isEmpty
+                        ? 'Not provided'
+                        : phoneController.text.trim(),
+                    'waitTime': waitTimeController.text.trim().isEmpty
+                        ? '0m'
+                        : waitTimeController.text.trim(),
+                    'status': 'Tables Available',
+                  });
+                });
+
+                Navigator.pop(dialogContext);
+
+                _showMessage('$name added successfully');
+              },
+              child: const Text('Add Partner'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // ============================================================
+  // EDIT RESTAURANT
+  // ============================================================
+
+  void _showEditRestaurantDialog(int index) {
+    final restaurant = restaurants[index];
+
+    final nameController = TextEditingController(text: restaurant['name']);
+
+    final cuisineController = TextEditingController(
+      text: restaurant['cuisine'],
+    );
+
+    final priceController = TextEditingController(text: restaurant['price']);
+
+    final addressController = TextEditingController(
+      text: restaurant['address'],
+    );
+
+    final phoneController = TextEditingController(text: restaurant['phone']);
+
+    final waitTimeController = TextEditingController(
+      text: restaurant['waitTime'],
+    );
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text(
+            'Edit Restaurant',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF064632),
+            ),
+          ),
+          content: SizedBox(
+            width: 450,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Restaurant Name',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 15),
+                  TextField(
+                    controller: cuisineController,
+                    decoration: const InputDecoration(
+                      labelText: 'Cuisine Type',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 15),
+                  TextField(
+                    controller: priceController,
+                    decoration: const InputDecoration(
+                      labelText: 'Price Level',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 15),
+                  TextField(
+                    controller: addressController,
+                    decoration: const InputDecoration(
+                      labelText: 'Address',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 15),
+                  TextField(
+                    controller: phoneController,
+                    decoration: const InputDecoration(
+                      labelText: 'Contact Number',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 15),
+                  TextField(
+                    controller: waitTimeController,
+                    decoration: const InputDecoration(
+                      labelText: 'Estimated Wait Time',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+              },
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00523D),
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () {
+                final name = nameController.text.trim();
+                final cuisine = cuisineController.text.trim();
+
+                if (name.isEmpty || cuisine.isEmpty) {
+                  _showMessage('Restaurant name and cuisine cannot be empty.');
+                  return;
+                }
+
+                setState(() {
+                  restaurants[index]['name'] = name;
+                  restaurants[index]['cuisine'] = cuisine;
+
+                  restaurants[index]['price'] =
+                      priceController.text.trim().isEmpty
+                      ? r'$$'
+                      : priceController.text.trim();
+
+                  restaurants[index]['address'] =
+                      addressController.text.trim().isEmpty
+                      ? 'Address not provided'
+                      : addressController.text.trim();
+
+                  restaurants[index]['phone'] =
+                      phoneController.text.trim().isEmpty
+                      ? 'Not provided'
+                      : phoneController.text.trim();
+
+                  restaurants[index]['waitTime'] =
+                      waitTimeController.text.trim().isEmpty
+                      ? '0m'
+                      : waitTimeController.text.trim();
+                });
+
+                Navigator.pop(dialogContext);
+
+                _showMessage('$name updated successfully');
+              },
+              child: const Text('Save Changes'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // ============================================================
+  // DELETE RESTAURANT
+  // ============================================================
+
+  void _showDeleteRestaurantDialog(int index) {
+    final String restaurantName = restaurants[index]['name']!;
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          icon: const Icon(
+            Icons.warning_amber_rounded,
+            color: Colors.deepOrange,
+            size: 45,
+          ),
+          title: const Text(
+            'Delete Restaurant?',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF064632),
+            ),
+          ),
+          content: Text(
+            'Are you sure you want to remove "$restaurantName" from the platform?\n\nThis action cannot be undone.',
+            textAlign: TextAlign.center,
+          ),
+          actionsAlignment: MainAxisAlignment.center,
+          actions: [
+            OutlinedButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+              },
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.deepOrange,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () {
+                setState(() {
+                  restaurants.removeAt(index);
+                });
+
+                Navigator.pop(dialogContext);
+
+                _showMessage('$restaurantName deleted');
+              },
+              icon: const Icon(Icons.delete_outline),
+              label: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // ============================================================
+  // TOGGLE RESTAURANT STATUS
+  // ============================================================
+
+  void _toggleRestaurantStatus(int index) {
+    final String currentStatus = restaurants[index]['status']!;
+
+    setState(() {
+      if (currentStatus == 'Tables Available') {
+        restaurants[index]['status'] = 'Few Tables Left';
+        restaurants[index]['waitTime'] = '15m';
+      } else {
+        restaurants[index]['status'] = 'Tables Available';
+        restaurants[index]['waitTime'] = '0m';
+      }
+    });
+
+    _showMessage('${restaurants[index]['name']} status updated');
+  }
+
+  // ============================================================
+  // USERS
+  // ============================================================
 
   Widget _buildUsers() {
     return Column(
@@ -501,7 +927,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  // ---------------- BROADCASTS ----------------
+  // ============================================================
+  // BROADCASTS
+  // ============================================================
 
   Widget _buildBroadcasts() {
     return Column(
@@ -612,7 +1040,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  // ---------------- SYSTEM ----------------
+  // ============================================================
+  // SYSTEM
+  // ============================================================
 
   Widget _buildSystem() {
     return Column(
@@ -627,7 +1057,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ),
         ),
         const SizedBox(height: 25),
-
         Container(
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
@@ -674,9 +1103,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
             ],
           ),
         ),
-
         const SizedBox(height: 18),
-
         Container(
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
@@ -719,15 +1146,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
             ],
           ),
         ),
-
         const SizedBox(height: 30),
-
         const Text(
           'Infrastructure Health & Telemetry',
           style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 18),
-
         _statusRow('Virtual Queue Sync Socket: Operational (0ms)'),
         _statusRow('Push Notification Gateway: Connected'),
         _statusRow('Automated Double-Booking Prevention: Active'),
@@ -747,6 +1171,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
       ),
     );
   }
+
+  // ============================================================
+  // MESSAGE
+  // ============================================================
 
   void _showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
