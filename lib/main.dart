@@ -5,6 +5,7 @@ import 'screens/auth_gate.dart';
 import 'screens/receptionist/receptionist_dashboard_screen.dart';
 import 'models/user_profile.dart';
 import 'models/user_role.dart';
+import 'screens/home_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -42,6 +43,7 @@ class RestaurantQueueApp extends StatelessWidget {
           role: UserRole.receptionist,
         ),
       ),
+      home: const HomeScreen(),
     );
   }
 }
