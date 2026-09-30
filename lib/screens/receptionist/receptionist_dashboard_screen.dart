@@ -14,34 +14,8 @@ class ReceptionistDashboardScreen extends StatefulWidget {
 
 class _ReceptionistDashboardScreenState extends State<ReceptionistDashboardScreen> {
   final AuthService _authService = AuthService();
+  int _selectedIndex = 0;
   bool _isSigningOut = false;
-
-  final List<Map<String, dynamic>> _queue = [
-    {
-      'id': 'Q-101',
-      'name': 'Kamal Perera',
-      'partySize': 4,
-      'waitTime': '14 min',
-      'status': 'waiting',
-      'phone': '+94 77 123 4567',
-    },
-    {
-      'id': 'Q-102',
-      'name': 'Sarah Jenkins',
-      'partySize': 2,
-      'waitTime': '8 min',
-      'status': 'called',
-      'phone': '+94 71 987 6543',
-    },
-    {
-      'id': 'Q-103',
-      'name': 'Rohan De Silva',
-      'partySize': 6,
-      'waitTime': '3 min',
-      'status': 'waiting',
-      'phone': '+94 76 555 1234',
-    },
-  ];
 
   Future<void> _signOut() async {
     setState(() => _isSigningOut = true);
@@ -63,418 +37,475 @@ class _ReceptionistDashboardScreenState extends State<ReceptionistDashboardScree
     }
   }
 
-  void _callParty(int index) {
-    setState(() {
-      _queue[index]['status'] = 'called';
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Alert sent to ${_queue[index]['name']}! Table is ready.'),
-        backgroundColor: const Color(0xFFF27B50),
-      ),
-    );
-  }
-
-  void _seatParty(int index) {
-    final name = _queue[index]['name'];
-    setState(() {
-      _queue.removeAt(index);
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$name has been marked as SEATED.'),
-        backgroundColor: const Color(0xFF00E676),
-      ),
-    );
-  }
-
-  void _showAddWalkInDialog() {
-    final nameController = TextEditingController();
-    final partySizeController = TextEditingController(text: '2');
-    final phoneController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF162C1E),
-        title: const Text(
-          'Add Walk-In Guest',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  labelText: 'Guest Name',
-                  labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
-                  enabledBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
-                  ),
-                  focusedBorder: const OutlineInputBorder(
-                    borderSide: BorderSide(color: Color(0xFFF27B50)),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: partySizeController,
-                keyboardType: TextInputType.number,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  labelText: 'Party Size',
-                  labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
-                  enabledBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
-                  ),
-                  focusedBorder: const OutlineInputBorder(
-                    borderSide: BorderSide(color: Color(0xFFF27B50)),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: phoneController,
-                keyboardType: TextInputType.phone,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  labelText: 'Phone Number (SMS Alert)',
-                  labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
-                  enabledBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
-                  ),
-                  focusedBorder: const OutlineInputBorder(
-                    borderSide: BorderSide(color: Color(0xFFF27B50)),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (nameController.text.trim().isEmpty) return;
-              setState(() {
-                _queue.add({
-                  'id': 'Q-${100 + _queue.length + 1}',
-                  'name': nameController.text.trim(),
-                  'partySize': int.tryParse(partySizeController.text) ?? 2,
-                  'waitTime': 'Just now',
-                  'status': 'waiting',
-                  'phone': phoneController.text.trim(),
-                });
-              });
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Walk-in added to live queue')),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFF27B50),
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Add to Queue'),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0B1910),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF0B1910),
-        elevation: 0,
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF1C77F).withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFF1C77F).withValues(alpha: 0.4)),
-              ),
-              child: const Text(
-                'HOST & RECEPTION DESK',
-                style: TextStyle(
-                  color: Color(0xFFF1C77F),
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.0,
-                ),
+    return Theme(
+      data: ThemeData.light().copyWith(
+        scaffoldBackgroundColor: Colors.white,
+      ),
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        appBar: PreferredSize(
+          preferredSize: const Size.fromHeight(60),
+          child: AppBar(
+            backgroundColor: const Color(0xFF143621),
+            elevation: 0,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.vertical(
+                bottom: Radius.circular(16),
               ),
             ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            icon: _isSigningOut
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white70),
-                  )
-                : const Icon(Icons.logout, color: Colors.white70),
-            tooltip: 'Sign Out',
-            onPressed: _isSigningOut ? null : _signOut,
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showAddWalkInDialog,
-        backgroundColor: const Color(0xFFF27B50),
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.person_add),
-        label: const Text('Add Walk-In'),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Host Greeting Banner
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF162C1E),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-                ),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 26,
-                      backgroundColor: const Color(0xFFF1C77F).withValues(alpha: 0.2),
-                      child: const Icon(Icons.room_service, color: Color(0xFFF1C77F), size: 26),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Host Station • ${widget.profile.fullName}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '${_queue.length} parties currently waiting',
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.6),
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 24),
-
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Live Waiting List',
+            title: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFF6B35),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text(
+                    'RECEPTIONIST',
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 18,
+                      fontSize: 12,
                       fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.05),
-                      borderRadius: BorderRadius.circular(8),
+                ),
+                GestureDetector(
+                  onTap: _isSigningOut ? null : _signOut,
+                  child: _isSigningOut 
+                      ? const SizedBox(
+                          width: 12, 
+                          height: 12, 
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                        )
+                      : Text(
+                          'Tap to switch role',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.5),
+                            fontSize: 12,
+                          ),
+                        ),
+                ),
+                const Text(
+                  'DineQueue',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Ocean Bistro',
+                        style: TextStyle(
+                          color: Color(0xFF1E293B),
+                          fontSize: 28,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Receptionist Desk • Live Operations',
+                        style: TextStyle(
+                          color: const Color(0xFF64748B),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF10B981),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      const Text(
+                        'On Duty',
+                        style: TextStyle(
+                          color: Color(0xFF10B981),
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  )
+                ],
+              ),
+              const SizedBox(height: 24),
+
+              // Grid Stats
+              GridView.count(
+                crossAxisCount: 2,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                childAspectRatio: 1.5,
+                children: [
+                  _buildStatCard(
+                    'Today\'s RSV',
+                    '2',
+                    Icons.calendar_today_outlined,
+                    const Color(0xFFF8FAFC),
+                    const Color(0xFF1E293B),
+                    const Color(0xFF64748B),
+                  ),
+                  _buildStatCard(
+                    'Available',
+                    '5/12',
+                    Icons.check_circle_outline,
+                    const Color(0xFFF0FDF4),
+                    const Color(0xFF10B981),
+                    const Color(0xFF10B981),
+                  ),
+                  _buildStatCard(
+                    'Waiting Queue',
+                    '4',
+                    Icons.people_outline,
+                    const Color(0xFFFFF7ED),
+                    const Color(0xFFD97706),
+                    const Color(0xFFD97706),
+                  ),
+                  _buildStatCard(
+                    'Occupied',
+                    '4',
+                    Icons.restaurant,
+                    const Color(0xFFFEF2F2),
+                    const Color(0xFFDC2626),
+                    const Color(0xFFDC2626),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+
+              // Action Buttons
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () {},
+                      icon: const Icon(Icons.person_add_alt_1, color: Colors.white, size: 20),
+                      label: const Text(
+                        '+ Walk-In',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF143621),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
                     ),
-                    child: Text(
-                      'Auto-synced',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.5),
-                        fontSize: 11,
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {},
+                      icon: const Icon(Icons.grid_view, color: Color(0xFF1E293B), size: 20),
+                      label: const Text(
+                        'Floor Plan',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        side: const BorderSide(color: Color(0xFFE2E8F0)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 32),
 
-              if (_queue.isEmpty)
-                Container(
-                  padding: const EdgeInsets.all(32),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF162C1E),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Center(
-                    child: Text(
-                      'No guests in queue right now. Great job!',
-                      style: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
+              // Upcoming Arrivals Header
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Upcoming Arrivals',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF1E293B),
                     ),
                   ),
-                )
-              else
-                ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: _queue.length,
-                  separatorBuilder: (context, i) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    final item = _queue[index];
-                    final isCalled = item['status'] == 'called';
+                  Text(
+                    'View All (2)',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
 
-                    return Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF162C1E),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: isCalled
-                              ? const Color(0xFFF27B50)
-                              : Colors.white.withValues(alpha: 0.08),
-                          width: isCalled ? 1.5 : 1,
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF0B1910),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      item['id'],
-                                      style: const TextStyle(
-                                        color: Color(0xFFF1C77F),
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Text(
-                                    item['name'],
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: isCalled
-                                      ? const Color(0xFFF27B50).withValues(alpha: 0.2)
-                                      : Colors.white.withValues(alpha: 0.05),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  isCalled ? 'TABLE READY (CALLED)' : 'WAITING',
-                                  style: TextStyle(
-                                    color: isCalled ? const Color(0xFFF27B50) : Colors.white60,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          Row(
-                            children: [
-                              Icon(Icons.group, size: 14, color: Colors.white.withValues(alpha: 0.5)),
-                              const SizedBox(width: 4),
-                              Text(
-                                '${item['partySize']} Guests',
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.7),
-                                  fontSize: 12,
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Icon(Icons.access_time, size: 14, color: Colors.white.withValues(alpha: 0.5)),
-                              const SizedBox(width: 4),
-                              Text(
-                                'Waited ${item['waitTime']}',
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.7),
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 14),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: OutlinedButton.icon(
-                                  onPressed: () => _callParty(index),
-                                  icon: const Icon(Icons.notifications_active, size: 16),
-                                  label: const Text('Call Party'),
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: const Color(0xFFF27B50),
-                                    side: const BorderSide(color: Color(0xFFF27B50)),
-                                    padding: const EdgeInsets.symmetric(vertical: 10),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  onPressed: () => _seatParty(index),
-                                  icon: const Icon(Icons.check_circle_outline, size: 16),
-                                  label: const Text('Seat Table'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF00E676),
-                                    foregroundColor: Colors.black,
-                                    padding: const EdgeInsets.symmetric(vertical: 10),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              const SizedBox(height: 80),
+              // Reservation List
+              _buildReservationCard(
+                name: 'Ayesha Perera',
+                time: '7:30 PM',
+                guests: '4 Guests',
+                table: 'Table 04',
+                requirement: 'Req: Window seat facing the ocean, celebrating an anniversary.',
+                status: 'Confirmed',
+                isConfirmed: true,
+                showActions: true,
+              ),
+              const SizedBox(height: 16),
+              _buildReservationCard(
+                name: 'Ayesha Perera',
+                time: '8:00 PM',
+                guests: '2 Guests',
+                table: 'Table 02',
+                requirement: 'Req: Quiet corner table.',
+                status: 'Completed',
+                isConfirmed: false,
+                showActions: false,
+              ),
             ],
           ),
         ),
+        bottomNavigationBar: BottomNavigationBar(
+          currentIndex: _selectedIndex,
+          onTap: (index) {
+            setState(() {
+              _selectedIndex = index;
+            });
+          },
+          type: BottomNavigationBarType.fixed,
+          backgroundColor: Colors.white,
+          selectedItemColor: const Color(0xFF143621),
+          unselectedItemColor: const Color(0xFF94A3B8),
+          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 12),
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.grid_view_rounded),
+              label: 'Dashboard',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.calendar_today_outlined),
+              label: 'Reservations',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.table_restaurant_outlined),
+              label: 'Tables',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.people_outline),
+              label: 'Queue',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.person_outline),
+              label: 'Profile',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatCard(String title, String value, IconData icon, Color bgColor, Color valueColor, Color iconColor) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: bgColor == const Color(0xFFF8FAFC) 
+              ? const Color(0xFFE2E8F0) 
+              : bgColor.withOpacity(0.5), // Fallback slightly darker border
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 18, color: iconColor),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF475569),
+                ),
+              ),
+            ],
+          ),
+          const Spacer(),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 32,
+              fontWeight: FontWeight.bold,
+              color: valueColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReservationCard({
+    required String name,
+    required String time,
+    required String guests,
+    required String table,
+    required String requirement,
+    required String status,
+    required bool isConfirmed,
+    required bool showActions,
+  }) {
+    final statusColor = isConfirmed ? const Color(0xFF10B981) : const Color(0xFF059669);
+    final statusBgColor = isConfirmed ? const Color(0xFFECFDF5) : const Color(0xFFD1FAE5);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                name,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1E293B),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusBgColor,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: statusColor.withOpacity(0.3)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.check, size: 14, color: statusColor),
+                    const SizedBox(width: 4),
+                    Text(
+                      status,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: statusColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '$time • $guests • $table',
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF64748B),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              requirement,
+              style: const TextStyle(
+                fontSize: 14,
+                color: Color(0xFF334155),
+              ),
+            ),
+          ),
+          if (showActions) ...[
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {},
+                    icon: const Icon(Icons.check, color: Colors.white, size: 18),
+                    label: const Text(
+                      'Check In & Seat',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2E9B60),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () {},
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      side: const BorderSide(color: Color(0xFFE2E8F0)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text(
+                      'Reassign Table',
+                      style: TextStyle(
+                        color: Color(0xFF475569),
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
       ),
     );
   }
