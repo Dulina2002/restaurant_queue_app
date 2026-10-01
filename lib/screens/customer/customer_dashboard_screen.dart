@@ -7,7 +7,9 @@ import 'widgets/filter_restaurants_sheet.dart';
 import 'widgets/customer_notifications_sheet.dart';
 import 'widgets/customer_bookings_view.dart';
 import 'widgets/customer_queue_view.dart';
+import 'create_booking_screen.dart';
 import '../../services/auth_service.dart';
+import '../../services/supabase_service.dart';
 
 class CustomerDashboardScreen extends StatefulWidget {
   final UserProfile? profile;
@@ -54,6 +56,8 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
   int _partySize = 2;
 
   UserProfile? _currentProfile;
+  List<Map<String, dynamic>> _restaurants = [];
+  bool _isLoadingRestaurants = true;
 
   @override
   void initState() {
@@ -61,6 +65,17 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
     _bottomNavIndex = widget.initialTabIndex;
     _currentProfile = widget.profile;
     _loadProfileAsync();
+    _loadRestaurants();
+  }
+
+  Future<void> _loadRestaurants() async {
+    final data = await SupabaseService().getRestaurants();
+    if (mounted) {
+      setState(() {
+        _restaurants = data;
+        _isLoadingRestaurants = false;
+      });
+    }
   }
 
   Future<void> _loadProfileAsync() async {
@@ -122,6 +137,75 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
     );
   }
 
+  Future<void> _joinQueue(String restaurantId) async {
+    final userId = AuthService().currentUser?.id;
+    if (userId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please log in to join a queue.')),
+      );
+      return;
+    }
+    
+    try {
+      await SupabaseService().joinQueue(restaurantId, userId, _partySize);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Successfully joined the queue!')),
+        );
+        setState(() {
+          _bottomNavIndex = 3;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to join queue: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _bookTable(Map<String, dynamic> restaurant) async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CreateBookingScreen(restaurant: restaurant),
+      ),
+    );
+
+    if (result != null && result is Map<String, dynamic>) {
+      final userId = AuthService().currentUser?.id;
+      if (userId != null) {
+        try {
+          await SupabaseService().createBooking(
+            restaurantId: result['restaurant_id'],
+            userId: userId,
+            bookingDate: result['date'],
+            partySize: result['party_size'],
+          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Table booked successfully!')),
+            );
+            setState(() {
+              _bottomNavIndex = 2;
+            });
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Failed to book table: $e')),
+            );
+          }
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please log in to book a table.')),
+        );
+      }
+    }
+  }
+
   String _getGreeting() {
     final hour = DateTime.now().hour;
     if (hour < 12) return 'Good morning,';
@@ -144,6 +228,7 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
         return _buildExploreView();
       case 2:
         return CustomerBookingsView(
+          restaurants: _restaurants,
           onExploreTap: () => setState(() => _bottomNavIndex = 1),
         );
       case 3:
@@ -215,52 +300,13 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
   Widget _buildExploreView() {
     final selectedCuisine = _exploreCuisines[_selectedExploreCuisineIndex];
 
-    final allRestaurants = [
-      {
-        'name': 'Ocean Bistro',
-        'cuisine': 'Italian',
-        'tag': 'Italian • Seafood',
-        'location': '1.2 km • Open until 10:30 PM',
-        'rating': '4.7',
-        'reviews': '342',
-        'status': 'Tables Available',
-        'isAvailable': true,
-      },
-      {
-        'name': 'The Mango Tree',
-        'cuisine': 'Indian',
-        'tag': 'Indian • North Indian',
-        'location': '2.1 km • Open until 11:00 PM',
-        'rating': '4.8',
-        'reviews': '512',
-        'status': 'Few Tables Left',
-        'isAvailable': false,
-      },
-      {
-        'name': 'Nihonbashi',
-        'cuisine': 'Japanese',
-        'tag': 'Japanese • Sushi & Robata',
-        'location': '3.4 km • Open until 11:00 PM',
-        'rating': '4.9',
-        'reviews': '620',
-        'status': 'Tables Available',
-        'isAvailable': true,
-      },
-      {
-        'name': 'Black Cat Café',
-        'cuisine': 'Café',
-        'tag': 'Café • Artisan Brunch',
-        'location': '0.8 km • Open until 9:00 PM',
-        'rating': '4.6',
-        'reviews': '180',
-        'status': 'Tables Available',
-        'isAvailable': true,
-      },
-    ];
+    if (_isLoadingRestaurants) {
+      return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+    }
 
     final filtered = selectedCuisine == 'All'
-        ? allRestaurants
-        : allRestaurants.where((r) => r['cuisine'] == selectedCuisine).toList();
+        ? _restaurants
+        : _restaurants.where((r) => r['cuisine'] == selectedCuisine).toList();
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
@@ -374,16 +420,23 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
 
           // Restaurant Cards List
           ...filtered.map((item) {
+            final isAvailable = item['is_queue_available'] as bool? ?? true;
+            final waitlistCount = item['waitlist_count'] as int? ?? 0;
+            final status = waitlistCount > 0 ? '$waitlistCount in queue' : (isAvailable ? 'Tables Available' : 'Few Tables Left');
+
             return Padding(
               padding: const EdgeInsets.only(bottom: 16),
-              child: _buildExploreCard(
-                name: item['name'] as String,
-                tag: item['tag'] as String,
-                location: item['location'] as String,
-                rating: item['rating'] as String,
-                reviews: item['reviews'] as String,
-                status: item['status'] as String,
-                isAvailable: item['isAvailable'] as bool,
+              child: GestureDetector(
+                onTap: () => _bookTable(item),
+                child: _buildExploreCard(
+                  name: item['name'] as String,
+                  tag: item['tag'] as String,
+                  location: item['location'] as String,
+                  rating: item['rating'] as String,
+                  reviews: item['reviews'] as String,
+                  status: status,
+                  isAvailable: isAvailable,
+                ),
               ),
             );
           }),
@@ -549,7 +602,7 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
   // --- 2. VIRTUAL QUEUE VIEW SCREEN ---
   // ==========================================
   Widget _buildQueueView() {
-    return const CustomerQueueView();
+    return CustomerQueueView(restaurants: _restaurants);
   }
 
   // ==========================================
@@ -955,65 +1008,90 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
           const SizedBox(height: 16),
 
           // Virtual Queue Banner
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFF9EC),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFFFE8B2)),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFFF6B4A),
-                    shape: BoxShape.circle,
+          StreamBuilder<List<Map<String, dynamic>>>(
+            stream: AuthService().currentUser?.id != null
+                ? SupabaseService().listenToUserQueue(AuthService().currentUser!.id)
+                : const Stream.empty(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                return const SizedBox.shrink(); // Hide if no active queue
+              }
+
+              final activeQueue = snapshot.data!.first;
+              final restaurantId = activeQueue['restaurant_id'];
+              
+              // Find restaurant details from loaded data
+              final restaurant = _restaurants.firstWhere(
+                (r) => r['id'] == restaurantId,
+                orElse: () => <String, dynamic>{},
+              );
+
+              final restaurantName = restaurant['name'] ?? 'Restaurant';
+              final estWait = restaurant['est_wait'] ?? 'Calculating...';
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 24),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF9EC),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFFFE8B2)),
                   ),
-                  alignment: Alignment.center,
-                  child: const Text(
-                    'Q12',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                      Text(
-                        'Virtual Queue: Position #3',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFFD9531E),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFFF6B4A),
+                          shape: BoxShape.circle,
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          'P${activeQueue['party_size']}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
-                      SizedBox(height: 2),
-                      Text(
-                        'Ocean Bistro • Est. wait 12 min',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary,
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Virtual Queue Active',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFFD9531E),
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '$restaurantName • Est. wait $estWait',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
                         ),
+                      ),
+                      const Icon(
+                        Icons.chevron_right_rounded,
+                        color: AppColors.accentOrange,
+                        size: 22,
                       ),
                     ],
                   ),
                 ),
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  color: AppColors.accentOrange,
-                  size: 22,
-                ),
-              ],
-            ),
+              );
+            },
           ),
-          const SizedBox(height: 24),
 
           // Restaurants Near You Section
           Column(
@@ -1039,28 +1117,37 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
           ),
           const SizedBox(height: 14),
 
-          _buildHomeRestaurantCard(
-            name: 'Ocean Bistro',
-            tag: 'Italian • Seafood',
-            location: 'Colombo 03 • 1.2 km',
-            rating: '4.8',
-            reviews: '240',
-            waitlistCount: 3,
-            estWait: '12 min',
-            isQueueAvailable: true,
-          ),
-          const SizedBox(height: 14),
-
-          _buildHomeRestaurantCard(
-            name: 'The Mango Tree',
-            tag: 'Indian • North Indian',
-            location: 'Colombo 07 • 2.1 km',
-            rating: '4.8',
-            reviews: '512',
-            waitlistCount: 0,
-            estWait: 'Direct Seating',
-            isQueueAvailable: false,
-          ),
+          if (_isLoadingRestaurants)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(20.0),
+                child: CircularProgressIndicator(color: AppColors.primary),
+              ),
+            )
+          else if (_restaurants.isEmpty)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(20.0),
+                child: Text('No restaurants found.', style: TextStyle(color: AppColors.textMuted)),
+              ),
+            )
+          else
+            ..._restaurants.map((item) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: _buildHomeRestaurantCard(
+                  id: item['id'] as String? ?? '',
+                  name: item['name'] as String? ?? '',
+                  tag: item['tag'] as String? ?? '',
+                  location: item['location'] as String? ?? '',
+                  rating: item['rating'] as String? ?? '0.0',
+                  reviews: item['reviews'] as String? ?? '0',
+                  waitlistCount: item['waitlist_count'] as int? ?? 0,
+                  estWait: item['est_wait'] as String? ?? 'Direct Seating',
+                  isQueueAvailable: item['is_queue_available'] as bool? ?? true,
+                ),
+              );
+            }),
           const SizedBox(height: 24),
         ],
       ),
@@ -1085,6 +1172,7 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
   }
 
   Widget _buildHomeRestaurantCard({
+    required String id,
     required String name,
     required String tag,
     required String location,
@@ -1234,7 +1322,13 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
                       ],
                     ),
                     ElevatedButton(
-                      onPressed: () {},
+                      onPressed: () {
+                        if (isQueueAvailable && id.isNotEmpty) {
+                          _joinQueue(id);
+                        } else if (!isQueueAvailable && id.isNotEmpty) {
+                          _bookTable({'id': id, 'name': name});
+                        }
+                      },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF0D3B2E),
                         foregroundColor: Colors.white,
