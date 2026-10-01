@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../../../services/auth_service.dart';
+import '../../../services/supabase_service.dart';
 import 'modify_reservation_screen.dart';
 import 'cancel_reservation_dialog.dart';
 
 class CustomerBookingsView extends StatefulWidget {
   final VoidCallback? onExploreTap;
+  final List<Map<String, dynamic>> restaurants;
 
   const CustomerBookingsView({
     super.key,
     this.onExploreTap,
+    this.restaurants = const [],
   });
 
   @override
@@ -19,77 +24,45 @@ class _CustomerBookingsViewState extends State<CustomerBookingsView> {
 
   final List<String> _tabs = ['Upcoming', 'Past', 'Cancelled'];
 
-  // Mock list of upcoming bookings
-  final List<Map<String, dynamic>> _upcomingBookings = [
-    {
-      'id': 'RSV10245',
-      'restaurantName': 'Ocean Bistro',
-      'date': 'Saturday, 12 September',
-      'time': '7:30 PM',
-      'guests': 4,
-      'status': 'Confirmed',
-    },
-  ];
-
-  // Mock list of past bookings
-  final List<Map<String, dynamic>> _pastBookings = [
-    {
-      'id': 'RSV09812',
-      'restaurantName': 'The Mango Tree',
-      'date': 'Friday, 28 August',
-      'time': '8:00 PM',
-      'guests': 2,
-      'status': 'Completed',
-    },
-    {
-      'id': 'RSV09450',
-      'restaurantName': 'Ministry of Crab',
-      'date': 'Sunday, 15 August',
-      'time': '1:30 PM',
-      'guests': 5,
-      'status': 'Completed',
-    },
-  ];
-
-  // Mock list of cancelled bookings
-  final List<Map<String, dynamic>> _cancelledBookings = [
-    {
-      'id': 'RSV08990',
-      'restaurantName': 'Nihonbashi',
-      'date': 'Wednesday, 5 August',
-      'time': '6:30 PM',
-      'guests': 2,
-      'status': 'Cancelled',
-    },
-  ];
-
   void _showModifyDialog(Map<String, dynamic> booking) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => ModifyReservationScreen(
           booking: booking,
-          onSave: (updatedBooking) {
-            setState(() {
-              final index = _upcomingBookings
-                  .indexWhere((b) => b['id'] == booking['id']);
-              if (index != -1) {
-                _upcomingBookings[index] = updatedBooking;
-              }
-            });
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Row(
-                  children: [
-                    Icon(Icons.check_circle, color: Colors.white, size: 18),
-                    SizedBox(width: 8),
-                    Text('Reservation updated successfully!'),
-                  ],
-                ),
-                backgroundColor: Color(0xFF0D3B2E),
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
+          onSave: (updatedBooking) async {
+            // Note: Since we don't have a specific update method for everything yet, let's keep it simple
+            // We just let them cancel and rebook. But we can update the party size and date.
+            try {
+               await SupabaseService().updateBookingStatus(booking['id'], 'cancelled');
+               await SupabaseService().createBooking(
+                  restaurantId: updatedBooking['restaurant_id'],
+                  userId: AuthService().currentUser!.id,
+                  bookingDate: updatedBooking['date'],
+                  partySize: updatedBooking['party_size'],
+               );
+               if (mounted) {
+                 ScaffoldMessenger.of(context).showSnackBar(
+                   const SnackBar(
+                     content: Row(
+                       children: [
+                         Icon(Icons.check_circle, color: Colors.white, size: 18),
+                         SizedBox(width: 8),
+                         Text('Reservation updated successfully!'),
+                       ],
+                     ),
+                     backgroundColor: Color(0xFF0D3B2E),
+                     behavior: SnackBarBehavior.floating,
+                   ),
+                 );
+               }
+            } catch (e) {
+               if (mounted) {
+                 ScaffoldMessenger.of(context).showSnackBar(
+                   SnackBar(content: Text('Failed to update booking: $e')),
+                 );
+               }
+            }
           },
         ),
       ),
@@ -101,20 +74,25 @@ class _CustomerBookingsViewState extends State<CustomerBookingsView> {
       context: context,
       builder: (ctx) => CancelReservationDialog(
         booking: booking,
-        onConfirmCancel: () {
-          setState(() {
-            _upcomingBookings.remove(booking);
-            final cancelledItem = Map<String, dynamic>.from(booking);
-            cancelledItem['status'] = 'Cancelled';
-            _cancelledBookings.insert(0, cancelledItem);
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Reservation #${booking['id']} cancelled.'),
-              backgroundColor: const Color(0xFFDC4437),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+        onConfirmCancel: () async {
+          try {
+            await SupabaseService().updateBookingStatus(booking['id'], 'cancelled');
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Reservation #${booking['id'].toString().substring(0,8)} cancelled.'),
+                  backgroundColor: const Color(0xFFDC4437),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            }
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Failed to cancel booking: $e')),
+              );
+            }
+          }
         },
       ),
     );
@@ -208,31 +186,50 @@ class _CustomerBookingsViewState extends State<CustomerBookingsView> {
   }
 
   Widget _buildTabContent() {
-    switch (_selectedTabIndex) {
-      case 0:
-        return _buildBookingsList(
-          bookings: _upcomingBookings,
-          isUpcoming: true,
-          emptyMessage: 'No upcoming bookings found.',
-          emptySubMessage: 'Explore top restaurants and reserve your table now.',
-        );
-      case 1:
-        return _buildBookingsList(
-          bookings: _pastBookings,
-          isUpcoming: false,
-          emptyMessage: 'No past bookings yet.',
-          emptySubMessage: 'Your completed dining experiences will appear here.',
-        );
-      case 2:
-        return _buildBookingsList(
-          bookings: _cancelledBookings,
-          isUpcoming: false,
-          emptyMessage: 'No cancelled bookings.',
-          emptySubMessage: 'Any cancelled reservations will be archived here.',
-        );
-      default:
-        return const SizedBox.shrink();
+    final userId = AuthService().currentUser?.id;
+    if (userId == null) {
+      return const Center(child: Text('Please log in to view your bookings.'));
     }
+
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: SupabaseService().listenToUserBookings(userId),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator(color: Color(0xFF1B4D3E)));
+        }
+
+        final bookings = snapshot.data ?? [];
+        final upcoming = bookings.where((b) => b['status'] == 'confirmed').toList();
+        final past = bookings.where((b) => b['status'] == 'completed').toList();
+        final cancelled = bookings.where((b) => b['status'] == 'cancelled').toList();
+
+        switch (_selectedTabIndex) {
+          case 0:
+            return _buildBookingsList(
+              bookings: upcoming,
+              isUpcoming: true,
+              emptyMessage: 'No upcoming bookings found.',
+              emptySubMessage: 'Explore top restaurants and reserve your table now.',
+            );
+          case 1:
+            return _buildBookingsList(
+              bookings: past,
+              isUpcoming: false,
+              emptyMessage: 'No past bookings yet.',
+              emptySubMessage: 'Your completed dining experiences will appear here.',
+            );
+          case 2:
+            return _buildBookingsList(
+              bookings: cancelled,
+              isUpcoming: false,
+              emptyMessage: 'No cancelled bookings.',
+              emptySubMessage: 'Any cancelled reservations will be archived here.',
+            );
+          default:
+            return const SizedBox.shrink();
+        }
+      },
+    );
   }
 
   Widget _buildBookingsList({
@@ -311,9 +308,20 @@ class _CustomerBookingsViewState extends State<CustomerBookingsView> {
   }
 
   Widget _buildBookingCard(Map<String, dynamic> booking, bool isUpcoming) {
-    final status = booking['status'] as String;
-    final isConfirmed = status == 'Confirmed';
-    final isCancelled = status == 'Cancelled';
+    final status = (booking['status'] as String? ?? '').toLowerCase();
+    final isConfirmed = status == 'confirmed';
+    final isCancelled = status == 'cancelled';
+    final restaurantId = booking['restaurant_id'];
+    final restaurant = widget.restaurants.firstWhere(
+      (r) => r['id'] == restaurantId,
+      orElse: () => <String, dynamic>{'name': 'Unknown Restaurant'},
+    );
+    final restName = restaurant['name'];
+    final guests = booking['party_size'] ?? 1;
+    final bDate = DateTime.tryParse(booking['booking_date'] ?? '');
+    final dateStr = bDate != null ? DateFormat('EEEE, d MMMM').format(bDate) : 'Unknown Date';
+    final timeStr = bDate != null ? DateFormat('h:mm a').format(bDate) : 'Unknown Time';
+    final shortId = booking['id'].toString().length > 8 ? booking['id'].toString().substring(0,8).toUpperCase() : booking['id'].toString().toUpperCase();
 
     Color statusColor;
     IconData statusIcon;
@@ -360,7 +368,7 @@ class _CustomerBookingsViewState extends State<CustomerBookingsView> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      booking['restaurantName'] ?? '',
+                      restName,
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -369,7 +377,7 @@ class _CustomerBookingsViewState extends State<CustomerBookingsView> {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      'Booking #${booking['id']}',
+                      'Booking #$shortId',
                       style: const TextStyle(
                         fontSize: 12,
                         color: Color(0xFF9CA3AF),
@@ -388,7 +396,7 @@ class _CustomerBookingsViewState extends State<CustomerBookingsView> {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    status,
+                    status.toUpperCase(),
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
@@ -416,7 +424,7 @@ class _CustomerBookingsViewState extends State<CustomerBookingsView> {
                   ),
                   const SizedBox(width: 5),
                   Text(
-                    booking['date'] ?? '',
+                    dateStr,
                     style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
@@ -438,7 +446,7 @@ class _CustomerBookingsViewState extends State<CustomerBookingsView> {
                   ),
                   const SizedBox(width: 5),
                   Text(
-                    booking['time'] ?? '',
+                    timeStr,
                     style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
@@ -460,7 +468,7 @@ class _CustomerBookingsViewState extends State<CustomerBookingsView> {
                   ),
                   const SizedBox(width: 5),
                   Text(
-                    '${booking['guests']} Guests',
+                    '$guests Guests',
                     style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
@@ -532,21 +540,26 @@ class _CustomerBookingsViewState extends State<CustomerBookingsView> {
             SizedBox(
               width: double.infinity,
               child: OutlinedButton(
-                onPressed: () {
-                  setState(() {
-                    _cancelledBookings.remove(booking);
-                    final rebooked = Map<String, dynamic>.from(booking);
-                    rebooked['status'] = 'Confirmed';
-                    _upcomingBookings.insert(0, rebooked);
-                    _selectedTabIndex = 0;
-                  });
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Re-booking confirmed!'),
-                      backgroundColor: Color(0xFF0D3B2E),
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
+                onPressed: () async {
+                  // Rebook action
+                  try {
+                    await SupabaseService().updateBookingStatus(booking['id'], 'confirmed');
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Re-booking confirmed!'),
+                          backgroundColor: Color(0xFF0D3B2E),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    }
+                  } catch(e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Failed to rebook: $e')),
+                      );
+                    }
+                  }
                 },
                 style: OutlinedButton.styleFrom(
                   foregroundColor: const Color(0xFF0D3B2E),
@@ -605,21 +618,30 @@ class _CustomerBookingsViewState extends State<CustomerBookingsView> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: () {
-                      setState(() {
-                        final rebooked = Map<String, dynamic>.from(booking);
-                        rebooked['status'] = 'Confirmed';
-                        rebooked['date'] = 'Saturday, 19 September';
-                        _upcomingBookings.insert(0, rebooked);
-                        _selectedTabIndex = 0;
-                      });
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Table re-booked for Saturday, 19 September!'),
-                          backgroundColor: Color(0xFF0D3B2E),
-                          behavior: SnackBarBehavior.floating,
-                        ),
-                      );
+                    onPressed: () async {
+                      try {
+                        await SupabaseService().createBooking(
+                          restaurantId: booking['restaurant_id'],
+                          userId: AuthService().currentUser!.id,
+                          bookingDate: DateTime.now().add(const Duration(days: 1)),
+                          partySize: booking['party_size'],
+                        );
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Table re-booked for tomorrow!'),
+                              backgroundColor: Color(0xFF0D3B2E),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Failed to rebook: $e')),
+                          );
+                        }
+                      }
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF0D3B2E),
