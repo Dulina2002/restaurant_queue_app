@@ -10,7 +10,7 @@ Future<void> main() async {
   
   await Supabase.initialize(
     url: dotenv.env['SUPABASE_URL']!,
-    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
+    publishableKey: dotenv.env['SUPABASE_ANON_KEY']!,
   );
 
   runApp(const RestaurantQueueApp());
@@ -26,7 +26,8 @@ class RestaurantQueueApp extends StatelessWidget {
       title: 'Restaurant Queue App',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.deepOrange,
+          seedColor: const Color(0xFFF27B50),
+          brightness: Brightness.dark,
         ),
         useMaterial3: true,
       ),
