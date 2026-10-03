@@ -18,7 +18,7 @@ class DefaultFirebaseOptions {
   }
 
   static FirebaseOptions get web => FirebaseOptions(
-        apiKey: dotenv.env['FIREBASE_API_KEY'] ?? 'AIzaSyDemoApiKeyForWebInitialization123',
+        apiKey: dotenv.env['FIREBASE_API_KEY'] ?? 'demo_web_api_key_placeholder',
         appId: dotenv.env['FIREBASE_APP_ID'] ?? '1:100000000000:web:demo123456789',
         messagingSenderId: dotenv.env['FIREBASE_MESSAGING_SENDER_ID'] ?? '100000000000',
         projectId: dotenv.env['FIREBASE_PROJECT_ID'] ?? 'restaurant-queue-app-demo',
@@ -27,7 +27,7 @@ class DefaultFirebaseOptions {
       );
 
   static FirebaseOptions get android => FirebaseOptions(
-        apiKey: dotenv.env['FIREBASE_API_KEY'] ?? 'AIzaSyDemoApiKeyForAndroid123',
+        apiKey: dotenv.env['FIREBASE_API_KEY'] ?? 'demo_android_api_key_placeholder',
         appId: dotenv.env['FIREBASE_APP_ID'] ?? '1:100000000000:android:demo123456789',
         messagingSenderId: dotenv.env['FIREBASE_MESSAGING_SENDER_ID'] ?? '100000000000',
         projectId: dotenv.env['FIREBASE_PROJECT_ID'] ?? 'restaurant-queue-app-demo',
@@ -35,7 +35,7 @@ class DefaultFirebaseOptions {
       );
 
   static FirebaseOptions get ios => FirebaseOptions(
-        apiKey: dotenv.env['FIREBASE_API_KEY'] ?? 'AIzaSyDemoApiKeyForIos123',
+        apiKey: dotenv.env['FIREBASE_API_KEY'] ?? 'demo_ios_api_key_placeholder',
         appId: dotenv.env['FIREBASE_APP_ID'] ?? '1:100000000000:ios:demo123456789',
         messagingSenderId: dotenv.env['FIREBASE_MESSAGING_SENDER_ID'] ?? '100000000000',
         projectId: dotenv.env['FIREBASE_PROJECT_ID'] ?? 'restaurant-queue-app-demo',
