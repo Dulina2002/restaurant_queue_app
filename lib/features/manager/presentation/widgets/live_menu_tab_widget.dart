@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../services/firestore_service.dart';
 import '../../data/models/live_menu_dish_model.dart';
 
 class LiveMenuTabWidget extends StatefulWidget {
@@ -10,7 +11,7 @@ class LiveMenuTabWidget extends StatefulWidget {
 }
 
 class _LiveMenuTabWidgetState extends State<LiveMenuTabWidget> {
-  late List<LiveMenuDish> _dishes;
+  final FirestoreService _firestoreService = FirestoreService();
   String _selectedRestaurantFilter = 'All';
 
   final List<String> _restaurantOptions = [
@@ -27,183 +28,234 @@ class _LiveMenuTabWidgetState extends State<LiveMenuTabWidget> {
     'Beverages',
   ];
 
-  @override
-  void initState() {
-    super.initState();
-    _dishes = LiveMenuDish.mockList();
-  }
-
-  List<LiveMenuDish> get _filteredDishes {
-    if (_selectedRestaurantFilter == 'All') {
-      return _dishes;
+  void _toggleAvailability(String id, bool val) async {
+    try {
+      await _firestoreService.toggleDishAvailability(id, val);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(val ? 'Dish marked AVAILABLE in Firestore' : 'Dish marked 86\'D in Firestore'),
+          duration: const Duration(seconds: 1),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error updating status: $e')),
+      );
     }
-    return _dishes.where((d) => d.restaurant == _selectedRestaurantFilter).toList();
   }
 
-  void _toggleAvailability(String id, bool val) {
-    setState(() {
-      final index = _dishes.indexWhere((d) => d.id == id);
-      if (index != -1) {
-        _dishes[index] = _dishes[index].copyWith(isAvailable: val);
-      }
-    });
+  void _addDish(LiveMenuDish newDish) async {
+    try {
+      await _firestoreService.addDish(newDish);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Dish added to Firestore Live Menu')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error adding dish: $e')),
+      );
+    }
   }
 
-  void _addDish(LiveMenuDish newDish) {
-    setState(() {
-      _dishes.add(newDish);
-    });
+  void _editDish(LiveMenuDish updatedDish) async {
+    try {
+      await _firestoreService.updateDish(updatedDish);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Dish updated in Firestore Live Menu')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error updating dish: $e')),
+      );
+    }
   }
 
-  void _editDish(LiveMenuDish updatedDish) {
-    setState(() {
-      final index = _dishes.indexWhere((d) => d.id == updatedDish.id);
-      if (index != -1) {
-        _dishes[index] = updatedDish;
-      }
-    });
-  }
-
-  void _deleteDish(String id) {
-    setState(() {
-      _dishes.removeWhere((d) => d.id == id);
-    });
+  void _deleteDish(String id) async {
+    try {
+      await _firestoreService.deleteDish(id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Dish removed from Firestore')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error deleting dish: $e')),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // --- Live Sync Banner Container ---
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: const Color(0xFFE8F5E9),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFFC8E6C9)),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Icon(
-                Icons.sync,
-                color: AppColors.primary,
-                size: 18,
-              ),
-              SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Live Sync Connected: Menu changes and 86\'d status update customer-facing reservation pre-orders and dining menus in real-time.',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: AppColors.primary,
-                    height: 1.35,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
+    return StreamBuilder<List<LiveMenuDish>>(
+      stream: _firestoreService.streamLiveMenu(restaurantId: _selectedRestaurantFilter),
+      builder: (context, snapshot) {
+        final dishes = snapshot.data ?? LiveMenuDish.mockList();
+        final isLoading = snapshot.connectionState == ConnectionState.waiting;
 
-        // --- Header Section: Title & + Add Dish Button ---
-        Row(
+        return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Expanded(
-              child: Column(
+            // --- Live Sync Banner Container ---
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE8F5E9),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFC8E6C9)),
+              ),
+              child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: const [
-                  Text(
-                    'Live Menu & 86 Item Management',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
+                  Icon(
+                    Icons.sync,
+                    color: AppColors.primary,
+                    size: 18,
                   ),
-                  SizedBox(height: 4),
-                  Text(
-                    'Instant toggle availability, edit price, or add specials.',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: AppColors.textSecondary,
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Live Sync Connected: Menu changes and 86\'d status update customer-facing reservation pre-orders and dining menus in real-time.',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: AppColors.primary,
+                        height: 1.35,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 8),
-            ElevatedButton.icon(
-              onPressed: () => _showAddOrEditDishDialog(),
-              icon: const Icon(Icons.add, size: 16, color: Colors.white),
-              label: const Text(
-                'Add Dish',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 14),
+            const SizedBox(height: 16),
 
-        // --- Restaurant Filter Pills ---
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: _restaurantOptions.map((rest) {
-              final isSelected = _selectedRestaurantFilter == rest;
-              return GestureDetector(
-                onTap: () => setState(() => _selectedRestaurantFilter = rest),
-                child: Container(
-                  margin: const EdgeInsets.only(right: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: isSelected ? AppColors.primary : Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: isSelected ? null : Border.all(color: AppColors.border),
+            // --- Header Section: Title & + Add Dish Button ---
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Text(
+                        'Live Menu & 86 Item Management',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        'Instant toggle availability, edit price, or add specials.',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
                   ),
-                  child: Text(
-                    rest,
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: () => _showAddOrEditDishDialog(),
+                  icon: const Icon(Icons.add, size: 16, color: Colors.white),
+                  label: const Text(
+                    'Add Dish',
                     style: TextStyle(
                       fontSize: 12,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                      color: isSelected ? Colors.white : AppColors.textSecondary,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
                     ),
                   ),
                 ),
-              );
-            }).toList(),
-          ),
-        ),
-        const SizedBox(height: 16),
+              ],
+            ),
+            const SizedBox(height: 14),
 
-        // --- Dish Cards List ---
-        ListView.separated(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: _filteredDishes.length,
-          separatorBuilder: (context, index) => const SizedBox(height: 10),
-          itemBuilder: (context, index) {
-            final dish = _filteredDishes[index];
-            return _buildDishCard(dish);
-          },
-        ),
-      ],
+            // --- Restaurant Filter Pills ---
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: _restaurantOptions.map((rest) {
+                  final isSelected = _selectedRestaurantFilter == rest;
+                  return GestureDetector(
+                    onTap: () => setState(() => _selectedRestaurantFilter = rest),
+                    child: Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: isSelected ? AppColors.primary : Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: isSelected ? null : Border.all(color: AppColors.border),
+                      ),
+                      child: Text(
+                        rest,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                          color: isSelected ? Colors.white : AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // --- Dish Cards List ---
+            if (isLoading)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(24.0),
+                  child: CircularProgressIndicator(color: AppColors.primary),
+                ),
+              )
+            else if (dishes.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: const Center(
+                  child: Text(
+                    'No dishes found in menu. Tap + Add Dish to create one.',
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+                  ),
+                ),
+              )
+            else
+              ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: dishes.length,
+                separatorBuilder: (context, index) => const SizedBox(height: 10),
+                itemBuilder: (context, index) {
+                  final dish = dishes[index];
+                  return _buildDishCard(dish);
+                },
+              ),
+          ],
+        );
+      },
     );
   }
 
@@ -519,6 +571,7 @@ class _LiveMenuTabWidgetState extends State<LiveMenuTabWidget> {
                               } else {
                                 _addDish(LiveMenuDish(
                                   id: DateTime.now().millisecondsSinceEpoch.toString(),
+                                  restaurantId: 'ocean_bistro',
                                   name: name,
                                   restaurant: selectedRestaurant,
                                   category: selectedCategory,

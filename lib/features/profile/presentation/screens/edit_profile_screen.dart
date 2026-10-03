@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../models/user_profile.dart';
+import '../../../../services/auth_service.dart';
 import '../../../../shared/theme/app_colors.dart';
 
 class EditProfileScreen extends StatefulWidget {
@@ -15,16 +16,33 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
+  final AuthService _authService = AuthService();
   bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
+    _loadProfile();
+    _nameController.addListener(() => setState(() {}));
+  }
+
+  Future<void> _loadProfile() async {
     if (widget.profile != null) {
       _nameController.text = widget.profile!.fullName;
       _emailController.text = widget.profile!.email;
+      _phoneController.text = widget.profile!.phoneNumber ?? '';
+    } else {
+      final currentProf = await _authService.getCurrentUserProfile();
+      if (currentProf != null) {
+        _nameController.text = currentProf.fullName;
+        _emailController.text = currentProf.email;
+        _phoneController.text = currentProf.phoneNumber ?? '';
+      } else {
+        _nameController.text = _authService.currentUser?.displayName ?? 'Manager';
+        _emailController.text = _authService.currentUser?.email ?? 'manager@restaurant.com';
+      }
     }
-    _nameController.addListener(() => setState(() {}));
+    if (mounted) setState(() {});
   }
 
   @override
@@ -37,7 +55,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   String _getInitials(String name) {
     final trimmed = name.trim();
-    if (trimmed.isEmpty) return '';
+    if (trimmed.isEmpty) return 'U';
     final parts = trimmed.split(RegExp(r'\s+'));
     if (parts.length > 1) {
       return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
@@ -46,23 +64,46 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   void _handleSave() async {
+    final userId = widget.profile?.id ?? _authService.currentUser?.uid ?? 'demo_user_manager';
+
     setState(() => _isSaving = true);
-    await Future.delayed(const Duration(milliseconds: 500));
-    if (mounted) {
+
+    try {
+      final updatedProf = await _authService.updateProfile(
+        userId: userId,
+        fullName: _nameController.text.trim().isEmpty ? 'Manager' : _nameController.text.trim(),
+        email: _emailController.text.trim().isEmpty ? 'manager@restaurant.com' : _emailController.text.trim(),
+        phoneNumber: _phoneController.text.trim(),
+      );
+
+      if (!mounted) return;
       setState(() => _isSaving = false);
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Row(
             children: [
               Icon(Icons.check_circle, color: Colors.white, size: 20),
               SizedBox(width: 8),
-              Text('Profile updated successfully!'),
+              Text('Profile saved in Firestore!'),
             ],
           ),
           backgroundColor: AppColors.primary,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
+      );
+
+      Future.delayed(const Duration(milliseconds: 600), () {
+        if (mounted) {
+          Navigator.of(context).pop(updatedProf);
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update profile: $e')),
       );
     }
   }

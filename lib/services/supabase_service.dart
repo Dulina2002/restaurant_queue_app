@@ -1,45 +1,32 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user_profile.dart';
 import '../models/user_role.dart';
 import 'auth_service.dart';
+import 'firestore_service.dart';
 
+/// Legacy Service Alias wrapping Firebase Operations
 class SupabaseService {
-  final SupabaseClient _client = Supabase.instance.client;
+  final FirestoreService _firestore = FirestoreService();
   final AuthService _auth = AuthService();
 
-  // Realtime subscription for a restaurant's queue
   Stream<List<Map<String, dynamic>>> listenToQueue(String restaurantId) {
-    return _client
-        .from('queue_entries')
-        .stream(primaryKey: ['id'])
-        .eq('restaurant_id', restaurantId)
-        .order('created_at', ascending: true);
+    return _firestore.streamQueue(restaurantId).map((list) => list.map((item) => item.toFirestore()).toList());
   }
 
-  // Add a user to the queue
   Future<void> joinQueue(String restaurantId, String userId, int partySize) async {
-    await _client.from('queue_entries').insert({
-      'restaurant_id': restaurantId,
-      'user_id': userId,
-      'party_size': partySize,
-      'status': 'waiting',
-    });
+    await _firestore.joinQueue(
+      restaurantId: restaurantId,
+      restaurantName: 'Ocean Bistro',
+      userId: userId,
+      guestName: _auth.currentUser?.displayName ?? 'Guest',
+      partySize: partySize,
+      phoneNumber: '',
+    );
   }
 
-  // Get active restaurants
   Future<List<Map<String, dynamic>>> getRestaurants() async {
-    try {
-      final response = await _client
-          .from('restaurants')
-          .select()
-          .eq('is_active', true);
-      return List<Map<String, dynamic>>.from(response);
-    } catch (_) {
-      return [];
-    }
+    final restaurants = await _firestore.getActiveRestaurants();
+    return restaurants.map((r) => r.toFirestore()).toList();
   }
-
-  // --- Authentication Wrappers ---
 
   Future<UserProfile> signIn(String email, String password) async {
     return await _auth.signIn(email: email, password: password);

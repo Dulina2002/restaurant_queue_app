@@ -1,5 +1,8 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class LiveMenuDish {
   final String id;
+  final String restaurantId;
   final String name;
   final String restaurant;
   final String category;
@@ -9,6 +12,7 @@ class LiveMenuDish {
 
   const LiveMenuDish({
     required this.id,
+    this.restaurantId = 'ocean_bistro',
     required this.name,
     required this.restaurant,
     required this.category,
@@ -17,8 +21,37 @@ class LiveMenuDish {
     this.isAvailable = true,
   });
 
+  factory LiveMenuDish.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data() ?? {};
+    return LiveMenuDish(
+      id: doc.id,
+      restaurantId: data['restaurant_id'] as String? ?? 'ocean_bistro',
+      name: data['name'] as String? ?? '',
+      restaurant: data['restaurant'] as String? ?? 'Ocean Bistro',
+      category: data['category'] as String? ?? 'Mains',
+      price: (data['price'] as num?)?.toDouble() ?? 0.0,
+      description: data['description'] as String? ?? '',
+      isAvailable: data['is_available'] as bool? ?? true,
+    );
+  }
+
+  Map<String, dynamic> toFirestore() {
+    return {
+      'id': id,
+      'restaurant_id': restaurantId,
+      'name': name,
+      'restaurant': restaurant,
+      'category': category,
+      'price': price,
+      'description': description,
+      'is_available': isAvailable,
+      'updated_at': FieldValue.serverTimestamp(),
+    };
+  }
+
   LiveMenuDish copyWith({
     String? id,
+    String? restaurantId,
     String? name,
     String? restaurant,
     String? category,
@@ -28,6 +61,7 @@ class LiveMenuDish {
   }) {
     return LiveMenuDish(
       id: id ?? this.id,
+      restaurantId: restaurantId ?? this.restaurantId,
       name: name ?? this.name,
       restaurant: restaurant ?? this.restaurant,
       category: category ?? this.category,
@@ -38,8 +72,8 @@ class LiveMenuDish {
   }
 
   static List<LiveMenuDish> mockList() {
-    return const [
-      LiveMenuDish(
+    return [
+      const LiveMenuDish(
         id: '1',
         name: 'Grilled Calamari & Aioli',
         restaurant: 'Ocean Bistro',
@@ -48,7 +82,7 @@ class LiveMenuDish {
         description: 'Tender local squid flash-grilled with garlic herb butter',
         isAvailable: true,
       ),
-      LiveMenuDish(
+      const LiveMenuDish(
         id: '2',
         name: 'Seafood Black Curry',
         restaurant: 'Ocean Bistro',
@@ -57,7 +91,7 @@ class LiveMenuDish {
         description: 'Traditional Sri Lankan roasted spice curry with fresh catch',
         isAvailable: true,
       ),
-      LiveMenuDish(
+      const LiveMenuDish(
         id: '3',
         name: 'Mango Sticky Rice',
         restaurant: 'The Mango Tree',
@@ -66,7 +100,7 @@ class LiveMenuDish {
         description: 'Fresh local mango with coconut infused sticky rice',
         isAvailable: false,
       ),
-      LiveMenuDish(
+      const LiveMenuDish(
         id: '4',
         name: 'Wagyu Beef Teppanyaki',
         restaurant: 'Nihonbashi',

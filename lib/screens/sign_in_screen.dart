@@ -152,7 +152,33 @@ class _SignInScreenState extends State<SignInScreen> {
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 32),
+                  // Quick Demo Login Selector Chips
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'QUICK DEMO ROLE SELECTOR:',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.5),
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.0,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _buildRoleChip('Manager', 'manager@restaurant.com', const Color(0xFFF27B50)),
+                          _buildRoleChip('Host Station', 'receptionist@restaurant.com', const Color(0xFF00B4D8)),
+                          _buildRoleChip('Customer', 'customer@restaurant.com', const Color(0xFF10B981)),
+                          _buildRoleChip('Admin', 'admin@restaurant.com', const Color(0xFFD97706)),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
 
                   // Error Alert Box (if any)
                   if (_errorMessage != null) ...[
@@ -331,6 +357,30 @@ class _SignInScreenState extends State<SignInScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildRoleChip(String label, String email, Color color) {
+    return ActionChip(
+      avatar: Icon(Icons.flash_on, size: 14, color: color),
+      label: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      backgroundColor: color.withValues(alpha: 0.12),
+      side: BorderSide(color: color.withValues(alpha: 0.4)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      onPressed: () {
+        setState(() {
+          _emailController.text = email;
+          _passwordController.text = 'password123';
+        });
+        _handleSignIn();
+      },
     );
   }
 }
