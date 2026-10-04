@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+
 import 'how_it_works_screen.dart';
+
 import 'sign_in_screen.dart';
+
+import 'admin_dashboard.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -9,6 +13,7 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0B1910), // Very dark green
+
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
@@ -16,15 +21,18 @@ class HomeScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // Top Bar
+
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.05),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                      border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.1)),
                     ),
                     child: Row(
                       children: [
@@ -53,7 +61,8 @@ class HomeScreen extends StatelessWidget {
                     onPressed: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (context) => const SignInScreen()),
+                        MaterialPageRoute(
+                            builder: (context) => const SignInScreen()),
                       );
                     },
                     style: TextButton.styleFrom(
@@ -70,10 +79,11 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ],
               ),
-              
+
               const SizedBox(height: 60),
 
               // Logo & Title
+
               Center(
                 child: Column(
                   children: [
@@ -101,7 +111,8 @@ class HomeScreen extends StatelessWidget {
                         Positioned(
                           bottom: -10,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
                               color: const Color(0xFFF27B50),
                               borderRadius: BorderRadius.circular(10),
@@ -109,7 +120,8 @@ class HomeScreen extends StatelessWidget {
                             child: const Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.check, color: Colors.white, size: 12),
+                                Icon(Icons.check,
+                                    color: Colors.white, size: 12),
                                 SizedBox(width: 4),
                                 Text(
                                   'LIVE SYNC',
@@ -147,10 +159,11 @@ class HomeScreen extends StatelessWidget {
                   ],
                 ),
               ),
-              
+
               const SizedBox(height: 40),
 
               // Features
+
               const Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -175,12 +188,14 @@ class HomeScreen extends StatelessWidget {
               const SizedBox(height: 24),
 
               // Banner
+
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: const Color(0xFF162C1E),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                  border:
+                      Border.all(color: Colors.white.withValues(alpha: 0.05)),
                 ),
                 child: Row(
                   children: [
@@ -190,7 +205,8 @@ class HomeScreen extends StatelessWidget {
                         color: Colors.white.withValues(alpha: 0.05),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.show_chart, color: Colors.greenAccent, size: 20),
+                      child: const Icon(Icons.show_chart,
+                          color: Colors.greenAccent, size: 20),
                     ),
                     const SizedBox(width: 16),
                     Expanded(
@@ -217,7 +233,8 @@ class HomeScreen extends StatelessWidget {
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
                         color: Colors.greenAccent.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(6),
@@ -238,11 +255,13 @@ class HomeScreen extends StatelessWidget {
               const SizedBox(height: 60),
 
               // Buttons
+
               ElevatedButton(
                 onPressed: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => const SignInScreen()),
+                    MaterialPageRoute(
+                        builder: (context) => const SignInScreen()),
                   );
                 },
                 style: ElevatedButton.styleFrom(
@@ -260,7 +279,8 @@ class HomeScreen extends StatelessWidget {
                     SizedBox(width: 8),
                     Text(
                       'Explore & Reserve Tables',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                     ),
                     SizedBox(width: 8),
                     Icon(Icons.arrow_forward, size: 18),
@@ -277,7 +297,8 @@ class HomeScreen extends StatelessWidget {
                       onPressed: () => _showHowItWorksDialog(context),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.white,
-                        side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+                        side: BorderSide(
+                            color: Colors.white.withValues(alpha: 0.2)),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -292,12 +313,14 @@ class HomeScreen extends StatelessWidget {
                       onPressed: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (context) => const SignInScreen()),
+                          MaterialPageRoute(
+                              builder: (context) => const SignInScreen()),
                         );
                       },
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.white,
-                        side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+                        side: BorderSide(
+                            color: Colors.white.withValues(alpha: 0.2)),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -307,6 +330,34 @@ class HomeScreen extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
+
+              const SizedBox(height: 16),
+
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const AdminDashboard(),
+                      ),
+                    );
+                  },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: BorderSide(
+                      color: Colors.white.withValues(alpha: 0.2),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  icon: const Icon(Icons.admin_panel_settings_outlined),
+                  label: const Text('Admin Dashboard'),
+                ),
               ),
             ],
           ),
@@ -325,7 +376,9 @@ class HomeScreen extends StatelessWidget {
 
 class _FeatureCard extends StatelessWidget {
   final IconData icon;
+
   final String title;
+
   final String subtitle;
 
   const _FeatureCard({
