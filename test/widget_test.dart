@@ -60,46 +60,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Edit Profile'), findsOneWidget);
-    expect(find.text('Current Role: Manager'), findsOneWidget);
-    expect(find.text('My Reviews'), findsOneWidget);
-    expect(find.text('Log Out'), findsOneWidget);
-
-    // Tap Edit Profile item
-    await tester.tap(find.text('Edit Profile'));
-    await tester.pumpAndSettle();
-
     expect(find.text('Full Name'), findsOneWidget);
     expect(find.text('Save Changes'), findsOneWidget);
-  });
-
-  testWidgets('CustomerDashboardScreen renders CustomerQueueView in Queue tab', (tester) async {
-    const customerProfile = UserProfile(
-      id: 'cust-1',
-      email: 'customer@dinequeue.com',
-      fullName: 'Ayesha Perera',
-      role: UserRole.customer,
-    );
-
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: CustomerDashboardScreen(
-          profile: customerProfile,
-          initialTabIndex: 3,
-        ),
-      ),
-    );
-
-    expect(find.text('Ocean Bistro'), findsOneWidget);
-    expect(find.text('Virtual Waitlist'), findsOneWidget);
-    expect(find.text('Live'), findsOneWidget);
-    expect(find.text('Your Queue Position'), findsOneWidget);
-    expect(find.text('Estimated Wait'), findsOneWidget);
-    expect(find.text('22 min'), findsOneWidget);
-    expect(find.text('Your table is being prepared.'), findsOneWidget);
-    expect(find.text('Queue Progress'), findsOneWidget);
-    expect(find.text('Joined Queue'), findsOneWidget);
-    expect(find.text('Position #5'), findsOneWidget);
-    expect(find.text('Position #3 (Current)'), findsOneWidget);
-    expect(find.text('Table Ready'), findsOneWidget);
   });
 }

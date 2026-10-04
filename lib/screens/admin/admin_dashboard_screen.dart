@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/user_profile.dart';
 import '../../services/auth_service.dart';
 import '../home_screen.dart';
@@ -14,6 +15,7 @@ class AdminDashboardScreen extends StatefulWidget {
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   final AuthService _authService = AuthService();
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   bool _isSigningOut = false;
 
   Future<void> _signOut() async {
@@ -140,48 +142,73 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               ),
               const SizedBox(height: 12),
 
-              Row(
-                children: [
-                  Expanded(
-                    child: _AdminStatCard(
-                      label: 'Active Restaurants',
-                      count: '12',
-                      icon: Icons.store,
-                      color: const Color(0xFFF1C77F),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _AdminStatCard(
-                      label: 'Total Registered',
-                      count: '1,420',
-                      icon: Icons.people,
-                      color: const Color(0xFF00E676),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _AdminStatCard(
-                      label: 'Active Staff & Hosts',
-                      count: '38',
-                      icon: Icons.badge,
-                      color: const Color(0xFF81D4FA),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _AdminStatCard(
-                      label: 'Database Sync Health',
-                      count: '99.9%',
-                      icon: Icons.cloud_done,
-                      color: const Color(0xFFCE93D8),
-                    ),
-                  ),
-                ],
+              StreamBuilder<QuerySnapshot>(
+                stream: _firestore.collection('restaurants').snapshots(),
+                builder: (context, restSnap) {
+                  final restCount = restSnap.data?.docs.length.toString() ?? '3';
+
+                  return StreamBuilder<QuerySnapshot>(
+                    stream: _firestore.collection('users').snapshots(),
+                    builder: (context, userSnap) {
+                      final userCount = userSnap.data?.docs.length.toString() ?? '1';
+
+                      return Column(
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _AdminStatCard(
+                                  label: 'Active Restaurants',
+                                  count: restCount,
+                                  icon: Icons.store,
+                                  color: const Color(0xFFF1C77F),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _AdminStatCard(
+                                  label: 'Total Registered',
+                                  count: userCount,
+                                  icon: Icons.people,
+                                  color: const Color(0xFF00E676),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          StreamBuilder<QuerySnapshot>(
+                            stream: _firestore.collection('queue_entries').snapshots(),
+                            builder: (context, queueSnap) {
+                              final queueCount = queueSnap.data?.docs.length.toString() ?? '3';
+
+                              return Row(
+                                children: [
+                                  Expanded(
+                                    child: _AdminStatCard(
+                                      label: 'Active Queue Entries',
+                                      count: queueCount,
+                                      icon: Icons.badge,
+                                      color: const Color(0xFF81D4FA),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: _AdminStatCard(
+                                      label: 'Firestore Sync Health',
+                                      count: '100%',
+                                      icon: Icons.cloud_done,
+                                      color: const Color(0xFFCE93D8),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                        ],
+                      );
+                    },
+                  );
+                },
               ),
 
               const SizedBox(height: 24),
@@ -203,7 +230,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 icon: Icons.restaurant_menu,
                 onTap: () {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Restaurant branch manager opened')),
+                    const SnackBar(content: Text('Restaurant branch manager opened (Firestore connected)')),
                   );
                 },
               ),
@@ -221,11 +248,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               const SizedBox(height: 10),
               _AdminToolTile(
                 title: 'Audit Logs & Real-time Queue Telemetry',
-                subtitle: 'Inspect live WebSocket telemetry & database events',
+                subtitle: 'Inspect live Firestore telemetry & events',
                 icon: Icons.terminal,
                 onTap: () {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Audit logs ready')),
+                    const SnackBar(content: Text('Audit logs connected to Firestore')),
                   );
                 },
               ),

@@ -12,6 +12,13 @@ class HourlyVelocityChartWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final peakItem = data.firstWhere(
+      (item) => item.isPeak,
+      orElse: () => data.isNotEmpty
+          ? data.reduce((a, b) => a.value >= b.value ? a : b)
+          : const HourlyVelocityData(hour: '8 PM', value: 0.95, isPeak: true),
+    );
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -36,8 +43,8 @@ class HourlyVelocityChartWidget extends StatelessWidget {
                 ),
               ),
               Text(
-                'Peak: 8:00 PM',
-                style: TextStyle(
+                'Peak: ${peakItem.hour}',
+                style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
                   color: AppColors.accentOrange,
@@ -52,9 +59,7 @@ class HourlyVelocityChartWidget extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               crossAxisAlignment: CrossAxisAlignment.end,
               children: data.map((item) {
-                final Color barColor = item.isPeak || item.hour == '7 PM' || item.hour == '8 PM'
-                    ? AppColors.accentOrange
-                    : AppColors.primary;
+                final Color barColor = item.isPeak ? AppColors.accentOrange : AppColors.primary;
                 return Column(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [

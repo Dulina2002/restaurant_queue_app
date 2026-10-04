@@ -1,0 +1,25 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isUserAvatar(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // User Avatar uploads
+    match /avatars/{userId}.jpg {
+      allow read: if true;
+      allow write: if isUserAvatar(userId);
+    }
+
+    // Restaurant & Dish image uploads
+    match /dishes/{dishId}.jpg {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+  }
+}

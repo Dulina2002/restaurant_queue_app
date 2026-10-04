@@ -152,7 +152,7 @@ class _SignInScreenState extends State<SignInScreen> {
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 24),
 
                   // Error Alert Box (if any)
                   if (_errorMessage != null) ...[

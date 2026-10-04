@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../services/firestore_service.dart';
 import '../../data/models/physical_table_model.dart';
 
 class TablesTabWidget extends StatefulWidget {
@@ -10,115 +11,164 @@ class TablesTabWidget extends StatefulWidget {
 }
 
 class _TablesTabWidgetState extends State<TablesTabWidget> {
-  late List<PhysicalTable> _tables;
+  final FirestoreService _firestoreService = FirestoreService();
 
-  @override
-  void initState() {
-    super.initState();
-    _tables = PhysicalTable.mockList();
+  Future<void> _addNewTable(PhysicalTable newTable) async {
+    try {
+      await _firestoreService.addTable(newTable);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Physical table added to Firestore')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error adding table: $e')),
+      );
+    }
   }
 
-  void _addNewTable(PhysicalTable newTable) {
-    setState(() {
-      _tables.add(newTable);
-    });
+  Future<void> _editTable(PhysicalTable updatedTable) async {
+    try {
+      await _firestoreService.updateTable(updatedTable);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Physical table updated in Firestore')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error updating table: $e')),
+      );
+    }
   }
 
-  void _editTable(PhysicalTable updatedTable) {
-    setState(() {
-      final index = _tables.indexWhere((t) => t.id == updatedTable.id);
-      if (index != -1) {
-        _tables[index] = updatedTable;
-      }
-    });
-  }
-
-  void _deleteTable(String id) {
-    setState(() {
-      _tables.removeWhere((t) => t.id == id);
-    });
+  Future<void> _deleteTable(String id) async {
+    try {
+      await _firestoreService.deleteTable(id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Table removed from Firestore')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error deleting table: $e')),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // --- Header Section: Title & + New Table Button ---
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text(
-                    'Restaurant Physical Floor',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  SizedBox(height: 2),
-                  Text(
-                    'Tables',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  SizedBox(height: 4),
-                  Text(
-                    'Add, configure seating, update status, or delete tables.',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: AppColors.textSecondary,
-                      height: 1.3,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            ElevatedButton.icon(
-              onPressed: () => _showAddOrEditTableDialog(),
-              icon: const Icon(Icons.add, size: 16, color: Colors.white),
-              label: const Text(
-                'New Table',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 18),
+    return StreamBuilder<List<PhysicalTable>>(
+      stream: _firestoreService.streamTables(restaurantId: 'ocean_bistro'),
+      builder: (context, snapshot) {
+        final tables = snapshot.data ?? PhysicalTable.mockList();
+        final isLoading = snapshot.connectionState == ConnectionState.waiting;
 
-        // --- Table Cards List ---
-        ListView.separated(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: _tables.length,
-          separatorBuilder: (context, index) => const SizedBox(height: 10),
-          itemBuilder: (context, index) {
-            final table = _tables[index];
-            return _buildTableCard(table);
-          },
-        ),
-      ],
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // --- Header Section: Title & + New Table Button ---
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Text(
+                        'Restaurant Physical Floor',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'Tables',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        'Add, configure seating, update status, or delete tables in Firestore.',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textSecondary,
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: () => _showAddOrEditTableDialog(currentTablesCount: tables.length),
+                  icon: const Icon(Icons.add, size: 16, color: Colors.white),
+                  label: const Text(
+                    'New Table',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+
+            // --- Table Cards List ---
+            if (isLoading)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(24.0),
+                  child: CircularProgressIndicator(color: AppColors.primary),
+                ),
+              )
+            else if (tables.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: const Center(
+                  child: Text(
+                    'No tables configured yet. Tap + New Table to create one.',
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+                  ),
+                ),
+              )
+            else
+              ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: tables.length,
+                separatorBuilder: (context, index) => const SizedBox(height: 10),
+                itemBuilder: (context, index) {
+                  final table = tables[index];
+                  return _buildTableCard(table);
+                },
+              ),
+          ],
+        );
+      },
     );
   }
 
@@ -266,9 +316,9 @@ class _TablesTabWidgetState extends State<TablesTabWidget> {
     );
   }
 
-  void _showAddOrEditTableDialog({PhysicalTable? table}) {
+  void _showAddOrEditTableDialog({PhysicalTable? table, int currentTablesCount = 4}) {
     final isEditing = table != null;
-    final nameController = TextEditingController(text: isEditing ? table.name : 'Table 0${_tables.length + 1}');
+    final nameController = TextEditingController(text: isEditing ? table.name : 'Table 0${currentTablesCount + 1}');
     final seatsController = TextEditingController(text: isEditing ? table.seats.toString() : '4');
     final guestController = TextEditingController(text: isEditing ? table.guestName : 'No Guest');
     TableStatus selectedStatus = isEditing ? table.status : TableStatus.available;
@@ -437,6 +487,7 @@ class _TablesTabWidgetState extends State<TablesTabWidget> {
                             } else {
                               _addNewTable(PhysicalTable(
                                 id: DateTime.now().millisecondsSinceEpoch.toString(),
+                                restaurantId: 'ocean_bistro',
                                 name: name,
                                 seats: seats,
                                 guestName: guest,
