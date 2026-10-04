@@ -4,21 +4,21 @@ import '../../services/auth_service.dart';
 import '../home_screen.dart';
 import '../../shared/widgets/role_header_widget.dart';
 import '../../shared/widgets/role_bottom_nav_widget.dart';
-import '../../features/receptionist/presentation/widgets/floor_overview_widget.dart';
+import '../../features/receptionist/presentation/widgets/live_queue_widget.dart';
 import 'receptionist_dashboard_screen.dart';
 import 'reservation_summary_screen.dart';
-import 'live_queue_screen.dart';
+import 'floor_overview_screen.dart';
 
-class FloorOverviewScreen extends StatefulWidget {
+class LiveQueueScreen extends StatefulWidget {
   final UserProfile profile;
 
-  const FloorOverviewScreen({super.key, required this.profile});
+  const LiveQueueScreen({super.key, required this.profile});
 
   @override
-  State<FloorOverviewScreen> createState() => _FloorOverviewScreenState();
+  State<LiveQueueScreen> createState() => _LiveQueueScreenState();
 }
 
-class _FloorOverviewScreenState extends State<FloorOverviewScreen> {
+class _LiveQueueScreenState extends State<LiveQueueScreen> {
   final AuthService _authService = AuthService();
   bool _isSigningOut = false;
 
@@ -43,17 +43,18 @@ class _FloorOverviewScreenState extends State<FloorOverviewScreen> {
   }
 
   void _navigate(int index) {
-    if (index == 2) return; // already here
+    if (index == 3) return; // already on Queue tab
     Widget destination;
     if (index == 0) {
       destination = ReceptionistDashboardScreen(profile: widget.profile);
     } else if (index == 1) {
       destination = ReservationSummaryScreen(profile: widget.profile);
-    } else if (index == 3) {
-      destination = LiveQueueScreen(profile: widget.profile);
+    } else if (index == 2) {
+      destination = FloorOverviewScreen(profile: widget.profile);
     } else {
       return;
     }
+
     Navigator.pushReplacement(
       context,
       PageRouteBuilder(
@@ -75,18 +76,33 @@ class _FloorOverviewScreenState extends State<FloorOverviewScreen> {
         onSignOut: _signOut,
       ),
       body: const SingleChildScrollView(
-        padding: EdgeInsets.all(16),
-        child: FloorOverviewWidget(),
+        padding: EdgeInsets.all(20),
+        child: LiveQueueWidget(),
       ),
       bottomNavigationBar: RoleBottomNavWidget(
-        selectedIndex: 2, // Tables tab
+        selectedIndex: 3, // Queue tab
         onDestinationSelected: _navigate,
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.grid_view_rounded), label: 'Dashboard'),
-          NavigationDestination(icon: Icon(Icons.calendar_today_outlined), label: 'Reservations'),
-          NavigationDestination(icon: Icon(Icons.table_restaurant_outlined), label: 'Tables'),
-          NavigationDestination(icon: Icon(Icons.people_outline), label: 'Queue'),
-          NavigationDestination(icon: Icon(Icons.person_outline), label: 'Profile'),
+          NavigationDestination(
+            icon: Icon(Icons.grid_view_rounded),
+            label: 'Dashboard',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.calendar_today_outlined),
+            label: 'Reservation',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.table_restaurant_outlined),
+            label: 'Tables',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.people_alt_rounded),
+            label: 'Queue',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.person_outline),
+            label: 'Profile',
+          ),
         ],
       ),
     );

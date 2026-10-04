@@ -6,6 +6,7 @@ import 'receptionist_dashboard_screen.dart';
 import '../../shared/widgets/role_header_widget.dart';
 import '../../shared/widgets/role_bottom_nav_widget.dart';
 import 'floor_overview_screen.dart';
+import 'live_queue_screen.dart';
 
 class ReservationSummaryScreen extends StatefulWidget {
   final UserProfile profile;
@@ -137,6 +138,15 @@ class _ReservationSummaryScreenState extends State<ReservationSummaryScreen> {
               context,
               PageRouteBuilder(
                 pageBuilder: (context, animation1, animation2) => FloorOverviewScreen(profile: widget.profile),
+                transitionDuration: Duration.zero,
+                reverseTransitionDuration: Duration.zero,
+              ),
+            );
+          } else if (index == 3) {
+            Navigator.pushReplacement(
+              context,
+              PageRouteBuilder(
+                pageBuilder: (context, animation1, animation2) => LiveQueueScreen(profile: widget.profile),
                 transitionDuration: Duration.zero,
                 reverseTransitionDuration: Duration.zero,
               ),
