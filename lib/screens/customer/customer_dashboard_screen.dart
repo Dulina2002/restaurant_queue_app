@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
 import '../../models/user_profile.dart';
+import '../../models/restaurant_model.dart';
+import '../../models/queue_entry_model.dart';
+import '../../models/reservation_model.dart';
 import '../../shared/theme/app_colors.dart';
+import '../../services/firestore_service.dart';
 import '../home_screen.dart';
 import '../../features/profile/presentation/screens/edit_profile_screen.dart';
 import 'widgets/filter_restaurants_sheet.dart';
 import 'widgets/customer_notifications_sheet.dart';
-import 'widgets/customer_bookings_view.dart';
-import 'widgets/customer_queue_view.dart';
-import 'create_booking_screen.dart';
-import '../../services/auth_service.dart';
-import '../../services/supabase_service.dart';
 
 class CustomerDashboardScreen extends StatefulWidget {
   final UserProfile? profile;
@@ -26,6 +25,7 @@ class CustomerDashboardScreen extends StatefulWidget {
 }
 
 class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
+  final FirestoreService _firestoreService = FirestoreService();
   int _selectedCategoryIndex = 0;
   int _selectedExploreCuisineIndex = 0;
   late int _bottomNavIndex;
@@ -55,41 +55,10 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
   String _selectedAvailability = 'Available Today';
   int _partySize = 2;
 
-  UserProfile? _currentProfile;
-  List<Map<String, dynamic>> _restaurants = [];
-  bool _isLoadingRestaurants = true;
-
   @override
   void initState() {
     super.initState();
     _bottomNavIndex = widget.initialTabIndex;
-    _currentProfile = widget.profile;
-    _loadProfileAsync();
-    _loadRestaurants();
-  }
-
-  Future<void> _loadRestaurants() async {
-    final data = await SupabaseService().getRestaurants();
-    if (mounted) {
-      setState(() {
-        _restaurants = data;
-        _isLoadingRestaurants = false;
-      });
-    }
-  }
-
-  Future<void> _loadProfileAsync() async {
-    try {
-      final user = AuthService().currentUser;
-      if (user != null) {
-        final profile = await AuthService().getCurrentUserProfile();
-        if (profile != null && mounted) {
-          setState(() {
-            _currentProfile = profile;
-          });
-        }
-      }
-    } catch (_) {}
   }
 
   @override
@@ -137,73 +106,83 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
     );
   }
 
-  Future<void> _joinQueue(String restaurantId) async {
-    final userId = AuthService().currentUser?.id;
-    if (userId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please log in to join a queue.')),
-      );
-      return;
-    }
-    
-    try {
-      await SupabaseService().joinQueue(restaurantId, userId, _partySize);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Successfully joined the queue!')),
-        );
-        setState(() {
-          _bottomNavIndex = 3;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to join queue: $e')),
-        );
-      }
-    }
-  }
+  void _handleJoinQueue(RestaurantModel restaurant) async {
+    final partySizeController = TextEditingController(text: '2');
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF162C1E),
+        title: Text(
+          'Join Queue: ${restaurant.name}',
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Enter your party size to join the live virtual queue in Firestore.',
+              style: TextStyle(color: Colors.white70, fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: partySizeController,
+              keyboardType: TextInputType.number,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                labelText: 'Party Size (Guests)',
+                labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+                enabledBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+                ),
+                focusedBorder: const OutlineInputBorder(
+                  borderSide: BorderSide(color: Color(0xFFF27B50)),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final size = int.tryParse(partySizeController.text) ?? 2;
+              final messenger = ScaffoldMessenger.of(context);
+              Navigator.pop(context);
 
-  Future<void> _bookTable(Map<String, dynamic> restaurant) async {
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => CreateBookingScreen(restaurant: restaurant),
+              try {
+                final entry = await _firestoreService.joinQueue(
+                  restaurantId: restaurant.id,
+                  restaurantName: restaurant.name,
+                  userId: widget.profile?.id ?? 'guest_id',
+                  guestName: widget.profile?.fullName ?? 'Diner Guest',
+                  partySize: size,
+                  phoneNumber: widget.profile?.phoneNumber ?? '',
+                );
+
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text('Joined ${restaurant.name} Queue! Ticket ${entry.queueNumber} (#${entry.position} in line)'),
+                    backgroundColor: const Color(0xFF00E676),
+                  ),
+                );
+              } catch (e) {
+                messenger.showSnackBar(
+                  SnackBar(content: Text('Failed to join queue: $e')),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFF27B50),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Confirm & Join'),
+          ),
+        ],
       ),
     );
-
-    if (result != null && result is Map<String, dynamic>) {
-      final userId = AuthService().currentUser?.id;
-      if (userId != null) {
-        try {
-          await SupabaseService().createBooking(
-            restaurantId: result['restaurant_id'],
-            userId: userId,
-            bookingDate: result['date'],
-            partySize: result['party_size'],
-          );
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Table booked successfully!')),
-            );
-            setState(() {
-              _bottomNavIndex = 2;
-            });
-          }
-        } catch (e) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Failed to book table: $e')),
-            );
-          }
-        }
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please log in to book a table.')),
-        );
-      }
-    }
   }
 
   String _getGreeting() {
@@ -222,55 +201,34 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
     return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
   }
 
-  Widget _buildBody(String userName, String initials) {
-    switch (_bottomNavIndex) {
-      case 1:
-        return _buildExploreView();
-      case 2:
-        return CustomerBookingsView(
-          restaurants: _restaurants,
-          onExploreTap: () => setState(() => _bottomNavIndex = 1),
-        );
-      case 3:
-        return _buildQueueView();
-      case 4:
-        return EditProfileScreen(profile: _currentProfile ?? widget.profile);
-      case 0:
-      default:
-        return _buildHomeView(userName, initials);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final resolvedProfile = _currentProfile ?? widget.profile;
-    final authMetaName = AuthService().currentUser?.userMetadata?['full_name'] as String?;
-    final userName = (resolvedProfile?.fullName.isNotEmpty == true)
-        ? resolvedProfile!.fullName
-        : (authMetaName != null && authMetaName.isNotEmpty)
-            ? authMetaName
-            : 'Ayesha Perera';
+    final userName = (widget.profile?.fullName.isNotEmpty == true)
+        ? widget.profile!.fullName
+        : 'Ayesha Perera';
     final initials = _getInitials(userName);
 
     return Scaffold(
-      backgroundColor: (_bottomNavIndex == 2 || _bottomNavIndex == 3 || _bottomNavIndex == 4) ? Colors.white : AppColors.background,
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: Column(
           children: [
             Expanded(
-              child: _buildBody(userName, initials),
+              child: _bottomNavIndex == 1
+                  ? _buildExploreView()
+                  : _buildHomeView(userName, initials),
             ),
 
             // --- Bottom Navigation Bar ---
             Container(
               decoration: BoxDecoration(
-                color: const Color(0xFFF7FAF8),
+                color: Colors.white,
                 border: const Border(
-                  top: BorderSide(color: Color(0xFFE5E7EB), width: 1),
+                  top: BorderSide(color: AppColors.border, width: 1),
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
+                    color: Colors.black.withValues(alpha: 0.04),
                     blurRadius: 10,
                     offset: const Offset(0, -2),
                   ),
@@ -280,10 +238,10 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _buildNavItem(icon: Icons.home_outlined, label: 'Home', index: 0),
-                  _buildNavItem(icon: Icons.explore_outlined, label: 'Explore', index: 1),
-                  _buildNavItem(icon: Icons.calendar_month, label: 'Bookings', index: 2),
-                  _buildNavItem(icon: Icons.people_outline, label: 'Queue', index: 3),
+                  _buildNavItem(icon: Icons.home_filled, label: 'Home', index: 0),
+                  _buildNavItem(icon: Icons.explore, label: 'Explore', index: 1),
+                  _buildNavItem(icon: Icons.calendar_month_outlined, label: 'Bookings', index: 2),
+                  _buildNavItem(icon: Icons.people_alt_outlined, label: 'Queue', index: 3),
                   _buildNavItem(icon: Icons.person_outline, label: 'Profile', index: 4),
                 ],
               ),
@@ -300,159 +258,154 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
   Widget _buildExploreView() {
     final selectedCuisine = _exploreCuisines[_selectedExploreCuisineIndex];
 
-    if (_isLoadingRestaurants) {
-      return const Center(child: CircularProgressIndicator(color: AppColors.primary));
-    }
+    return StreamBuilder<List<RestaurantModel>>(
+      stream: _firestoreService.streamActiveRestaurants(),
+      builder: (context, snapshot) {
+        final restaurants = snapshot.data ?? [];
+        final filtered = selectedCuisine == 'All'
+            ? restaurants
+            : restaurants.where((r) => r.cuisine.toLowerCase() == selectedCuisine.toLowerCase()).toList();
 
-    final filtered = selectedCuisine == 'All'
-        ? _restaurants
-        : _restaurants.where((r) => r['cuisine'] == selectedCuisine).toList();
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Screen Title
-          const Text(
-            'Explore Restaurants',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
-              letterSpacing: -0.5,
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Search Bar & Filter Button
-          Row(
+        return SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Container(
-                  height: 48,
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.search_rounded,
-                        color: AppColors.textMuted,
-                        size: 22,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: TextField(
-                          controller: _exploreSearchController,
-                          decoration: const InputDecoration(
-                            hintText: 'Search cuisine or restaurant',
-                            hintStyle: TextStyle(
-                              color: AppColors.textMuted,
-                              fontSize: 13,
-                            ),
-                            border: InputBorder.none,
-                            isDense: true,
-                            contentPadding: EdgeInsets.zero,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+              // Screen Title
+              const Text(
+                'Explore Restaurants',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                  letterSpacing: -0.5,
                 ),
               ),
-              const SizedBox(width: 12),
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0D3B2E),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.tune_rounded, color: Colors.white, size: 20),
-                  onPressed: _showFilterBottomSheet,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
+              const SizedBox(height: 16),
 
-          // Cuisine Filter Pills
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: List.generate(_exploreCuisines.length, (index) {
-                final isSelected = _selectedExploreCuisineIndex == index;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 10),
-                  child: GestureDetector(
-                    onTap: () {
-                      setState(() => _selectedExploreCuisineIndex = index);
-                    },
+              // Search Bar & Filter Button
+              Row(
+                children: [
+                  Expanded(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                      height: 48,
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
                       decoration: BoxDecoration(
-                        color: isSelected ? const Color(0xFF0D3B2E) : Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: isSelected ? const Color(0xFF0D3B2E) : AppColors.border,
-                        ),
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: AppColors.border),
                       ),
-                      child: Text(
-                        _exploreCuisines[index],
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                          color: isSelected ? Colors.white : AppColors.textPrimary,
-                        ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.search_rounded,
+                            color: AppColors.textMuted,
+                            size: 22,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: TextField(
+                              controller: _exploreSearchController,
+                              decoration: const InputDecoration(
+                                hintText: 'Search cuisine or restaurant',
+                                hintStyle: TextStyle(
+                                  color: AppColors.textMuted,
+                                  fontSize: 13,
+                                ),
+                                border: InputBorder.none,
+                                isDense: true,
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                );
-              }),
-            ),
-          ),
-          const SizedBox(height: 20),
+                  const SizedBox(width: 12),
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0D3B2E),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.tune_rounded, color: Colors.white, size: 20),
+                      onPressed: _showFilterBottomSheet,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
 
-          // Restaurant Cards List
-          ...filtered.map((item) {
-            final isAvailable = item['is_queue_available'] as bool? ?? true;
-            final waitlistCount = item['waitlist_count'] as int? ?? 0;
-            final status = waitlistCount > 0 ? '$waitlistCount in queue' : (isAvailable ? 'Tables Available' : 'Few Tables Left');
-
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: GestureDetector(
-                onTap: () => _bookTable(item),
-                child: _buildExploreCard(
-                  name: item['name'] as String,
-                  tag: item['tag'] as String,
-                  location: item['location'] as String,
-                  rating: item['rating'] as String,
-                  reviews: item['reviews'] as String,
-                  status: status,
-                  isAvailable: isAvailable,
+              // Cuisine Filter Pills
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: List.generate(_exploreCuisines.length, (index) {
+                    final isSelected = _selectedExploreCuisineIndex == index;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 10),
+                      child: GestureDetector(
+                        onTap: () {
+                          setState(() => _selectedExploreCuisineIndex = index);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: isSelected ? const Color(0xFF0D3B2E) : Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: isSelected ? const Color(0xFF0D3B2E) : AppColors.border,
+                            ),
+                          ),
+                          child: Text(
+                            _exploreCuisines[index],
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                              color: isSelected ? Colors.white : AppColors.textPrimary,
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
                 ),
               ),
-            );
-          }),
-        ],
-      ),
+              const SizedBox(height: 20),
+
+              // Restaurant Cards List
+              if (filtered.isEmpty)
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Center(
+                    child: Text('No active restaurants found in Firestore.'),
+                  ),
+                )
+              else
+                ...filtered.map((item) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: _buildExploreCard(
+                      restaurant: item,
+                    ),
+                  );
+                }),
+            ],
+          ),
+        );
+      },
     );
   }
 
   Widget _buildExploreCard({
-    required String name,
-    required String tag,
-    required String location,
-    required String rating,
-    required String reviews,
-    required String status,
-    required bool isAvailable,
+    required RestaurantModel restaurant,
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -508,7 +461,7 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
                         const Icon(Icons.restaurant_menu_rounded, size: 13, color: Colors.white),
                         const SizedBox(width: 5),
                         Text(
-                          tag,
+                          restaurant.tag,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 11,
@@ -533,7 +486,7 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      name,
+                      restaurant.name,
                       style: const TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.bold,
@@ -545,7 +498,7 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
                         const Icon(Icons.star_rounded, color: Color(0xFFF59E0B), size: 17),
                         const SizedBox(width: 3),
                         Text(
-                          rating,
+                          restaurant.rating.toString(),
                           style: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
@@ -553,7 +506,7 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
                           ),
                         ),
                         Text(
-                          ' ($reviews)',
+                          ' (${restaurant.reviewsCount})',
                           style: const TextStyle(
                             fontSize: 12,
                             color: AppColors.textMuted,
@@ -565,7 +518,7 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  location,
+                  restaurant.location,
                   style: const TextStyle(
                     fontSize: 12,
                     color: AppColors.textMuted,
@@ -575,17 +528,17 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
                 Row(
                   children: [
                     Icon(
-                      isAvailable ? Icons.check_circle_rounded : Icons.warning_amber_rounded,
+                      restaurant.isQueueAvailable ? Icons.check_circle_rounded : Icons.warning_amber_rounded,
                       size: 15,
-                      color: isAvailable ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+                      color: restaurant.isQueueAvailable ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
                     ),
                     const SizedBox(width: 5),
                     Text(
-                      status,
+                      restaurant.estWait,
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: isAvailable ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+                        color: restaurant.isQueueAvailable ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
                       ),
                     ),
                   ],
@@ -599,16 +552,11 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
   }
 
   // ==========================================
-  // --- 2. VIRTUAL QUEUE VIEW SCREEN ---
-  // ==========================================
-  Widget _buildQueueView() {
-    return CustomerQueueView(restaurants: _restaurants);
-  }
-
-  // ==========================================
-  // --- 3. HOME VIEW SCREEN ---
+  // --- 2. HOME VIEW SCREEN ---
   // ==========================================
   Widget _buildHomeView(String userName, String initials) {
+    final userId = widget.profile?.id ?? 'guest_id';
+
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
       child: Column(
@@ -623,7 +571,14 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
               Row(
                 children: [
                   GestureDetector(
-                    onTap: () => setState(() => _bottomNavIndex = 4),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => EditProfileScreen(profile: widget.profile),
+                        ),
+                      );
+                    },
                     child: Container(
                       width: 44,
                       height: 44,
@@ -881,6 +836,77 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
           ),
           const SizedBox(height: 24),
 
+          // --- Realtime Firestore Customer Active Queue Banner ---
+          StreamBuilder<QueueEntryModel?>(
+            stream: _firestoreService.streamCustomerActiveQueue(userId),
+            builder: (context, queueSnapshot) {
+              final activeQueue = queueSnapshot.data;
+              if (activeQueue == null) {
+                return const SizedBox.shrink();
+              }
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 24),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF9EC),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFFFE8B2)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFFF6B4A),
+                        shape: BoxShape.circle,
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        activeQueue.queueNumber,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Virtual Queue: Position #${activeQueue.position}',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFFD9531E),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${activeQueue.restaurantName} • Est. wait ${activeQueue.estimatedWaitMinutes} min',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      color: AppColors.accentOrange,
+                      size: 22,
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+
           // Your Upcoming Reservation Section
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -913,187 +939,122 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
           ),
           const SizedBox(height: 12),
 
-          // Upcoming Reservation Card
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: AppColors.border),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.03),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text(
-                          'Ocean Bistro',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          'ID: #RSV10245',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textMuted,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE8F5E9),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        children: const [
-                          Icon(
-                            Icons.check_circle_rounded,
-                            color: Color(0xFF10B981),
-                            size: 14,
-                          ),
-                          SizedBox(width: 4),
-                          Text(
-                            'Confirmed',
-                            style: TextStyle(
-                              color: Color(0xFF10B981),
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
+          // Upcoming Reservation Card (Stream from Firestore)
+          StreamBuilder<List<ReservationModel>>(
+            stream: _firestoreService.streamUserReservations(userId),
+            builder: (context, resSnapshot) {
+              final reservations = resSnapshot.data ?? [];
+              final res = reservations.isNotEmpty
+                  ? reservations.first
+                  : const ReservationModel(
+                      id: 'RSV10245',
+                      restaurantId: 'ocean_bistro',
+                      restaurantName: 'Ocean Bistro',
+                      userId: '',
+                      guestName: 'Guest',
+                      reservationCode: '#RSV10245',
+                      date: 'Saturday, 12 September',
+                      time: '7:30 PM',
+                      partySize: 4,
+                      status: 'confirmed',
+                    );
+
+              return Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: AppColors.border),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.03),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
                     ),
                   ],
                 ),
-                const SizedBox(height: 14),
-                const Divider(height: 1, color: AppColors.border),
-                const SizedBox(height: 14),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildReservationDetail(
-                      icon: Icons.calendar_today_outlined,
-                      text: 'Saturday, 12 September',
-                    ),
-                    _buildReservationDetail(
-                      icon: Icons.access_time_rounded,
-                      text: '7:30 PM',
-                    ),
-                    _buildReservationDetail(
-                      icon: Icons.people_outline_rounded,
-                      text: '4 Guests',
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Virtual Queue Banner
-          StreamBuilder<List<Map<String, dynamic>>>(
-            stream: AuthService().currentUser?.id != null
-                ? SupabaseService().listenToUserQueue(AuthService().currentUser!.id)
-                : const Stream.empty(),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                return const SizedBox.shrink(); // Hide if no active queue
-              }
-
-              final activeQueue = snapshot.data!.first;
-              final restaurantId = activeQueue['restaurant_id'];
-              
-              // Find restaurant details from loaded data
-              final restaurant = _restaurants.firstWhere(
-                (r) => r['id'] == restaurantId,
-                orElse: () => <String, dynamic>{},
-              );
-
-              final restaurantName = restaurant['name'] ?? 'Restaurant';
-              final estWait = restaurant['est_wait'] ?? 'Calculating...';
-
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 24),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF9EC),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFFFE8B2)),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFFF6B4A),
-                          shape: BoxShape.circle,
-                        ),
-                        alignment: Alignment.center,
-                        child: Text(
-                          'P${activeQueue['party_size']}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
-                              'Virtual Queue Active',
-                              style: TextStyle(
-                                fontSize: 13,
+                            Text(
+                              res.restaurantName,
+                              style: const TextStyle(
+                                fontSize: 16,
                                 fontWeight: FontWeight.bold,
-                                color: Color(0xFFD9531E),
+                                color: AppColors.textPrimary,
                               ),
                             ),
-                            const SizedBox(height: 2),
+                            const SizedBox(height: 4),
                             Text(
-                              '$restaurantName • Est. wait $estWait',
+                              'ID: ${res.reservationCode}',
                               style: const TextStyle(
                                 fontSize: 12,
-                                color: AppColors.textSecondary,
+                                color: AppColors.textMuted,
                               ),
                             ),
                           ],
                         ),
-                      ),
-                      const Icon(
-                        Icons.chevron_right_rounded,
-                        color: AppColors.accentOrange,
-                        size: 22,
-                      ),
-                    ],
-                  ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE8F5E9),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.check_circle_rounded,
+                                color: Color(0xFF10B981),
+                                size: 14,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                res.status.toUpperCase(),
+                                style: const TextStyle(
+                                  color: Color(0xFF10B981),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    const Divider(height: 1, color: AppColors.border),
+                    const SizedBox(height: 14),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        _buildReservationDetail(
+                          icon: Icons.calendar_today_outlined,
+                          text: res.date.isNotEmpty ? res.date : 'Saturday, 12 Sep',
+                        ),
+                        _buildReservationDetail(
+                          icon: Icons.access_time_rounded,
+                          text: res.time.isNotEmpty ? res.time : '7:30 PM',
+                        ),
+                        _buildReservationDetail(
+                          icon: Icons.people_outline_rounded,
+                          text: '${res.partySize} Guests',
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               );
             },
           ),
+          const SizedBox(height: 24),
 
-          // Restaurants Near You Section
+          // Restaurants Near You Section (Stream from Firestore)
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: const [
@@ -1107,7 +1068,7 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
               ),
               SizedBox(height: 2),
               Text(
-                'Real-time table availability in Colombo',
+                'Real-time Firestore table availability',
                 style: TextStyle(
                   fontSize: 12,
                   color: AppColors.textMuted,
@@ -1117,37 +1078,33 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
           ),
           const SizedBox(height: 14),
 
-          if (_isLoadingRestaurants)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(20.0),
-                child: CircularProgressIndicator(color: AppColors.primary),
-              ),
-            )
-          else if (_restaurants.isEmpty)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(20.0),
-                child: Text('No restaurants found.', style: TextStyle(color: AppColors.textMuted)),
-              ),
-            )
-          else
-            ..._restaurants.map((item) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 14),
-                child: _buildHomeRestaurantCard(
-                  id: item['id'] as String? ?? '',
-                  name: item['name'] as String? ?? '',
-                  tag: item['tag'] as String? ?? '',
-                  location: item['location'] as String? ?? '',
-                  rating: item['rating'] as String? ?? '0.0',
-                  reviews: item['reviews'] as String? ?? '0',
-                  waitlistCount: item['waitlist_count'] as int? ?? 0,
-                  estWait: item['est_wait'] as String? ?? 'Direct Seating',
-                  isQueueAvailable: item['is_queue_available'] as bool? ?? true,
-                ),
+          StreamBuilder<List<RestaurantModel>>(
+            stream: _firestoreService.streamActiveRestaurants(),
+            builder: (context, snapshot) {
+              final restaurants = snapshot.data ?? [];
+              if (restaurants.isEmpty) {
+                return Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Center(
+                    child: Text('Loading active restaurants from Firestore...'),
+                  ),
+                );
+              }
+
+              return Column(
+                children: restaurants.map((restaurant) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 14),
+                    child: _buildHomeRestaurantCard(restaurant: restaurant),
+                  );
+                }).toList(),
               );
-            }),
+            },
+          ),
           const SizedBox(height: 24),
         ],
       ),
@@ -1172,15 +1129,7 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
   }
 
   Widget _buildHomeRestaurantCard({
-    required String id,
-    required String name,
-    required String tag,
-    required String location,
-    required String rating,
-    required String reviews,
-    required int waitlistCount,
-    required String estWait,
-    required bool isQueueAvailable,
+    required RestaurantModel restaurant,
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -1235,7 +1184,7 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
                         const Icon(Icons.restaurant_menu_rounded, size: 13, color: Colors.white),
                         const SizedBox(width: 5),
                         Text(
-                          tag,
+                          restaurant.tag,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 11,
@@ -1258,7 +1207,7 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      name,
+                      restaurant.name,
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -1270,7 +1219,7 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
                         const Icon(Icons.star_rounded, color: Color(0xFFF59E0B), size: 16),
                         const SizedBox(width: 2),
                         Text(
-                          rating,
+                          restaurant.rating.toString(),
                           style: const TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
@@ -1278,7 +1227,7 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
                           ),
                         ),
                         Text(
-                          ' ($reviews)',
+                          ' (${restaurant.reviewsCount})',
                           style: const TextStyle(
                             fontSize: 11,
                             color: AppColors.textMuted,
@@ -1290,7 +1239,7 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  location,
+                  restaurant.location,
                   style: const TextStyle(
                     fontSize: 12,
                     color: AppColors.textMuted,
@@ -1306,29 +1255,23 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
                           width: 8,
                           height: 8,
                           decoration: BoxDecoration(
-                            color: isQueueAvailable ? const Color(0xFF10B981) : AppColors.accentOrange,
+                            color: restaurant.isQueueAvailable ? const Color(0xFF10B981) : AppColors.accentOrange,
                             shape: BoxShape.circle,
                           ),
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          isQueueAvailable ? '$waitlistCount in queue • $estWait' : estWait,
+                          restaurant.isQueueAvailable ? '${restaurant.waitlistCount} in queue • ${restaurant.estWait}' : restaurant.estWait,
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color: isQueueAvailable ? const Color(0xFF10B981) : AppColors.accentOrange,
+                            color: restaurant.isQueueAvailable ? const Color(0xFF10B981) : AppColors.accentOrange,
                           ),
                         ),
                       ],
                     ),
                     ElevatedButton(
-                      onPressed: () {
-                        if (isQueueAvailable && id.isNotEmpty) {
-                          _joinQueue(id);
-                        } else if (!isQueueAvailable && id.isNotEmpty) {
-                          _bookTable({'id': id, 'name': name});
-                        }
-                      },
+                      onPressed: () => _handleJoinQueue(restaurant),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF0D3B2E),
                         foregroundColor: Colors.white,
@@ -1339,7 +1282,7 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
                         ),
                       ),
                       child: Text(
-                        isQueueAvailable ? 'Join Queue' : 'Book Table',
+                        restaurant.isQueueAvailable ? 'Join Queue' : 'Book Table',
                         style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                       ),
                     ),
@@ -1356,7 +1299,18 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
   Widget _buildNavItem({required IconData icon, required String label, required int index}) {
     final isSelected = _bottomNavIndex == index;
     return GestureDetector(
-      onTap: () => setState(() => _bottomNavIndex = index),
+      onTap: () {
+        if (index == 4) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => EditProfileScreen(profile: widget.profile),
+            ),
+          );
+        } else {
+          setState(() => _bottomNavIndex = index);
+        }
+      },
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
