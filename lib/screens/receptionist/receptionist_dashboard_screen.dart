@@ -56,29 +56,10 @@ class _ReceptionistDashboardScreenState extends State<ReceptionistDashboardScree
         selectedIndex: 0,
         onDestinationSelected: (index) {
           if (index == 1) {
-          if (index == 1) {
             Navigator.pushReplacement(
               context,
               PageRouteBuilder(
                 pageBuilder: (context, animation1, animation2) => ReservationSummaryScreen(profile: widget.profile),
-                transitionDuration: Duration.zero,
-                reverseTransitionDuration: Duration.zero,
-              ),
-            );
-          } else if (index == 2) {
-            Navigator.pushReplacement(
-              context,
-              PageRouteBuilder(
-                pageBuilder: (context, animation1, animation2) => FloorOverviewScreen(profile: widget.profile),
-                transitionDuration: Duration.zero,
-                reverseTransitionDuration: Duration.zero,
-              ),
-            );
-          } else if (index == 3) {
-            Navigator.pushReplacement(
-              context,
-              PageRouteBuilder(
-                pageBuilder: (context, animation1, animation2) => LiveQueueScreen(profile: widget.profile),
                 transitionDuration: Duration.zero,
                 reverseTransitionDuration: Duration.zero,
               ),
