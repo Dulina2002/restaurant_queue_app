@@ -10,6 +10,7 @@ class AdminDashboard extends StatefulWidget {
 class _AdminDashboardState extends State<AdminDashboard> {
   int selectedTab = 0;
   bool platformFrozen = false;
+  final List<Map<String, String>> broadcasts = [];
 
   final List<String> tabs = ['Restaurants', 'Users', 'Broadcasts', 'System'];
 
@@ -93,7 +94,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
               const SizedBox(height: 28),
               _buildTabs(),
               const SizedBox(height: 30),
-
               if (selectedTab == 0) _buildRestaurants(),
               if (selectedTab == 1) _buildUsers(),
               if (selectedTab == 2) _buildBroadcasts(),
@@ -315,13 +315,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ],
         ),
         const SizedBox(height: 22),
-
         if (restaurants.isEmpty)
           _emptyMessage(
             Icons.store_outlined,
             'No partner restaurants available.',
           ),
-
         ...List.generate(
           restaurants.length,
           (index) => Padding(
@@ -338,9 +336,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
     final bool available = restaurant['status'] == 'Tables Available';
 
-    final Color statusColor = available
-        ? const Color(0xFF1B8F5A)
-        : const Color(0xFFF47B4A);
+    final Color statusColor =
+        available ? const Color(0xFF1B8F5A) : const Color(0xFFF47B4A);
 
     final details =
         '${restaurant['cuisine']} • ${restaurant['price']} • ${restaurant['address']}';
@@ -714,10 +711,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ],
         ),
         const SizedBox(height: 20),
-
         if (users.isEmpty)
           _emptyMessage(Icons.people_outline, 'No users available.'),
-
         ...List.generate(
           users.length,
           (index) => Padding(
@@ -737,9 +732,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
     final String role = user['role'];
     final bool suspended = user['suspended'];
 
-    final String initial = name.isNotEmpty
-        ? name.substring(0, 1).toUpperCase()
-        : '?';
+    final String initial =
+        name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '?';
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -1171,6 +1165,98 @@ class _AdminDashboardState extends State<AdminDashboard> {
   // BROADCASTS
   // ============================================================
 
+  Future<void> _showSendAlertDialog() async {
+    final formKey = GlobalKey<FormState>();
+    String title = '';
+    String message = '';
+    String priority = 'NORMAL';
+
+    final broadcast = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Send Alert'),
+        content: SizedBox(
+          width: 450,
+          child: SingleChildScrollView(
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    decoration: const InputDecoration(
+                      labelText: 'Alert title',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) => value == null || value.trim().isEmpty
+                        ? 'Please enter an alert title.'
+                        : null,
+                    onSaved: (value) => title = value!.trim(),
+                  ),
+                  const SizedBox(height: 15),
+                  TextFormField(
+                    minLines: 3,
+                    maxLines: 5,
+                    decoration: const InputDecoration(
+                      labelText: 'Message',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) => value == null || value.trim().isEmpty
+                        ? 'Please enter a message.'
+                        : null,
+                    onSaved: (value) => message = value!.trim(),
+                  ),
+                  const SizedBox(height: 15),
+                  DropdownButtonFormField<String>(
+                    initialValue: priority,
+                    decoration: const InputDecoration(
+                      labelText: 'Alert type / priority',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'NORMAL', child: Text('Normal')),
+                      DropdownMenuItem(
+                          value: 'WARNING', child: Text('Warning')),
+                      DropdownMenuItem(value: 'URGENT', child: Text('Urgent')),
+                    ],
+                    validator: (value) => value == null
+                        ? 'Please select an alert priority.'
+                        : null,
+                    onChanged: (value) {
+                      if (value != null) priority = value;
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: _greenButtonStyle(),
+            onPressed: () {
+              if (!formKey.currentState!.validate()) return;
+              formKey.currentState!.save();
+              Navigator.pop(dialogContext, {
+                'title': title,
+                'message': message,
+                'priority': priority,
+              });
+            },
+            child: const Text('Send'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || broadcast == null) return;
+    setState(() => broadcasts.insert(0, broadcast));
+    _showMessage('Alert sent successfully');
+  }
+
   Widget _buildBroadcasts() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1198,9 +1284,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
               ),
             ),
             ElevatedButton.icon(
-              onPressed: () {
-                _showMessage('Send Alert clicked');
-              },
+              onPressed: _showSendAlertDialog,
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFF47B4A),
                 foregroundColor: Colors.white,
@@ -1211,9 +1295,22 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ],
         ),
         const SizedBox(height: 22),
+        ...broadcasts.map(
+          (broadcast) => Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: _broadcastCard(
+              title: broadcast['title']!,
+              message: broadcast['message']!,
+              status: broadcast['priority']!,
+              active: true,
+              dispatched: 'Dispatched: Just now • Active',
+            ),
+          ),
+        ),
         _broadcastCard(
           title: 'Platform Operational',
-          message: 'All reservation and queue sync services running normally across Colombo partners.',
+          message:
+              'All reservation and queue sync services running normally across Colombo partners.',
           status: 'NORMAL',
           active: true,
         ),
@@ -1234,6 +1331,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     required String message,
     required String status,
     required bool active,
+    String? dispatched,
   }) {
     return Container(
       padding: const EdgeInsets.all(20),
@@ -1270,9 +1368,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
           Text(message, style: const TextStyle(color: Colors.grey)),
           const SizedBox(height: 14),
           Text(
-            active
-                ? 'Dispatched: 10m ago • Active'
-                : 'Dispatched: 2d ago • Archived',
+            dispatched ??
+                (active
+                    ? 'Dispatched: 10m ago • Active'
+                    : 'Dispatched: 2d ago • Archived'),
             style: const TextStyle(color: Colors.grey, fontSize: 12),
           ),
         ],
@@ -1283,6 +1382,63 @@ class _AdminDashboardState extends State<AdminDashboard> {
   // ============================================================
   // SYSTEM
   // ============================================================
+
+  Future<void> _confirmPlatformFreeze(bool value) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+            value ? 'Enable Platform Freeze?' : 'Disable Platform Freeze?'),
+        content: Text(value
+            ? 'Confirm emergency platform freeze? This updates the local dashboard state only.'
+            : 'Confirm disabling the emergency platform freeze?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: _greenButtonStyle(),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Confirm'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+    setState(() => platformFrozen = value);
+    _showMessage(
+        value ? 'Platform freeze enabled' : 'Platform freeze disabled');
+  }
+
+  Future<void> _confirmWaitlistFlush() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        icon: const Icon(Icons.warning_amber_rounded, color: Colors.deepOrange),
+        title: const Text('Global Waitlist Flush?'),
+        content: const Text(
+          'Flushing waitlists would remove all waiting entries. Confirm this local simulation? No restaurant waitlists will be deleted.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.deepOrange,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Confirm'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+    _showMessage('Global waitlist flush simulation completed successfully');
+  }
 
   Widget _buildSystem() {
     return Column(
@@ -1328,17 +1484,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
               ),
               Switch(
                 value: platformFrozen,
-                onChanged: (value) {
-                  setState(() {
-                    platformFrozen = value;
-                  });
-
-                  _showMessage(
-                    value
-                        ? 'Platform freeze enabled'
-                        : 'Platform freeze disabled',
-                  );
-                },
+                onChanged: _confirmPlatformFreeze,
               ),
             ],
           ),
@@ -1374,9 +1520,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 ),
               ),
               ElevatedButton(
-                onPressed: () {
-                  _showMessage('Global waitlist flushed');
-                },
+                onPressed: _confirmWaitlistFlush,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFF47B20),
                   foregroundColor: Colors.white,
