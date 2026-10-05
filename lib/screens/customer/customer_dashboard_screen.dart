@@ -1,14 +1,25 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../models/user_profile.dart';
 import '../../models/restaurant_model.dart';
 import '../../models/queue_entry_model.dart';
 import '../../models/reservation_model.dart';
+import '../../models/customer_notification_model.dart';
 import '../../shared/theme/app_colors.dart';
+import '../../shared/widgets/user_avatar.dart';
 import '../../services/firestore_service.dart';
+import '../../services/customer_notification_center.dart';
 import '../home_screen.dart';
 import '../../features/profile/presentation/screens/edit_profile_screen.dart';
 import 'widgets/filter_restaurants_sheet.dart';
 import 'widgets/customer_notifications_sheet.dart';
+import 'widgets/create_booking_modal.dart';
+import 'widgets/customer_queue_view.dart';
+import 'widgets/customer_bookings_view.dart';
+import 'widgets/customer_profile_view.dart';
+import 'widgets/top_notification_banner.dart';
+import 'booking/restaurant_details_screen.dart';
+import 'booking/reservation_details_screen.dart';
 
 class CustomerDashboardScreen extends StatefulWidget {
   final UserProfile? profile;
@@ -55,14 +66,41 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
   String _selectedAvailability = 'Available Today';
   int _partySize = 2;
 
+  StreamSubscription<CustomerNotificationItem>? _notificationSub;
+  UserProfile? _currentProfile;
+
   @override
   void initState() {
     super.initState();
+    _currentProfile = widget.profile;
     _bottomNavIndex = widget.initialTabIndex;
+    _homeSearchController.addListener(() => setState(() {}));
+    _exploreSearchController.addListener(() => setState(() {}));
+
+    // Real-time notifications for the bell icon and top dropdown banner
+    CustomerNotificationCenter.instance.start(widget.profile?.id ?? 'guest_id');
+    _notificationSub = CustomerNotificationCenter.instance.onNew.listen((item) {
+      if (!mounted) return;
+      TopNotificationBanner.show(
+        context,
+        item: item,
+        onTapView: _showNotificationsBottomSheet,
+      );
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant CustomerDashboardScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.profile != oldWidget.profile) {
+      _currentProfile = widget.profile;
+    }
   }
 
   @override
   void dispose() {
+    _notificationSub?.cancel();
+    TopNotificationBanner.dismiss();
     _homeSearchController.dispose();
     _exploreSearchController.dispose();
     super.dispose();
@@ -112,6 +150,7 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF162C1E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         title: Text(
           'Join Queue: ${restaurant.name}',
           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
@@ -120,7 +159,7 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text(
-              'Enter your party size to join the live virtual queue in Firestore.',
+              'Enter your party size to join the live virtual queue.',
               style: TextStyle(color: Colors.white70, fontSize: 13),
             ),
             const SizedBox(height: 16),
@@ -133,9 +172,11 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
                 labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
                 enabledBorder: OutlineInputBorder(
                   borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                focusedBorder: const OutlineInputBorder(
-                  borderSide: BorderSide(color: Color(0xFFF27B50)),
+                focusedBorder: OutlineInputBorder(
+                  borderSide: const BorderSide(color: Color(0xFFF27B50)),
+                  borderRadius: BorderRadius.circular(12),
                 ),
               ),
             ),
@@ -156,10 +197,10 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
                 final entry = await _firestoreService.joinQueue(
                   restaurantId: restaurant.id,
                   restaurantName: restaurant.name,
-                  userId: widget.profile?.id ?? 'guest_id',
-                  guestName: widget.profile?.fullName ?? 'Diner Guest',
+                  userId: widget.profile?.id ?? 'current_customer_id',
+                  guestName: (widget.profile?.fullName.isNotEmpty == true) ? widget.profile!.fullName : 'Ayesha Perera',
                   partySize: size,
-                  phoneNumber: widget.profile?.phoneNumber ?? '',
+                  phoneNumber: widget.profile?.phoneNumber ?? '+94 77 123 4567',
                 );
 
                 messenger.showSnackBar(
@@ -168,6 +209,9 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
                     backgroundColor: const Color(0xFF00E676),
                   ),
                 );
+
+                // Switch to live queue tab
+                setState(() => _bottomNavIndex = 3);
               } catch (e) {
                 messenger.showSnackBar(
                   SnackBar(content: Text('Failed to join queue: $e')),
@@ -177,6 +221,7 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFF27B50),
               foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
             child: const Text('Confirm & Join'),
           ),
@@ -203,9 +248,10 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final userName = (widget.profile?.fullName.isNotEmpty == true)
-        ? widget.profile!.fullName
-        : 'Ayesha Perera';
+    final activeProfile = _currentProfile ?? widget.profile;
+    final userName = (activeProfile?.fullName.isNotEmpty == true)
+        ? activeProfile!.fullName
+        : 'Dulina';
     final initials = _getInitials(userName);
 
     return Scaffold(
@@ -214,9 +260,7 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
         child: Column(
           children: [
             Expanded(
-              child: _bottomNavIndex == 1
-                  ? _buildExploreView()
-                  : _buildHomeView(userName, initials),
+              child: _buildCurrentTab(activeProfile, userName, initials),
             ),
 
             // --- Bottom Navigation Bar ---
@@ -252,19 +296,61 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
     );
   }
 
+  Widget _buildCurrentTab(UserProfile? activeProfile, String userName, String initials) {
+    switch (_bottomNavIndex) {
+      case 0:
+        return _buildHomeView(activeProfile, userName, initials);
+      case 1:
+        return _buildExploreView();
+      case 2:
+        return CustomerBookingsView(
+          profile: activeProfile,
+          onBrowseRestaurants: () => setState(() => _bottomNavIndex = 1),
+        );
+      case 3:
+        return CustomerQueueView(
+          profile: activeProfile,
+          onBrowseRestaurants: () => setState(() => _bottomNavIndex = 0),
+        );
+      case 4:
+        return CustomerProfileView(
+          profile: activeProfile,
+          onProfileUpdated: (updated) {
+            setState(() {
+              _currentProfile = updated;
+            });
+          },
+        );
+      default:
+        return _buildHomeView(activeProfile, userName, initials);
+    }
+  }
+
   // ==========================================
   // --- 1. EXPLORE RESTAURANTS VIEW SCREEN ---
   // ==========================================
   Widget _buildExploreView() {
     final selectedCuisine = _exploreCuisines[_selectedExploreCuisineIndex];
+    final searchQuery = _exploreSearchController.text.trim().toLowerCase();
 
     return StreamBuilder<List<RestaurantModel>>(
       stream: _firestoreService.streamActiveRestaurants(),
       builder: (context, snapshot) {
         final restaurants = snapshot.data ?? [];
-        final filtered = selectedCuisine == 'All'
-            ? restaurants
-            : restaurants.where((r) => r.cuisine.toLowerCase() == selectedCuisine.toLowerCase()).toList();
+        final filtered = restaurants.where((r) {
+          // Cuisine Pill Filter
+          final matchesCuisine = selectedCuisine == 'All' ||
+              r.cuisine.toLowerCase() == selectedCuisine.toLowerCase() ||
+              r.tag.toLowerCase().contains(selectedCuisine.toLowerCase());
+
+          // Search query filter
+          final matchesQuery = searchQuery.isEmpty ||
+              r.name.toLowerCase().contains(searchQuery) ||
+              r.cuisine.toLowerCase().contains(searchQuery) ||
+              r.location.toLowerCase().contains(searchQuery);
+
+          return matchesCuisine && matchesQuery;
+        }).toList();
 
         return SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
@@ -280,6 +366,11 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
                   color: AppColors.textPrimary,
                   letterSpacing: -0.5,
                 ),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Discover top dining spots and reserve instantly',
+                style: TextStyle(fontSize: 12, color: AppColors.textMuted),
               ),
               const SizedBox(height: 16),
 
@@ -318,6 +409,11 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
                               ),
                             ),
                           ),
+                          if (_exploreSearchController.text.isNotEmpty)
+                            GestureDetector(
+                              onTap: () => _exploreSearchController.clear(),
+                              child: const Icon(Icons.clear, size: 18, color: AppColors.textMuted),
+                            ),
                         ],
                       ),
                     ),
@@ -379,22 +475,34 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
               // Restaurant Cards List
               if (filtered.isEmpty)
                 Container(
-                  padding: const EdgeInsets.all(24),
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(32),
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.border),
                   ),
-                  child: const Center(
-                    child: Text('No active restaurants found in Firestore.'),
+                  child: Column(
+                    children: [
+                      const Icon(Icons.search_off_rounded, size: 40, color: AppColors.textMuted),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'No Restaurants Match Your Search',
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Try clearing search filters or choosing another cuisine.',
+                        style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+                      ),
+                    ],
                   ),
                 )
               else
                 ...filtered.map((item) {
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 16),
-                    child: _buildExploreCard(
-                      restaurant: item,
-                    ),
+                    child: _buildExploreCard(restaurant: item),
                   );
                 }),
             ],
@@ -407,146 +515,194 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
   Widget _buildExploreCard({
     required RestaurantModel restaurant,
   }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => RestaurantDetailsScreen(
+              restaurant: restaurant,
+              profile: widget.profile,
+            ),
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Hero banner
-          Container(
-            height: 145,
-            width: double.infinity,
-            decoration: const BoxDecoration(
-              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-              gradient: LinearGradient(
-                colors: [Color(0xFF1B4D3E), Color(0xFF0B2B1F)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+        );
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppColors.border),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Hero banner
+            Container(
+              height: 145,
+              width: double.infinity,
+              decoration: const BoxDecoration(
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                gradient: LinearGradient(
+                  colors: [Color(0xFF1B4D3E), Color(0xFF0B2B1F)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: Stack(
+                children: [
+                  Positioned(
+                    right: -10,
+                    bottom: -10,
+                    child: Icon(
+                      Icons.restaurant_rounded,
+                      size: 115,
+                      color: Colors.white.withValues(alpha: 0.08),
+                    ),
+                  ),
+                  Positioned(
+                    left: 14,
+                    bottom: 14,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.restaurant_menu_rounded, size: 13, color: Colors.white),
+                          const SizedBox(width: 5),
+                          Text(
+                            restaurant.tag,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-            child: Stack(
-              children: [
-                Positioned(
-                  right: -10,
-                  bottom: -10,
-                  child: Icon(
-                    Icons.restaurant_rounded,
-                    size: 115,
-                    color: Colors.white.withValues(alpha: 0.08),
-                  ),
-                ),
-                Positioned(
-                  left: 14,
-                  bottom: 14,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.5),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.restaurant_menu_rounded, size: 13, color: Colors.white),
-                        const SizedBox(width: 5),
-                        Text(
-                          restaurant.tag,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
 
-          // Details
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      restaurant.name,
-                      style: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
+            // Details
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        restaurant.name,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
                       ),
-                    ),
-                    Row(
-                      children: [
-                        const Icon(Icons.star_rounded, color: Color(0xFFF59E0B), size: 17),
-                        const SizedBox(width: 3),
-                        Text(
-                          restaurant.rating.toString(),
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.textPrimary,
+                      Row(
+                        children: [
+                          const Icon(Icons.star_rounded, color: Color(0xFFF59E0B), size: 17),
+                          const SizedBox(width: 3),
+                          Text(
+                            restaurant.rating.toString(),
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
+                            ),
                           ),
-                        ),
-                        Text(
-                          ' (${restaurant.reviewsCount})',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textMuted,
+                          Text(
+                            ' (${restaurant.reviewsCount})',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textMuted,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  restaurant.location,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textMuted,
+                        ],
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Icon(
-                      restaurant.isQueueAvailable ? Icons.check_circle_rounded : Icons.warning_amber_rounded,
-                      size: 15,
-                      color: restaurant.isQueueAvailable ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+                  const SizedBox(height: 4),
+                  Text(
+                    restaurant.location,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textMuted,
                     ),
-                    const SizedBox(width: 5),
-                    Text(
-                      restaurant.estWait,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: restaurant.isQueueAvailable ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            restaurant.isQueueAvailable ? Icons.check_circle_rounded : Icons.calendar_today_rounded,
+                            size: 15,
+                            color: restaurant.isQueueAvailable ? const Color(0xFF10B981) : AppColors.accentOrange,
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            restaurant.estWait,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: restaurant.isQueueAvailable ? const Color(0xFF10B981) : AppColors.accentOrange,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                      ElevatedButton(
+                        onPressed: () {
+                          if (restaurant.isQueueAvailable) {
+                            _handleJoinQueue(restaurant);
+                          } else {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => RestaurantDetailsScreen(
+                                  restaurant: restaurant,
+                                  profile: widget.profile,
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0D3B2E),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: Text(
+                          restaurant.isQueueAvailable ? 'Join Queue' : 'Book Table',
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -554,8 +710,9 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
   // ==========================================
   // --- 2. HOME VIEW SCREEN ---
   // ==========================================
-  Widget _buildHomeView(String userName, String initials) {
-    final userId = widget.profile?.id ?? 'guest_id';
+  Widget _buildHomeView(UserProfile? activeProfile, String userName, String initials) {
+    final userId = activeProfile?.id ?? 'guest_id';
+    final homeQuery = _homeSearchController.text.trim().toLowerCase();
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
@@ -570,32 +727,21 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
               // Left: Avatar + Greeting & Name
               Row(
                 children: [
-                  GestureDetector(
-                    onTap: () {
-                      Navigator.push(
+                  UserAvatar(
+                    profile: activeProfile,
+                    name: userName,
+                    size: 44,
+                    onTap: () async {
+                      final updated = await Navigator.push<UserProfile>(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => EditProfileScreen(profile: widget.profile),
+                          builder: (context) => EditProfileScreen(profile: activeProfile),
                         ),
                       );
+                      if (updated != null && mounted) {
+                        setState(() => _currentProfile = updated);
+                      }
                     },
-                    child: Container(
-                      width: 44,
-                      height: 44,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFE8F5E9),
-                        shape: BoxShape.circle,
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        initials,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                    ),
                   ),
                   const SizedBox(width: 12),
                   Column(
@@ -683,26 +829,33 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
                             size: 22,
                           ),
                         ),
-                        Positioned(
-                          top: 1,
-                          right: 1,
-                          child: Container(
-                            width: 16,
-                            height: 16,
-                            decoration: const BoxDecoration(
-                              color: AppColors.accentOrange,
-                              shape: BoxShape.circle,
-                            ),
-                            alignment: Alignment.center,
-                            child: const Text(
-                              '2',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold,
+                        ListenableBuilder(
+                          listenable: CustomerNotificationCenter.instance,
+                          builder: (context, _) {
+                            final unread = CustomerNotificationCenter.instance.unreadCount;
+                            if (unread == 0) return const SizedBox.shrink();
+                            return Positioned(
+                              top: 1,
+                              right: 1,
+                              child: Container(
+                                constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                                padding: const EdgeInsets.symmetric(horizontal: 4),
+                                decoration: const BoxDecoration(
+                                  color: AppColors.accentOrange,
+                                  borderRadius: BorderRadius.all(Radius.circular(10)),
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  unread > 9 ? '9+' : '$unread',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                               ),
-                            ),
-                          ),
+                            );
+                          },
                         ),
                       ],
                     ),
@@ -763,9 +916,6 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
                       Expanded(
                         child: TextField(
                           controller: _homeSearchController,
-                          onTap: () {
-                            setState(() => _bottomNavIndex = 1);
-                          },
                           decoration: const InputDecoration(
                             hintText: 'Search restaurants or cuisines',
                             hintStyle: TextStyle(
@@ -778,6 +928,11 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
                           ),
                         ),
                       ),
+                      if (_homeSearchController.text.isNotEmpty)
+                        GestureDetector(
+                          onTap: () => _homeSearchController.clear(),
+                          child: const Icon(Icons.clear, size: 18, color: AppColors.textMuted),
+                        ),
                     ],
                   ),
                 ),
@@ -836,7 +991,7 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
           ),
           const SizedBox(height: 24),
 
-          // --- Realtime Firestore Customer Active Queue Banner ---
+          // --- Realtime Customer Active Queue Banner ---
           StreamBuilder<QueueEntryModel?>(
             stream: _firestoreService.streamCustomerActiveQueue(userId),
             builder: (context, queueSnapshot) {
@@ -845,63 +1000,66 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
                 return const SizedBox.shrink();
               }
 
-              return Container(
-                margin: const EdgeInsets.only(bottom: 24),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFF9EC),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFFFE8B2)),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFFF6B4A),
-                        shape: BoxShape.circle,
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        activeQueue.queueNumber,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
+              return GestureDetector(
+                onTap: () => setState(() => _bottomNavIndex = 3),
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 24),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF9EC),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFFFE8B2)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFFF6B4A),
+                          shape: BoxShape.circle,
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          activeQueue.queueNumber,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Virtual Queue: Position #${activeQueue.position}',
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFFD9531E),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Virtual Queue: Position #${activeQueue.position}',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFFD9531E),
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '${activeQueue.restaurantName} • Est. wait ${activeQueue.estimatedWaitMinutes} min',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: AppColors.textSecondary,
+                            const SizedBox(height: 2),
+                            Text(
+                              '${activeQueue.restaurantName} • Est. wait ${activeQueue.estimatedWaitMinutes} min',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textSecondary,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                    const Icon(
-                      Icons.chevron_right_rounded,
-                      color: AppColors.accentOrange,
-                      size: 22,
-                    ),
-                  ],
+                      const Icon(
+                        Icons.chevron_right_rounded,
+                        color: AppColors.accentOrange,
+                        size: 22,
+                      ),
+                    ],
+                  ),
                 ),
               );
             },
@@ -920,7 +1078,7 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
                 ),
               ),
               TextButton(
-                onPressed: () {},
+                onPressed: () => setState(() => _bottomNavIndex = 2),
                 style: TextButton.styleFrom(
                   padding: EdgeInsets.zero,
                   minimumSize: Size.zero,
@@ -943,111 +1101,148 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
           StreamBuilder<List<ReservationModel>>(
             stream: _firestoreService.streamUserReservations(userId),
             builder: (context, resSnapshot) {
-              final reservations = resSnapshot.data ?? [];
+              final reservations = (resSnapshot.data ?? []).where((r) => r.status.toLowerCase() == 'confirmed').toList();
               final res = reservations.isNotEmpty
                   ? reservations.first
-                  : const ReservationModel(
-                      id: 'RSV10245',
-                      restaurantId: 'ocean_bistro',
-                      restaurantName: 'Ocean Bistro',
-                      userId: '',
-                      guestName: 'Guest',
-                      reservationCode: '#RSV10245',
-                      date: 'Saturday, 12 September',
-                      time: '7:30 PM',
-                      partySize: 4,
-                      status: 'confirmed',
-                    );
+                  : null;
 
-              return Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: AppColors.border),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.03),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              res.restaurantName,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.textPrimary,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'ID: ${res.reservationCode}',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: AppColors.textMuted,
-                              ),
-                            ),
-                          ],
+              if (res == null) {
+                return Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: const [
+                          Text('No Upcoming Reservations', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textPrimary)),
+                          SizedBox(height: 2),
+                          Text('Book a table in advance anytime', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
+                        ],
+                      ),
+                      ElevatedButton(
+                        onPressed: () => CreateBookingModal.show(context, profile: widget.profile),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0D3B2E),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          elevation: 0,
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFE8F5E9),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Row(
+                        child: const Text('Book Table', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              return GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ReservationDetailsScreen(
+                        reservation: res,
+                        profile: widget.profile,
+                      ),
+                    ),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: AppColors.border),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.03),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Icon(
-                                Icons.check_circle_rounded,
-                                color: Color(0xFF10B981),
-                                size: 14,
-                              ),
-                              const SizedBox(width: 4),
                               Text(
-                                res.status.toUpperCase(),
+                                res.restaurantName,
                                 style: const TextStyle(
-                                  color: Color(0xFF10B981),
-                                  fontSize: 11,
+                                  fontSize: 16,
                                   fontWeight: FontWeight.bold,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'ID: ${res.reservationCode}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textMuted,
                                 ),
                               ),
                             ],
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    const Divider(height: 1, color: AppColors.border),
-                    const SizedBox(height: 14),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        _buildReservationDetail(
-                          icon: Icons.calendar_today_outlined,
-                          text: res.date.isNotEmpty ? res.date : 'Saturday, 12 Sep',
-                        ),
-                        _buildReservationDetail(
-                          icon: Icons.access_time_rounded,
-                          text: res.time.isNotEmpty ? res.time : '7:30 PM',
-                        ),
-                        _buildReservationDetail(
-                          icon: Icons.people_outline_rounded,
-                          text: '${res.partySize} Guests',
-                        ),
-                      ],
-                    ),
-                  ],
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE8F5E9),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.check_circle_rounded,
+                                  color: Color(0xFF10B981),
+                                  size: 14,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  res.status.toUpperCase(),
+                                  style: const TextStyle(
+                                    color: Color(0xFF10B981),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      const Divider(height: 1, color: AppColors.border),
+                      const SizedBox(height: 14),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          _buildReservationDetail(
+                            icon: Icons.calendar_today_outlined,
+                            text: res.date.isNotEmpty ? res.date : 'Saturday, 12 Sep',
+                          ),
+                          _buildReservationDetail(
+                            icon: Icons.access_time_rounded,
+                            text: res.time.isNotEmpty ? res.time : '7:30 PM',
+                          ),
+                          _buildReservationDetail(
+                            icon: Icons.people_outline_rounded,
+                            text: '${res.partySize} Guests',
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               );
             },
@@ -1068,7 +1263,7 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
               ),
               SizedBox(height: 2),
               Text(
-                'Real-time Firestore table availability',
+                'Real-time live queue & direct table booking',
                 style: TextStyle(
                   fontSize: 12,
                   color: AppColors.textMuted,
@@ -1082,21 +1277,42 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
             stream: _firestoreService.streamActiveRestaurants(),
             builder: (context, snapshot) {
               final restaurants = snapshot.data ?? [];
-              if (restaurants.isEmpty) {
+              final filtered = restaurants.where((r) {
+                // Search query filter
+                if (homeQuery.isNotEmpty) {
+                  final matches = r.name.toLowerCase().contains(homeQuery) ||
+                      r.cuisine.toLowerCase().contains(homeQuery) ||
+                      r.location.toLowerCase().contains(homeQuery);
+                  if (!matches) return false;
+                }
+
+                // Category filter ('Nearby', 'Available Now', 'Top Rated', 'Popular')
+                if (_selectedCategoryIndex == 1) {
+                  // Available Now: direct seating or queue available
+                  return r.isQueueAvailable;
+                } else if (_selectedCategoryIndex == 2) {
+                  // Top rated >= 4.8
+                  return r.rating >= 4.8;
+                }
+                return true;
+              }).toList();
+
+              if (filtered.isEmpty) {
                 return Container(
-                  padding: const EdgeInsets.all(20),
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: const Center(
-                    child: Text('Loading active restaurants from Firestore...'),
+                    child: Text('No matching restaurants found.', style: TextStyle(color: AppColors.textMuted)),
                   ),
                 );
               }
 
               return Column(
-                children: restaurants.map((restaurant) {
+                children: filtered.map((restaurant) {
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 14),
                     child: _buildHomeRestaurantCard(restaurant: restaurant),
@@ -1131,167 +1347,194 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
   Widget _buildHomeRestaurantCard({
     required RestaurantModel restaurant,
   }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => RestaurantDetailsScreen(
+              restaurant: restaurant,
+              profile: widget.profile,
+            ),
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            height: 140,
-            width: double.infinity,
-            decoration: const BoxDecoration(
-              borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-              gradient: LinearGradient(
-                colors: [Color(0xFF1B4D3E), Color(0xFF0B2B1F)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+        );
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppColors.border),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              height: 140,
+              width: double.infinity,
+              decoration: const BoxDecoration(
+                borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+                gradient: LinearGradient(
+                  colors: [Color(0xFF1B4D3E), Color(0xFF0B2B1F)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: Stack(
+                children: [
+                  Positioned(
+                    right: -10,
+                    bottom: -10,
+                    child: Icon(
+                      Icons.restaurant_rounded,
+                      size: 110,
+                      color: Colors.white.withValues(alpha: 0.07),
+                    ),
+                  ),
+                  Positioned(
+                    left: 14,
+                    bottom: 14,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.45),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.restaurant_menu_rounded, size: 13, color: Colors.white),
+                          const SizedBox(width: 5),
+                          Text(
+                            restaurant.tag,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-            child: Stack(
-              children: [
-                Positioned(
-                  right: -10,
-                  bottom: -10,
-                  child: Icon(
-                    Icons.restaurant_rounded,
-                    size: 110,
-                    color: Colors.white.withValues(alpha: 0.07),
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        restaurant.name,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          const Icon(Icons.star_rounded, color: Color(0xFFF59E0B), size: 16),
+                          const SizedBox(width: 2),
+                          Text(
+                            restaurant.rating.toString(),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          Text(
+                            ' (${restaurant.reviewsCount})',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: AppColors.textMuted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                ),
-                Positioned(
-                  left: 14,
-                  bottom: 14,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.45),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+                  const SizedBox(height: 4),
+                  Text(
+                    restaurant.location,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textMuted,
                     ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.restaurant_menu_rounded, size: 13, color: Colors.white),
-                        const SizedBox(width: 5),
-                        Text(
-                          restaurant.tag,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: restaurant.isQueueAvailable ? const Color(0xFF10B981) : AppColors.accentOrange,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            restaurant.isQueueAvailable ? '${restaurant.waitlistCount} in queue • ${restaurant.estWait}' : restaurant.estWait,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: restaurant.isQueueAvailable ? const Color(0xFF10B981) : AppColors.accentOrange,
+                            ),
+                          ),
+                        ],
+                      ),
+                      ElevatedButton(
+                        onPressed: () {
+                          if (restaurant.isQueueAvailable) {
+                            _handleJoinQueue(restaurant);
+                          } else {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => RestaurantDetailsScreen(
+                                  restaurant: restaurant,
+                                  profile: widget.profile,
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0D3B2E),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
                           ),
                         ),
-                      ],
-                    ),
+                        child: Text(
+                          restaurant.isQueueAvailable ? 'Join Queue' : 'Book Table',
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      restaurant.name,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    Row(
-                      children: [
-                        const Icon(Icons.star_rounded, color: Color(0xFFF59E0B), size: 16),
-                        const SizedBox(width: 2),
-                        Text(
-                          restaurant.rating.toString(),
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        Text(
-                          ' (${restaurant.reviewsCount})',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: AppColors.textMuted,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  restaurant.location,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textMuted,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color: restaurant.isQueueAvailable ? const Color(0xFF10B981) : AppColors.accentOrange,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          restaurant.isQueueAvailable ? '${restaurant.waitlistCount} in queue • ${restaurant.estWait}' : restaurant.estWait,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: restaurant.isQueueAvailable ? const Color(0xFF10B981) : AppColors.accentOrange,
-                          ),
-                        ),
-                      ],
-                    ),
-                    ElevatedButton(
-                      onPressed: () => _handleJoinQueue(restaurant),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0D3B2E),
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      child: Text(
-                        restaurant.isQueueAvailable ? 'Join Queue' : 'Book Table',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1300,16 +1543,7 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
     final isSelected = _bottomNavIndex == index;
     return GestureDetector(
       onTap: () {
-        if (index == 4) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => EditProfileScreen(profile: widget.profile),
-            ),
-          );
-        } else {
-          setState(() => _bottomNavIndex = index);
-        }
+        setState(() => _bottomNavIndex = index);
       },
       child: Column(
         mainAxisSize: MainAxisSize.min,

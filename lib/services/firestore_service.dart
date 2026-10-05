@@ -6,6 +6,7 @@ import '../models/reservation_model.dart';
 import '../features/manager/data/models/physical_table_model.dart';
 import '../features/manager/data/models/live_menu_dish_model.dart';
 import '../features/manager/data/models/manager_dashboard_model.dart';
+import 'supabase_service.dart';
 
 class FirestoreService {
   static final FirestoreService _instance = FirestoreService._internal();
@@ -32,24 +33,27 @@ class FirestoreService {
 
   final StreamController<List<PhysicalTable>> _tablesStreamController = StreamController<List<PhysicalTable>>.broadcast();
   final StreamController<List<LiveMenuDish>> _dishesStreamController = StreamController<List<LiveMenuDish>>.broadcast();
+  final StreamController<List<QueueEntryModel>> _queueStreamController = StreamController<List<QueueEntryModel>>.broadcast();
   final List<QueueEntryModel> _fallbackQueue = [
     QueueEntryModel(
       id: 'q1',
       restaurantId: 'ocean_bistro',
       restaurantName: 'Ocean Bistro',
+      userId: 'user_kamal',
       guestName: 'Kamal Perera',
       partySize: 4,
       phoneNumber: '+94 77 123 4567',
       status: QueueStatus.waiting,
       queueNumber: 'Q-101',
       position: 1,
-      estimatedWaitMinutes: 14,
+      estimatedWaitMinutes: 5,
       createdAt: DateTime.now().subtract(const Duration(minutes: 15)),
     ),
     QueueEntryModel(
       id: 'q2',
       restaurantId: 'ocean_bistro',
       restaurantName: 'Ocean Bistro',
+      userId: 'user_sarah',
       guestName: 'Sarah Jenkins',
       partySize: 2,
       phoneNumber: '+94 71 987 6543',
@@ -63,16 +67,34 @@ class FirestoreService {
       id: 'q3',
       restaurantId: 'ocean_bistro',
       restaurantName: 'Ocean Bistro',
+      userId: 'user_rohan',
       guestName: 'Rohan De Silva',
       partySize: 6,
       phoneNumber: '+94 76 555 1234',
       status: QueueStatus.waiting,
       queueNumber: 'Q-103',
       position: 3,
-      estimatedWaitMinutes: 22,
+      estimatedWaitMinutes: 15,
       createdAt: DateTime.now().subtract(const Duration(minutes: 3)),
     ),
   ];
+
+  final List<ReservationModel> _fallbackReservations = [
+    ReservationModel(
+      id: 'rsv_1',
+      restaurantId: 'ocean_bistro',
+      restaurantName: 'Ocean Bistro',
+      userId: 'guest_id',
+      guestName: 'Ayesha Perera',
+      reservationCode: '#RSV10245',
+      date: 'Saturday, 12 Oct',
+      time: '7:30 PM',
+      partySize: 4,
+      status: 'confirmed',
+      createdAt: DateTime.now().subtract(const Duration(days: 1)),
+    ),
+  ];
+  final StreamController<List<ReservationModel>> _reservationsStreamController = StreamController<List<ReservationModel>>.broadcast();
 
   final List<RestaurantModel> _fallbackRestaurants = [
     const RestaurantModel(
@@ -167,7 +189,8 @@ class FirestoreService {
   /// Realtime stream for a restaurant's queue
   Stream<List<QueueEntryModel>> streamQueue(String restaurantId) {
     if (!isLiveFirebaseProject) {
-      return Stream.value(_fallbackQueue.where((q) => q.status != QueueStatus.seated).toList());
+      Future.microtask(() => _queueStreamController.add(_fallbackQueue.where((q) => q.status != QueueStatus.seated && q.status != QueueStatus.cancelled).toList()));
+      return _queueStreamController.stream.map((list) => list.where((q) => (q.restaurantId == restaurantId || restaurantId == 'ocean_bistro') && q.status != QueueStatus.seated && q.status != QueueStatus.cancelled).toList());
     }
     try {
       return _queueRef
@@ -175,7 +198,7 @@ class FirestoreService {
           .snapshots()
           .map((snapshot) {
         if (snapshot.docs.isEmpty) {
-          return _fallbackQueue.where((q) => q.status != QueueStatus.seated).toList();
+          return _fallbackQueue.where((q) => q.status != QueueStatus.seated && q.status != QueueStatus.cancelled).toList();
         }
         final items = snapshot.docs
             .map((doc) => QueueEntryModel.fromFirestore(doc))
@@ -187,28 +210,75 @@ class FirestoreService {
           return a.createdAt!.compareTo(b.createdAt!);
         });
         return items;
-      }).handleError((_) => _fallbackQueue.where((q) => q.status != QueueStatus.seated).toList());
+      }).handleError((_) => _fallbackQueue.where((q) => q.status != QueueStatus.seated && q.status != QueueStatus.cancelled).toList());
     } catch (_) {
-      return Stream.value(_fallbackQueue.where((q) => q.status != QueueStatus.seated).toList());
+      Future.microtask(() => _queueStreamController.add(_fallbackQueue.where((q) => q.status != QueueStatus.seated && q.status != QueueStatus.cancelled).toList()));
+      return _queueStreamController.stream.map((list) => list.where((q) => (q.restaurantId == restaurantId || restaurantId == 'ocean_bistro') && q.status != QueueStatus.seated && q.status != QueueStatus.cancelled).toList());
     }
   }
 
-  /// Realtime stream for a customer's active queue item
+  /// Realtime stream for a customer's active queue item with dynamic position calculation
   Stream<QueueEntryModel?> streamCustomerActiveQueue(String userId) {
+    final effectiveUid = (userId.isNotEmpty && userId != 'guest_id') ? userId : 'current_customer_id';
+
     if (!isLiveFirebaseProject) {
-      final active = _fallbackQueue.where((q) => q.status == QueueStatus.waiting || q.status == QueueStatus.called).toList();
-      return Stream.value(active.isNotEmpty ? active.first : null);
+      Future.microtask(() => _queueStreamController.add(List.from(_fallbackQueue)));
+      return _queueStreamController.stream.map((list) {
+        final activeList = list
+            .where((q) =>
+                q.userId == effectiveUid &&
+                (q.status == QueueStatus.waiting || q.status == QueueStatus.called))
+            .toList();
+        if (activeList.isEmpty) return null;
+        final myEntry = activeList.first;
+
+        // Dynamic position recalculation in memory
+        final restaurantQueue = list
+            .where((q) =>
+                q.restaurantId == myEntry.restaurantId &&
+                (q.status == QueueStatus.waiting || q.status == QueueStatus.called))
+            .toList();
+        restaurantQueue.sort((a, b) =>
+            (a.createdAt ?? DateTime.now()).compareTo(b.createdAt ?? DateTime.now()));
+        final dynamicPos = restaurantQueue.indexWhere((q) => q.id == myEntry.id) + 1;
+        final calculatedPos = dynamicPos > 0 ? dynamicPos : myEntry.position;
+
+        return myEntry.copyWith(
+          position: calculatedPos,
+          estimatedWaitMinutes: calculatedPos * 5,
+        );
+      });
     }
     try {
       return _queueRef
-          .where('user_id', isEqualTo: userId)
+          .where('user_id', isEqualTo: effectiveUid)
           .snapshots()
-          .map((snapshot) {
+          .asyncMap((snapshot) async {
         final active = snapshot.docs
             .map((doc) => QueueEntryModel.fromFirestore(doc))
             .where((q) => q.status == QueueStatus.waiting || q.status == QueueStatus.called)
             .toList();
-        return active.isNotEmpty ? active.first : null;
+        if (active.isEmpty) return null;
+        final myEntry = active.first;
+
+        // Calculate live dynamic position from Firestore
+        try {
+          final restSnap = await _queueRef
+              .where('restaurant_id', isEqualTo: myEntry.restaurantId)
+              .where('status', whereIn: ['waiting', 'called'])
+              .get();
+          final allWaiting = restSnap.docs.map((d) => QueueEntryModel.fromFirestore(d)).toList();
+          allWaiting.sort((a, b) =>
+              (a.createdAt ?? DateTime.now()).compareTo(b.createdAt ?? DateTime.now()));
+          final idx = allWaiting.indexWhere((q) => q.id == myEntry.id);
+          final dynamicPos = idx >= 0 ? idx + 1 : myEntry.position;
+          return myEntry.copyWith(
+            position: dynamicPos,
+            estimatedWaitMinutes: dynamicPos * 5,
+          );
+        } catch (_) {
+          return myEntry;
+        }
       }).handleError((_) => null);
     } catch (_) {
       return Stream.value(null);
@@ -224,23 +294,39 @@ class FirestoreService {
     required int partySize,
     required String phoneNumber,
   }) async {
+    final effectiveUid = (userId.isNotEmpty && userId != 'guest_id') ? userId : 'current_customer_id';
+    final activeCount = _fallbackQueue
+        .where((q) => q.restaurantId == restaurantId && (q.status == QueueStatus.waiting || q.status == QueueStatus.called))
+        .length;
+    final currentPos = activeCount + 1;
     final queueNumber = 'Q-${_fallbackQueue.length + 101}';
     final entry = QueueEntryModel(
       id: 'q_${DateTime.now().millisecondsSinceEpoch}',
       restaurantId: restaurantId,
       restaurantName: restaurantName,
-      userId: userId,
+      userId: effectiveUid,
       guestName: guestName,
       partySize: partySize,
       phoneNumber: phoneNumber,
       status: QueueStatus.waiting,
       queueNumber: queueNumber,
-      position: _fallbackQueue.length + 1,
-      estimatedWaitMinutes: (_fallbackQueue.length + 1) * 5,
+      position: currentPos,
+      estimatedWaitMinutes: currentPos * 5,
       createdAt: DateTime.now(),
     );
 
     _fallbackQueue.add(entry);
+    _queueStreamController.add(List.from(_fallbackQueue));
+
+    // Update restaurant waitlist count in fallback
+    final rIdx = _fallbackRestaurants.indexWhere((r) => r.id == restaurantId);
+    if (rIdx != -1) {
+      _fallbackRestaurants[rIdx] = _fallbackRestaurants[rIdx].copyWith(
+        waitlistCount: currentPos,
+        estWait: '${currentPos * 5} min wait',
+        isQueueAvailable: true,
+      );
+    }
 
     if (isLiveFirebaseProject) {
       try {
@@ -249,6 +335,18 @@ class FirestoreService {
         await _updateRestaurantWaitlistCount(restaurantId);
       } catch (_) {}
     }
+
+    // Sync with Supabase backend
+    try {
+      SupabaseService().joinQueue(
+        restaurantId: restaurantId,
+        restaurantName: restaurantName,
+        userId: effectiveUid,
+        guestName: guestName,
+        partySize: partySize,
+        phoneNumber: phoneNumber,
+      );
+    } catch (_) {}
 
     return entry;
   }
@@ -277,6 +375,7 @@ class FirestoreService {
     );
 
     _fallbackQueue.add(entry);
+    _queueStreamController.add(List.from(_fallbackQueue));
 
     if (isLiveFirebaseProject) {
       try {
@@ -289,6 +388,17 @@ class FirestoreService {
     return entry;
   }
 
+  /// Leave or cancel waitlist
+  Future<void> leaveQueue({required String queueId, required String restaurantId}) async {
+    await updateQueueStatus(queueId, QueueStatus.cancelled);
+    await _updateRestaurantWaitlistCount(restaurantId);
+
+    // Sync with Supabase backend
+    try {
+      SupabaseService().leaveQueue(queueId: queueId, restaurantId: restaurantId);
+    } catch (_) {}
+  }
+
   /// Update queue status (called / seated / cancelled)
   Future<void> updateQueueStatus(String queueId, QueueStatus status) async {
     final index = _fallbackQueue.indexWhere((q) => q.id == queueId);
@@ -299,6 +409,7 @@ class FirestoreService {
         _fallbackQueue[index] = _fallbackQueue[index].copyWith(status: status);
       }
     }
+    _queueStreamController.add(List.from(_fallbackQueue));
 
     if (isLiveFirebaseProject) {
       try {
@@ -311,6 +422,17 @@ class FirestoreService {
   }
 
   Future<void> _updateRestaurantWaitlistCount(String restaurantId) async {
+    final count = _fallbackQueue
+        .where((q) => q.restaurantId == restaurantId && (q.status == QueueStatus.waiting || q.status == QueueStatus.called))
+        .length;
+    final rIdx = _fallbackRestaurants.indexWhere((r) => r.id == restaurantId);
+    if (rIdx != -1) {
+      _fallbackRestaurants[rIdx] = _fallbackRestaurants[rIdx].copyWith(
+        waitlistCount: count,
+        estWait: count == 0 ? 'Direct Seating' : '${count * 5} min wait',
+        isQueueAvailable: true,
+      );
+    }
     if (!isLiveFirebaseProject) return;
     try {
       final activeSnapshot = await _queueRef
@@ -318,11 +440,11 @@ class FirestoreService {
           .where('status', isEqualTo: 'waiting')
           .get();
 
-      final count = activeSnapshot.docs.length;
-      final estWaitStr = count == 0 ? 'Direct Seating' : '${count * 4} min wait';
+      final liveCount = activeSnapshot.docs.length;
+      final estWaitStr = liveCount == 0 ? 'Direct Seating' : '${liveCount * 4} min wait';
 
       await _restaurantsRef.doc(restaurantId).set({
-        'waitlist_count': count,
+        'waitlist_count': liveCount,
         'est_wait': estWaitStr,
         'is_queue_available': true,
       }, SetOptions(merge: true));
@@ -514,19 +636,58 @@ class FirestoreService {
   CollectionReference<Map<String, dynamic>> get _reservationsRef =>
       _firestore.collection('reservations');
 
-  /// Stream of user reservations
+  /// Stream of user reservations with reactive stream update
   Stream<List<ReservationModel>> streamUserReservations(String userId) {
     if (!isLiveFirebaseProject) {
-      return Stream.value(<ReservationModel>[]);
+      final list = _fallbackReservations
+          .where((r) => r.userId == userId || r.userId == 'guest_id' || userId.isEmpty)
+          .toList();
+      list.sort((a, b) {
+        if (a.createdAt == null) return 1;
+        if (b.createdAt == null) return -1;
+        return b.createdAt!.compareTo(a.createdAt!);
+      });
+      Future.microtask(() => _reservationsStreamController.add(List.from(_fallbackReservations)));
+      return _reservationsStreamController.stream.map((all) {
+        final filtered = all
+            .where((r) => r.userId == userId || r.userId == 'guest_id' || userId.isEmpty)
+            .toList();
+        filtered.sort((a, b) {
+          if (a.createdAt == null) return 1;
+          if (b.createdAt == null) return -1;
+          return b.createdAt!.compareTo(a.createdAt!);
+        });
+        return filtered;
+      });
     }
     try {
+      final effectiveUid = userId.isNotEmpty ? userId : 'guest_id';
       return _reservationsRef
-          .where('user_id', isEqualTo: userId)
+          .where('user_id', isEqualTo: effectiveUid)
           .snapshots()
-          .map((snapshot) => snapshot.docs.map((doc) => ReservationModel.fromFirestore(doc)).toList())
-          .handleError((_) => <ReservationModel>[]);
+          .map((snapshot) {
+            if (snapshot.docs.isEmpty) {
+              final list = _fallbackReservations.where((r) => r.userId == effectiveUid || r.userId == 'guest_id').toList();
+              list.sort((a, b) {
+                if (a.createdAt == null) return 1;
+                if (b.createdAt == null) return -1;
+                return b.createdAt!.compareTo(a.createdAt!);
+              });
+              return list;
+            }
+            final list = snapshot.docs.map((doc) => ReservationModel.fromFirestore(doc)).toList();
+            list.sort((a, b) {
+              if (a.createdAt == null) return 1;
+              if (b.createdAt == null) return -1;
+              return b.createdAt!.compareTo(a.createdAt!);
+            });
+            return list;
+          })
+          .handleError((_) => _fallbackReservations.where((r) => r.userId == effectiveUid || r.userId == 'guest_id').toList());
     } catch (_) {
-      return Stream.value(<ReservationModel>[]);
+      final list = _fallbackReservations.where((r) => r.userId == userId || r.userId == 'guest_id' || userId.isEmpty).toList();
+      Future.microtask(() => _reservationsStreamController.add(list));
+      return _reservationsStreamController.stream;
     }
   }
 
@@ -546,12 +707,64 @@ class FirestoreService {
       createdAt: DateTime.now(),
     );
 
+    _fallbackReservations.insert(0, item);
+    _reservationsStreamController.add(List.from(_fallbackReservations));
+
     if (isLiveFirebaseProject) {
       try {
         await _reservationsRef.doc(item.id).set(item.toFirestore());
       } catch (_) {}
     }
+
+    // Sync with Supabase backend
+    try {
+      SupabaseService().createReservation(item);
+    } catch (_) {}
+
     return item;
+  }
+
+  /// Cancel reservation
+  Future<void> cancelReservation(String reservationId) async {
+    final idx = _fallbackReservations.indexWhere((r) => r.id == reservationId);
+    if (idx != -1) {
+      _fallbackReservations[idx] = _fallbackReservations[idx].copyWith(status: 'cancelled');
+      _reservationsStreamController.add(List.from(_fallbackReservations));
+    }
+    if (isLiveFirebaseProject) {
+      try {
+        await _reservationsRef.doc(reservationId).update({
+          'status': 'cancelled',
+          'updated_at': FieldValue.serverTimestamp(),
+        });
+      } catch (_) {}
+    }
+
+    // Sync with Supabase backend
+    try {
+      SupabaseService().cancelReservation(reservationId);
+    } catch (_) {}
+  }
+
+  /// Update / Modify reservation
+  Future<ReservationModel> updateReservation(ReservationModel reservation) async {
+    final idx = _fallbackReservations.indexWhere((r) => r.id == reservation.id);
+    if (idx != -1) {
+      _fallbackReservations[idx] = reservation;
+      _reservationsStreamController.add(List.from(_fallbackReservations));
+    }
+    if (isLiveFirebaseProject) {
+      try {
+        await _reservationsRef.doc(reservation.id).set(reservation.toFirestore(), SetOptions(merge: true));
+      } catch (_) {}
+    }
+
+    // Sync with Supabase backend
+    try {
+      SupabaseService().updateReservation(reservation);
+    } catch (_) {}
+
+    return reservation;
   }
 
   /// Stream total bookings count for Manager Dashboard

@@ -11,6 +11,7 @@ class ReservationModel {
   final String time;
   final int partySize;
   final String status;
+  final String? specialNotes;
   final DateTime? createdAt;
 
   const ReservationModel({
@@ -24,6 +25,7 @@ class ReservationModel {
     required this.time,
     required this.partySize,
     this.status = 'confirmed',
+    this.specialNotes,
     this.createdAt,
   });
 
@@ -40,11 +42,42 @@ class ReservationModel {
       time: data['time'] as String? ?? '',
       partySize: (data['party_size'] as num?)?.toInt() ?? 2,
       status: data['status'] as String? ?? 'confirmed',
+      specialNotes: data['special_notes'] as String?,
       createdAt: data['created_at'] != null
           ? (data['created_at'] is Timestamp
               ? (data['created_at'] as Timestamp).toDate()
               : DateTime.tryParse(data['created_at'].toString()))
           : null,
+    );
+  }
+
+  ReservationModel copyWith({
+    String? id,
+    String? restaurantId,
+    String? restaurantName,
+    String? userId,
+    String? guestName,
+    String? reservationCode,
+    String? date,
+    String? time,
+    int? partySize,
+    String? status,
+    String? specialNotes,
+    DateTime? createdAt,
+  }) {
+    return ReservationModel(
+      id: id ?? this.id,
+      restaurantId: restaurantId ?? this.restaurantId,
+      restaurantName: restaurantName ?? this.restaurantName,
+      userId: userId ?? this.userId,
+      guestName: guestName ?? this.guestName,
+      reservationCode: reservationCode ?? this.reservationCode,
+      date: date ?? this.date,
+      time: time ?? this.time,
+      partySize: partySize ?? this.partySize,
+      status: status ?? this.status,
+      specialNotes: specialNotes ?? this.specialNotes,
+      createdAt: createdAt ?? this.createdAt,
     );
   }
 
@@ -60,6 +93,7 @@ class ReservationModel {
       'time': time,
       'party_size': partySize,
       'status': status,
+      if (specialNotes != null) 'special_notes': specialNotes,
       'created_at': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
     };
   }

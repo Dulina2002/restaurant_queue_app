@@ -83,13 +83,14 @@ class UserProfile {
     String? avatarUrl,
     String? phoneNumber,
     DateTime? createdAt,
+    bool clearAvatar = false,
   }) {
     return UserProfile(
       id: id,
       email: email ?? this.email,
       fullName: fullName ?? this.fullName,
       role: role ?? this.role,
-      avatarUrl: avatarUrl ?? this.avatarUrl,
+      avatarUrl: clearAvatar ? null : (avatarUrl ?? this.avatarUrl),
       phoneNumber: phoneNumber ?? this.phoneNumber,
       createdAt: createdAt ?? this.createdAt,
     );
