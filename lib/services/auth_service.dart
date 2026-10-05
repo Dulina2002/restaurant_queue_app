@@ -1,8 +1,11 @@
-import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import '../models/user_profile.dart';
 import '../models/user_role.dart';
+import 'firebase_storage_service.dart';
 
 class AuthService {
   static final AuthService _instance = AuthService._internal();
@@ -20,6 +23,14 @@ class AuthService {
   FirebaseFirestore? get _firestore {
     try {
       return FirebaseFirestore.instance;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  SupabaseClient? get _supabase {
+    try {
+      return Supabase.instance.client;
     } catch (_) {
       return null;
     }
@@ -154,6 +165,15 @@ class AuthService {
         await _firestore?.collection('users').doc(newProfile.id).set(newProfile.toFirestore());
       } catch (_) {}
 
+      try {
+        await _supabase?.from('profiles').upsert({
+          'id': newProfile.id,
+          'role': newProfile.role.value,
+          'full_name': newProfile.fullName,
+          'email': newProfile.email,
+        });
+      } catch (_) {}
+
       _localFallbackProfile = newProfile;
       return newProfile;
     } catch (e) {
@@ -170,17 +190,40 @@ class AuthService {
     }
   }
 
-  /// Fetch User Profile by User ID from Firestore
+  /// Fetch User Profile by User ID from Firestore or Supabase
   Future<UserProfile> getProfile(String userId, {String? defaultEmail}) async {
     if (_localFallbackProfile != null && _localFallbackProfile!.id == userId) {
       return _localFallbackProfile!;
     }
 
+    // Try Supabase profiles
+    try {
+      final supa = _supabase;
+      if (supa != null) {
+        final row = await supa.from('profiles').select().eq('id', userId).maybeSingle();
+        if (row != null) {
+          final p = UserProfile(
+            id: userId,
+            email: (row['email'] as String?) ?? defaultEmail ?? currentUser?.email ?? '',
+            fullName: (row['full_name'] as String?) ?? 'User',
+            role: UserRole.fromString(row['role'] as String?),
+            avatarUrl: row['avatar_url'] as String?,
+            phoneNumber: row['phone_number'] as String?,
+            createdAt: row['created_at'] != null ? DateTime.tryParse(row['created_at'].toString()) : null,
+          );
+          _localFallbackProfile = p;
+          return p;
+        }
+      }
+    } catch (_) {}
+
+    // Try Firestore users
     try {
       final doc = await _firestore?.collection('users').doc(userId).get();
-
       if (doc != null && doc.exists && doc.data() != null) {
-        return UserProfile.fromFirestore(doc, defaultEmail: defaultEmail ?? currentUser?.email);
+        final p = UserProfile.fromFirestore(doc, defaultEmail: defaultEmail ?? currentUser?.email);
+        _localFallbackProfile = p;
+        return p;
       }
     } catch (_) {}
 
@@ -207,13 +250,50 @@ class AuthService {
     return await getProfile(user.uid, defaultEmail: user.email);
   }
 
-  /// Update User Profile in Firestore
+  /// Upload avatar image and return URL or Data URI
+  Future<String> uploadAvatar({
+    required String userId,
+    required File imageFile,
+  }) async {
+    // 1. Try Firebase Storage
+    try {
+      final url = await FirebaseStorageService().uploadUserAvatar(
+        userId: userId,
+        imageFile: imageFile,
+      );
+      if (url.isNotEmpty) return url;
+    } catch (_) {}
+
+    // 2. Try Supabase Storage (bucket 'avatars')
+    try {
+      final supa = _supabase;
+      if (supa != null) {
+        final bytes = await imageFile.readAsBytes();
+        final path = 'avatars/$userId.jpg';
+        await supa.storage.from('avatars').uploadBinary(
+          path,
+          bytes,
+          fileOptions: const FileOptions(upsert: true, contentType: 'image/jpeg'),
+        );
+        final publicUrl = supa.storage.from('avatars').getPublicUrl(path);
+        if (publicUrl.isNotEmpty) return publicUrl;
+      }
+    } catch (_) {}
+
+    // 3. Resilient Base64 Data URI
+    final bytes = await imageFile.readAsBytes();
+    final base64String = base64Encode(bytes);
+    return 'data:image/jpeg;base64,$base64String';
+  }
+
+  /// Update User Profile in Firestore and Supabase
   Future<UserProfile> updateProfile({
     required String userId,
     required String fullName,
     required String email,
     String? phoneNumber,
     String? avatarUrl,
+    bool clearAvatar = false,
   }) async {
     final currentProf = await getProfile(userId);
     final updatedProf = currentProf.copyWith(
@@ -221,8 +301,10 @@ class AuthService {
       email: email,
       phoneNumber: phoneNumber,
       avatarUrl: avatarUrl,
+      clearAvatar: clearAvatar,
     );
 
+    // Save to Firestore
     try {
       await _firestore?.collection('users').doc(userId).set(
             updatedProf.toFirestore(),
@@ -233,6 +315,21 @@ class AuthService {
         if (fullName.isNotEmpty) {
           await currentUser!.updateDisplayName(fullName);
         }
+      }
+    } catch (_) {}
+
+    // Save to Supabase profiles
+    try {
+      final supa = _supabase;
+      if (supa != null) {
+        await supa.from('profiles').upsert({
+          'id': userId,
+          'role': updatedProf.role.value,
+          'full_name': updatedProf.fullName,
+          'email': updatedProf.email,
+          'phone_number': updatedProf.phoneNumber,
+          'avatar_url': updatedProf.avatarUrl,
+        });
       }
     } catch (_) {}
 

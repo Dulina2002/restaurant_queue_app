@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'firebase_options.dart';
 import 'services/firestore_service.dart';
 import 'screens/auth_gate.dart';
@@ -11,6 +12,22 @@ Future<void> main() async {
   try {
     await dotenv.load(fileName: ".env");
   } catch (_) {}
+
+  // Initialize Supabase if credentials are present in .env
+  final supabaseUrl = dotenv.env['SUPABASE_URL'];
+  final supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY'];
+  if (supabaseUrl != null && supabaseUrl.isNotEmpty &&
+      supabaseAnonKey != null && supabaseAnonKey.isNotEmpty) {
+    try {
+      await Supabase.initialize(
+        url: supabaseUrl,
+        anonKey: supabaseAnonKey,
+      );
+      debugPrint('Supabase initialized successfully: $supabaseUrl');
+    } catch (e) {
+      debugPrint('Supabase initialization notice: $e');
+    }
+  }
 
   try {
     await Firebase.initializeApp(

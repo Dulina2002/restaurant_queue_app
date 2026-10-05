@@ -5,8 +5,6 @@ import '../home_screen.dart';
 import 'reservation_summary_screen.dart';
 import '../../shared/widgets/role_header_widget.dart';
 import '../../shared/widgets/role_bottom_nav_widget.dart';
-import 'floor_overview_screen.dart';
-import 'live_queue_screen.dart';
 
 class ReceptionistDashboardScreen extends StatefulWidget {
   final UserProfile profile;

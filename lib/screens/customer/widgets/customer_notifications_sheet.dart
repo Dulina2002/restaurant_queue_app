@@ -1,35 +1,9 @@
 import 'package:flutter/material.dart';
+import '../../../models/customer_notification_model.dart';
+import '../../../services/customer_notification_center.dart';
 import '../../../shared/theme/app_colors.dart';
 
 enum NotificationCategory { all, queueAndBookings, offers }
-
-class CustomerNotificationItem {
-  final String id;
-  final String title;
-  final String message;
-  final String time;
-  final String category; // 'queue', 'booking', 'offer', 'loyalty'
-  final IconData icon;
-  final Color iconColor;
-  final Color iconBgColor;
-  final String? actionLabel;
-  final String section; // 'Today', 'Earlier'
-  bool isRead;
-
-  CustomerNotificationItem({
-    required this.id,
-    required this.title,
-    required this.message,
-    required this.time,
-    required this.category,
-    required this.icon,
-    required this.iconColor,
-    required this.iconBgColor,
-    this.actionLabel,
-    required this.section,
-    this.isRead = false,
-  });
-}
 
 class CustomerNotificationsSheet extends StatefulWidget {
   const CustomerNotificationsSheet({super.key});
@@ -42,105 +16,33 @@ class CustomerNotificationsSheet extends StatefulWidget {
 class _CustomerNotificationsSheetState
     extends State<CustomerNotificationsSheet> {
   NotificationCategory _selectedCategory = NotificationCategory.all;
+  final CustomerNotificationCenter _center = CustomerNotificationCenter.instance;
 
-  late List<CustomerNotificationItem> _notifications;
+  List<CustomerNotificationItem> get _notifications => _center.items;
 
   @override
   void initState() {
     super.initState();
-    _notifications = [
-      CustomerNotificationItem(
-        id: '1',
-        title: 'Table Ready Soon!',
-        message:
-            'You are #1 in queue at Ocean Bistro (Table for 2). Please proceed to the host desk.',
-        time: '5m ago',
-        category: 'queue',
-        icon: Icons.hourglass_top_rounded,
-        iconColor: const Color(0xFFD97706),
-        iconBgColor: AppColors.amberTint,
-        actionLabel: 'View Queue Ticket',
-        section: 'Today',
-        isRead: false,
-      ),
-      CustomerNotificationItem(
-        id: '2',
-        title: 'Reservation Confirmed',
-        message:
-            'Your booking #RSV10245 for 2 guests at Ocean Bistro today at 7:30 PM is confirmed.',
-        time: '1h ago',
-        category: 'booking',
-        icon: Icons.check_circle_outline_rounded,
-        iconColor: const Color(0xFF10B981),
-        iconBgColor: AppColors.mintTint,
-        actionLabel: 'View Reservation',
-        section: 'Today',
-        isRead: false,
-      ),
-      CustomerNotificationItem(
-        id: '3',
-        title: 'Weekend 20% Off Special',
-        message:
-            'Enjoy 20% off all brunch & artisan brews this Saturday at Black Cat Café.',
-        time: 'Yesterday, 4:15 PM',
-        category: 'offer',
-        icon: Icons.local_offer_outlined,
-        iconColor: const Color(0xFFFF6B4A),
-        iconBgColor: AppColors.peachTint,
-        actionLabel: 'View Offer',
-        section: 'Earlier',
-        isRead: true,
-      ),
-      CustomerNotificationItem(
-        id: '4',
-        title: 'Queue Joined Successfully',
-        message:
-            'You joined the virtual queue #Q12 at Ocean Bistro. Estimated wait is 12 mins.',
-        time: 'Yesterday, 1:20 PM',
-        category: 'queue',
-        icon: Icons.people_outline_rounded,
-        iconColor: const Color(0xFF0284C7),
-        iconBgColor: AppColors.skyTint,
-        section: 'Earlier',
-        isRead: true,
-      ),
-      CustomerNotificationItem(
-        id: '5',
-        title: 'Earned 150 DinePoints',
-        message:
-            'Your receipt from The Mango Tree has been verified. 150 points added to your balance!',
-        time: 'Sep 22, 9:00 PM',
-        category: 'loyalty',
-        icon: Icons.stars_rounded,
-        iconColor: const Color(0xFF8B5CF6),
-        iconBgColor: const Color(0xFFF3E8FF),
-        section: 'Earlier',
-        isRead: true,
-      ),
-    ];
+    _center.addListener(_onCenterChanged);
   }
 
-  int get _unreadCount => _notifications.where((n) => !n.isRead).length;
-
-  void _markAllAsRead() {
-    setState(() {
-      for (var n in _notifications) {
-        n.isRead = true;
-      }
-    });
+  @override
+  void dispose() {
+    _center.removeListener(_onCenterChanged);
+    super.dispose();
   }
 
-  void _markAsRead(CustomerNotificationItem item) {
-    setState(() {
-      item.isRead = true;
-    });
+  void _onCenterChanged() {
+    if (mounted) setState(() {});
   }
 
-  void _deleteNotification(String id) {
-    setState(() {
-      _notifications.removeWhere((n) => n.id == id);
-    });
-  }
+  int get _unreadCount => _center.unreadCount;
+
+  void _markAllAsRead() => _center.markAllRead();
+
+  void _markAsRead(CustomerNotificationItem item) => _center.markRead(item.id);
+
+  void _deleteNotification(String id) => _center.delete(id);
 
   List<CustomerNotificationItem> _getFilteredNotifications() {
     switch (_selectedCategory) {
