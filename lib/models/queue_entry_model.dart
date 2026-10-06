@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 enum QueueStatus {
   waiting,
   called,
@@ -65,10 +63,12 @@ class QueueEntryModel {
     this.updatedAt,
   });
 
-  factory QueueEntryModel.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
-    final data = doc.data() ?? {};
+  factory QueueEntryModel.fromFirestore(dynamic doc) {
+    final Map<String, dynamic> data = doc is Map<String, dynamic>
+        ? doc
+        : (doc is Map ? Map<String, dynamic>.from(doc) : {});
     return QueueEntryModel(
-      id: doc.id,
+      id: data['id'] as String? ?? '',
       restaurantId: data['restaurant_id'] as String? ?? '',
       restaurantName: data['restaurant_name'] as String? ?? 'Restaurant',
       userId: data['user_id'] as String?,
@@ -79,16 +79,8 @@ class QueueEntryModel {
       queueNumber: data['queue_number'] as String? ?? 'Q-101',
       position: (data['position'] as num?)?.toInt() ?? 1,
       estimatedWaitMinutes: (data['estimated_wait_minutes'] as num?)?.toInt() ?? 15,
-      createdAt: data['created_at'] != null
-          ? (data['created_at'] is Timestamp
-              ? (data['created_at'] as Timestamp).toDate()
-              : DateTime.tryParse(data['created_at'].toString()))
-          : null,
-      updatedAt: data['updated_at'] != null
-          ? (data['updated_at'] is Timestamp
-              ? (data['updated_at'] as Timestamp).toDate()
-              : DateTime.tryParse(data['updated_at'].toString()))
-          : null,
+      createdAt: data['created_at'] != null ? DateTime.tryParse(data['created_at'].toString()) : null,
+      updatedAt: data['updated_at'] != null ? DateTime.tryParse(data['updated_at'].toString()) : null,
     );
   }
 
@@ -105,8 +97,8 @@ class QueueEntryModel {
       'queue_number': queueNumber,
       'position': position,
       'estimated_wait_minutes': estimatedWaitMinutes,
-      'created_at': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
-      'updated_at': FieldValue.serverTimestamp(),
+      'created_at': createdAt?.toIso8601String(),
+      'updated_at': updatedAt?.toIso8601String(),
     };
   }
 

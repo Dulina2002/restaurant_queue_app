@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user_profile.dart';
 import '../models/user_role.dart';
 import '../services/auth_service.dart';
@@ -32,10 +32,10 @@ class AuthGate extends StatelessWidget {
     return StreamBuilder<User?>(
       stream: authService.onAuthStateChange,
       builder: (context, snapshot) {
-        final firebaseUser = snapshot.data ?? authService.currentUser;
+        final currentUser = snapshot.data ?? authService.currentUser;
 
         // Default to HomeScreen as the primary landing page on app startup
-        if (firebaseUser == null) {
+        if (currentUser == null) {
           return const HomeScreen();
         }
 
@@ -48,9 +48,9 @@ class AuthGate extends StatelessWidget {
 
             final userProfile = profileSnapshot.data ??
                 UserProfile(
-                  id: firebaseUser.uid,
-                  email: firebaseUser.email ?? '',
-                  fullName: firebaseUser.displayName ?? 'Diner Guest',
+                  id: currentUser.id,
+                  email: currentUser.email ?? '',
+                  fullName: currentUser.userMetadata?['full_name'] ?? 'Diner Guest',
                   role: UserRole.customer,
                 );
 

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/user_profile.dart';
 import '../../services/auth_service.dart';
 import '../home_screen.dart';
@@ -15,8 +15,15 @@ class AdminDashboardScreen extends StatefulWidget {
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   final AuthService _authService = AuthService();
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   bool _isSigningOut = false;
+
+  SupabaseClient? get _supabase {
+    try {
+      return Supabase.instance.client;
+    } catch (_) {
+      return null;
+    }
+  }
 
   Future<void> _signOut() async {
     setState(() => _isSigningOut = true);
@@ -142,15 +149,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               ),
               const SizedBox(height: 12),
 
-              StreamBuilder<QuerySnapshot>(
-                stream: _firestore.collection('restaurants').snapshots(),
+              StreamBuilder<List<Map<String, dynamic>>>(
+                stream: _supabase != null
+                    ? _supabase!.from('restaurants').stream(primaryKey: ['id'])
+                    : const Stream.empty(),
                 builder: (context, restSnap) {
-                  final restCount = restSnap.data?.docs.length.toString() ?? '3';
+                  final restCount = restSnap.data?.length.toString() ?? '3';
 
-                  return StreamBuilder<QuerySnapshot>(
-                    stream: _firestore.collection('users').snapshots(),
+                  return StreamBuilder<List<Map<String, dynamic>>>(
+                    stream: _supabase != null
+                        ? _supabase!.from('profiles').stream(primaryKey: ['id'])
+                        : const Stream.empty(),
                     builder: (context, userSnap) {
-                      final userCount = userSnap.data?.docs.length.toString() ?? '1';
+                      final userCount = userSnap.data?.length.toString() ?? '1';
 
                       return Column(
                         children: [
@@ -176,10 +187,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                             ],
                           ),
                           const SizedBox(height: 12),
-                          StreamBuilder<QuerySnapshot>(
-                            stream: _firestore.collection('queue_entries').snapshots(),
+                          StreamBuilder<List<Map<String, dynamic>>>(
+                            stream: _supabase != null
+                                ? _supabase!.from('queue_entries').stream(primaryKey: ['id'])
+                                : const Stream.empty(),
                             builder: (context, queueSnap) {
-                              final queueCount = queueSnap.data?.docs.length.toString() ?? '3';
+                              final queueCount = queueSnap.data?.length.toString() ?? '3';
 
                               return Row(
                                 children: [

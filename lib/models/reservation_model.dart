@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class ReservationModel {
   final String id;
   final String restaurantId;
@@ -27,10 +25,12 @@ class ReservationModel {
     this.createdAt,
   });
 
-  factory ReservationModel.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
-    final data = doc.data() ?? {};
+  factory ReservationModel.fromFirestore(dynamic doc) {
+    final Map<String, dynamic> data = doc is Map<String, dynamic>
+        ? doc
+        : (doc is Map ? Map<String, dynamic>.from(doc) : {});
     return ReservationModel(
-      id: doc.id,
+      id: data['id'] as String? ?? '',
       restaurantId: data['restaurant_id'] as String? ?? '',
       restaurantName: data['restaurant_name'] as String? ?? 'Restaurant',
       userId: data['user_id'] as String? ?? '',
@@ -40,11 +40,7 @@ class ReservationModel {
       time: data['time'] as String? ?? '',
       partySize: (data['party_size'] as num?)?.toInt() ?? 2,
       status: data['status'] as String? ?? 'confirmed',
-      createdAt: data['created_at'] != null
-          ? (data['created_at'] is Timestamp
-              ? (data['created_at'] as Timestamp).toDate()
-              : DateTime.tryParse(data['created_at'].toString()))
-          : null,
+      createdAt: data['created_at'] != null ? DateTime.tryParse(data['created_at'].toString()) : null,
     );
   }
 
@@ -60,7 +56,7 @@ class ReservationModel {
       'time': time,
       'party_size': partySize,
       'status': status,
-      'created_at': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
+      'created_at': createdAt?.toIso8601String(),
     };
   }
 }

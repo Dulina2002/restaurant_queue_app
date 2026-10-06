@@ -120,7 +120,7 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text(
-              'Enter your party size to join the live virtual queue in Firestore.',
+              'Enter your party size to join the live virtual queue in Supabase.',
               style: TextStyle(color: Colors.white70, fontSize: 13),
             ),
             const SizedBox(height: 16),
@@ -385,7 +385,7 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: const Center(
-                    child: Text('No active restaurants found in Firestore.'),
+                    child: Text('No active restaurants found in Supabase.'),
                   ),
                 )
               else
@@ -1068,7 +1068,7 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
               ),
               SizedBox(height: 2),
               Text(
-                'Real-time Firestore table availability',
+                'Real-time Supabase table availability',
                 style: TextStyle(
                   fontSize: 12,
                   color: AppColors.textMuted,
@@ -1090,7 +1090,7 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: const Center(
-                    child: Text('Loading active restaurants from Firestore...'),
+                    child: Text('Loading active restaurants from Supabase...'),
                   ),
                 );
               }

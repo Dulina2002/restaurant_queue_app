@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 enum TableStatus {
   occupied,
   reserved,
@@ -46,10 +44,12 @@ class PhysicalTable {
     required this.status,
   });
 
-  factory PhysicalTable.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
-    final data = doc.data() ?? {};
+  factory PhysicalTable.fromFirestore(dynamic doc) {
+    final Map<String, dynamic> data = doc is Map<String, dynamic>
+        ? doc
+        : (doc is Map ? Map<String, dynamic>.from(doc) : {});
     return PhysicalTable(
-      id: doc.id,
+      id: data['id'] as String? ?? '',
       restaurantId: data['restaurant_id'] as String? ?? 'ocean_bistro',
       name: data['name'] as String? ?? '',
       seats: (data['seats'] as num?)?.toInt() ?? 2,
@@ -66,7 +66,7 @@ class PhysicalTable {
       'seats': seats,
       'guest_name': guestName,
       'status': status.value,
-      'updated_at': FieldValue.serverTimestamp(),
+      'updated_at': DateTime.now().toIso8601String(),
     };
   }
 

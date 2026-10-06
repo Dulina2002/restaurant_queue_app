@@ -162,7 +162,7 @@ class _ReceptionistDashboardScreenState extends State<ReceptionistDashboardScree
                   phoneNumber: phoneController.text.trim(),
                 );
                 messenger.showSnackBar(
-                  const SnackBar(content: Text('Walk-in added to live Firestore queue')),
+                  const SnackBar(content: Text('Walk-in added to live Supabase queue')),
                 );
               } catch (e) {
                 messenger.showSnackBar(
@@ -305,7 +305,7 @@ class _ReceptionistDashboardScreenState extends State<ReceptionistDashboardScree
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
-                          'Firestore Realtime',
+                          'Supabase Realtime',
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.5),
                             fontSize: 11,

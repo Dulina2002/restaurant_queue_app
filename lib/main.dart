@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'firebase_options.dart';
 import 'services/firestore_service.dart';
 import 'screens/auth_gate.dart';
 
@@ -12,17 +11,24 @@ Future<void> main() async {
     await dotenv.load(fileName: ".env");
   } catch (_) {}
 
-  try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-  } catch (e) {
-    debugPrint('Firebase initialization notice: $e');
+  final supabaseUrl = dotenv.env['SUPABASE_URL'] ?? '';
+  final supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY'] ?? '';
+
+  if (supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty) {
+    try {
+      await Supabase.initialize(
+        url: supabaseUrl,
+        anonKey: supabaseAnonKey,
+      );
+      debugPrint('Supabase initialized successfully!');
+    } catch (e) {
+      debugPrint('Supabase initialization notice: $e');
+    }
   }
 
   runApp(const RestaurantQueueApp());
 
-  // Seed sample dataset into Firestore asynchronously in background
+  // Seed sample dataset asynchronously in background
   try {
     FirestoreService().seedInitialDataIfEmpty();
   } catch (_) {}

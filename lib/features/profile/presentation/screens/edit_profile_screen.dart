@@ -38,7 +38,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         _emailController.text = currentProf.email;
         _phoneController.text = currentProf.phoneNumber ?? '';
       } else {
-        _nameController.text = _authService.currentUser?.displayName ?? 'Manager';
+        _nameController.text = (_authService.currentUser?.userMetadata?['full_name'] as String?) ?? 'Manager';
         _emailController.text = _authService.currentUser?.email ?? 'manager@restaurant.com';
       }
     }
@@ -64,7 +64,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   void _handleSave() async {
-    final userId = widget.profile?.id ?? _authService.currentUser?.uid ?? 'demo_user_manager';
+    final userId = widget.profile?.id ?? _authService.currentUser?.id ?? 'demo_user_manager';
 
     setState(() => _isSaving = true);
 

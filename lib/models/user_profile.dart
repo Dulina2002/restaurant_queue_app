@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'user_role.dart';
 
 class UserProfile {
@@ -20,20 +19,15 @@ class UserProfile {
     this.createdAt,
   });
 
-  factory UserProfile.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc, {String? defaultEmail}) {
-    final data = doc.data() ?? {};
+  factory UserProfile.fromFirestore(dynamic doc, {String? defaultEmail}) {
+    if (doc is Map<String, dynamic>) {
+      return UserProfile.fromJson(doc, defaultEmail: defaultEmail);
+    }
     return UserProfile(
-      id: doc.id,
-      email: data['email'] as String? ?? defaultEmail ?? '',
-      fullName: data['full_name'] as String? ?? 'User',
-      role: UserRole.fromString(data['role'] as String?),
-      avatarUrl: data['avatar_url'] as String?,
-      phoneNumber: data['phone_number'] as String?,
-      createdAt: data['created_at'] != null
-          ? (data['created_at'] is Timestamp
-              ? (data['created_at'] as Timestamp).toDate()
-              : DateTime.tryParse(data['created_at'].toString()))
-          : null,
+      id: '',
+      email: defaultEmail ?? '',
+      fullName: 'User',
+      role: UserRole.customer,
     );
   }
 
@@ -45,25 +39,11 @@ class UserProfile {
       role: UserRole.fromString(json['role'] as String?),
       avatarUrl: json['avatar_url'] as String?,
       phoneNumber: json['phone_number'] as String?,
-      createdAt: json['created_at'] != null
-          ? (json['created_at'] is Timestamp
-              ? (json['created_at'] as Timestamp).toDate()
-              : DateTime.tryParse(json['created_at'].toString()))
-          : null,
+      createdAt: json['created_at'] != null ? DateTime.tryParse(json['created_at'].toString()) : null,
     );
   }
 
-  Map<String, dynamic> toFirestore() {
-    return {
-      'id': id,
-      'email': email,
-      'full_name': fullName,
-      'role': role.value,
-      if (avatarUrl != null) 'avatar_url': avatarUrl,
-      if (phoneNumber != null) 'phone_number': phoneNumber,
-      'created_at': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
-    };
-  }
+  Map<String, dynamic> toFirestore() => toJson();
 
   Map<String, dynamic> toJson() {
     return {

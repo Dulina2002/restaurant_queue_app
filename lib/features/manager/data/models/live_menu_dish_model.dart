@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class LiveMenuDish {
   final String id;
   final String restaurantId;
@@ -21,10 +19,12 @@ class LiveMenuDish {
     this.isAvailable = true,
   });
 
-  factory LiveMenuDish.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
-    final data = doc.data() ?? {};
+  factory LiveMenuDish.fromFirestore(dynamic doc) {
+    final Map<String, dynamic> data = doc is Map<String, dynamic>
+        ? doc
+        : (doc is Map ? Map<String, dynamic>.from(doc) : {});
     return LiveMenuDish(
-      id: doc.id,
+      id: data['id'] as String? ?? '',
       restaurantId: data['restaurant_id'] as String? ?? 'ocean_bistro',
       name: data['name'] as String? ?? '',
       restaurant: data['restaurant'] as String? ?? 'Ocean Bistro',
@@ -45,7 +45,7 @@ class LiveMenuDish {
       'price': price,
       'description': description,
       'is_available': isAvailable,
-      'updated_at': FieldValue.serverTimestamp(),
+      'updated_at': DateTime.now().toIso8601String(),
     };
   }
 

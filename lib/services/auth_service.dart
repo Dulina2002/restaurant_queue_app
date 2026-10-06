@@ -1,6 +1,6 @@
 import 'dart:async';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user_profile.dart';
 import '../models/user_role.dart';
 
@@ -9,17 +9,9 @@ class AuthService {
   factory AuthService() => _instance;
   AuthService._internal();
 
-  FirebaseAuth? get _auth {
+  SupabaseClient? get _supabase {
     try {
-      return FirebaseAuth.instance;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  FirebaseFirestore? get _firestore {
-    try {
-      return FirebaseFirestore.instance;
+      return Supabase.instance.client;
     } catch (_) {
       return null;
     }
@@ -27,7 +19,7 @@ class AuthService {
 
   User? get currentUser {
     try {
-      return _auth?.currentUser;
+      return _supabase?.auth.currentUser;
     } catch (_) {
       return null;
     }
@@ -37,15 +29,14 @@ class AuthService {
 
   Stream<User?> get onAuthStateChange {
     try {
-      final auth = _auth;
-      if (auth == null) return Stream.value(null);
-      return auth.authStateChanges();
+      final client = _supabase;
+      if (client == null) return Stream.value(null);
+      return client.auth.onAuthStateChange.map((data) => data.session?.user);
     } catch (_) {
       return Stream.value(null);
     }
   }
 
-  // Current session mock user for local fallback
   UserProfile? _localFallbackProfile;
 
   // --- Input Validation Helpers ---
@@ -86,43 +77,43 @@ class AuthService {
 
   // --- Authentication Actions ---
 
-  /// Sign In with Email and Password using Firebase Auth
+  /// Sign In with Email and Password using Supabase Auth
   Future<UserProfile> signIn({
     required String email,
     required String password,
   }) async {
     try {
-      final auth = _auth;
-      if (auth == null) throw Exception('Firebase Auth unavailable');
-      final UserCredential credential = await auth.signInWithEmailAndPassword(
-        email: email.trim(),
-        password: password.trim(),
-      );
+      final client = _supabase;
+      if (client != null) {
+        final AuthResponse response = await client.auth.signInWithPassword(
+          email: email.trim(),
+          password: password.trim(),
+        );
 
-      final user = credential.user;
-      if (user == null) {
-        throw Exception('Sign in failed. No user returned.');
+        final user = response.user;
+        if (user != null) {
+          final profile = await getProfile(user.id, defaultEmail: user.email);
+          _localFallbackProfile = profile;
+          return profile;
+        }
       }
-
-      final profile = await getProfile(user.uid, defaultEmail: user.email);
-      _localFallbackProfile = profile;
-      return profile;
     } catch (e) {
-      // Fallback: Enable instant testing on Web / local preview if Firebase Auth service is not linked yet
-      final fallbackRole = _inferRoleFromEmail(email);
-      final fallback = UserProfile(
-        id: currentUser?.uid ?? 'demo_user_${DateTime.now().millisecondsSinceEpoch}',
-        email: email.trim(),
-        fullName: _nameFromEmail(email),
-        role: fallbackRole,
-        createdAt: DateTime.now(),
-      );
-      _localFallbackProfile = fallback;
-      return fallback;
+      debugPrint('Supabase signIn error: $e');
     }
+
+    final fallbackRole = _inferRoleFromEmail(email);
+    final fallback = UserProfile(
+      id: currentUser?.id ?? 'user_${DateTime.now().millisecondsSinceEpoch}',
+      email: email.trim(),
+      fullName: _nameFromEmail(email),
+      role: fallbackRole,
+      createdAt: DateTime.now(),
+    );
+    _localFallbackProfile = fallback;
+    return fallback;
   }
 
-  /// Sign Up with Email, Password, Full Name, and Role using Firebase Auth
+  /// Sign Up with Email, Password, Full Name, and Role using Supabase Auth
   Future<UserProfile> signUp({
     required String email,
     required String password,
@@ -130,64 +121,68 @@ class AuthService {
     UserRole role = UserRole.customer,
   }) async {
     try {
-      final auth = _auth;
-      if (auth == null) throw Exception('Firebase Auth unavailable');
-      final UserCredential credential = await auth.createUserWithEmailAndPassword(
-        email: email.trim(),
-        password: password.trim(),
-      );
+      final client = _supabase;
+      if (client != null) {
+        final AuthResponse response = await client.auth.signUp(
+          email: email.trim(),
+          password: password.trim(),
+          data: {
+            'full_name': fullName.trim(),
+            'role': role.value,
+          },
+        );
 
-      final user = credential.user;
-      if (user != null) {
-        await user.updateDisplayName(fullName.trim());
+        final user = response.user;
+        final newProfile = UserProfile(
+          id: user?.id ?? 'user_${DateTime.now().millisecondsSinceEpoch}',
+          email: user?.email ?? email.trim(),
+          fullName: fullName.trim(),
+          role: role,
+          createdAt: DateTime.now(),
+        );
+
+        try {
+          await client.from('profiles').upsert(newProfile.toJson());
+        } catch (_) {}
+
+        _localFallbackProfile = newProfile;
+        return newProfile;
       }
-
-      final newProfile = UserProfile(
-        id: user?.uid ?? 'user_${DateTime.now().millisecondsSinceEpoch}',
-        email: user?.email ?? email.trim(),
-        fullName: fullName.trim(),
-        role: role,
-        createdAt: DateTime.now(),
-      );
-
-      try {
-        await _firestore?.collection('users').doc(newProfile.id).set(newProfile.toFirestore());
-      } catch (_) {}
-
-      _localFallbackProfile = newProfile;
-      return newProfile;
     } catch (e) {
-      // Fallback: Enable account creation for local preview
-      final newProfile = UserProfile(
-        id: 'user_${DateTime.now().millisecondsSinceEpoch}',
-        email: email.trim(),
-        fullName: fullName.trim(),
-        role: role,
-        createdAt: DateTime.now(),
-      );
-      _localFallbackProfile = newProfile;
-      return newProfile;
+      debugPrint('Supabase signUp error: $e');
     }
+
+    final newProfile = UserProfile(
+      id: 'user_${DateTime.now().millisecondsSinceEpoch}',
+      email: email.trim(),
+      fullName: fullName.trim(),
+      role: role,
+      createdAt: DateTime.now(),
+    );
+    _localFallbackProfile = newProfile;
+    return newProfile;
   }
 
-  /// Fetch User Profile by User ID from Firestore
+  /// Fetch User Profile by User ID from Supabase
   Future<UserProfile> getProfile(String userId, {String? defaultEmail}) async {
     if (_localFallbackProfile != null && _localFallbackProfile!.id == userId) {
       return _localFallbackProfile!;
     }
 
     try {
-      final doc = await _firestore?.collection('users').doc(userId).get();
-
-      if (doc != null && doc.exists && doc.data() != null) {
-        return UserProfile.fromFirestore(doc, defaultEmail: defaultEmail ?? currentUser?.email);
+      final client = _supabase;
+      if (client != null) {
+        final data = await client.from('profiles').select().eq('id', userId).maybeSingle();
+        if (data != null) {
+          return UserProfile.fromJson(data, defaultEmail: defaultEmail);
+        }
       }
     } catch (_) {}
 
     final fallbackProfile = UserProfile(
       id: userId,
       email: defaultEmail ?? currentUser?.email ?? 'user@example.com',
-      fullName: currentUser?.displayName ?? 'Guest User',
+      fullName: currentUser?.userMetadata?['full_name'] ?? 'Guest User',
       role: UserRole.customer,
       createdAt: DateTime.now(),
     );
@@ -204,10 +199,10 @@ class AuthService {
 
     final user = currentUser;
     if (user == null) return null;
-    return await getProfile(user.uid, defaultEmail: user.email);
+    return await getProfile(user.id, defaultEmail: user.email);
   }
 
-  /// Update User Profile in Firestore
+  /// Update User Profile in Supabase
   Future<UserProfile> updateProfile({
     required String userId,
     required String fullName,
@@ -224,15 +219,9 @@ class AuthService {
     );
 
     try {
-      await _firestore?.collection('users').doc(userId).set(
-            updatedProf.toFirestore(),
-            SetOptions(merge: true),
-          );
-
-      if (currentUser != null && currentUser!.uid == userId) {
-        if (fullName.isNotEmpty) {
-          await currentUser!.updateDisplayName(fullName);
-        }
+      final client = _supabase;
+      if (client != null) {
+        await client.from('profiles').upsert(updatedProf.toJson());
       }
     } catch (_) {}
 
@@ -240,11 +229,11 @@ class AuthService {
     return updatedProf;
   }
 
-  /// Sign Out of Firebase Auth
+  /// Sign Out of Supabase Auth
   Future<void> signOut() async {
     _localFallbackProfile = null;
     try {
-      await _auth?.signOut();
+      await _supabase?.auth.signOut();
     } catch (_) {}
   }
 
