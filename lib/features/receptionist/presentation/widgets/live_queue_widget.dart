@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../data/models/queue_entry_model.dart';
+import '../../../../core/utils/shared_mock_data.dart';
+import 'seat_table_dialog.dart';
+import '../../data/models/floor_table_model.dart';
 
 class LiveQueueWidget extends StatefulWidget {
   const LiveQueueWidget({super.key});
@@ -10,27 +13,41 @@ class LiveQueueWidget extends StatefulWidget {
 }
 
 class _LiveQueueWidgetState extends State<LiveQueueWidget> {
-  late List<QueueEntry> _queue;
+  List<QueueEntry> get _queue => SharedMockData().queue;
 
   @override
   void initState() {
     super.initState();
-    _queue = List.from(QueueEntry.mockList());
   }
 
-  void _seatAtTable(QueueEntry entry) {
-    setState(() {
-      _queue.removeWhere((e) => e.id == entry.id);
-      _recalculatePositions();
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${entry.guestName} (${entry.queueNumber}) marked as Seated!'),
-        backgroundColor: const Color(0xFF2E9B60),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-    );
+  void _seatAtTable(QueueEntry entry) async {
+    final selectedTable = await SeatTableDialog.show(context, entry: entry);
+    if (selectedTable != null) {
+      setState(() {
+        _queue.removeWhere((e) => e.id == entry.id);
+        _recalculatePositions();
+        
+        // Update table status in SharedMockData
+        final tables = SharedMockData().tables;
+        final index = tables.indexWhere((t) => t.id == selectedTable.id);
+        if (index != -1) {
+          tables[index] = tables[index].copyWith(
+            status: FloorTableStatus.occupied,
+            guestName: entry.guestName,
+          );
+        }
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${entry.guestName} seated at ${selectedTable.name}!'),
+            backgroundColor: const Color(0xFF2E9B60),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    }
   }
 
   void _notify(QueueEntry entry) {

@@ -8,6 +8,7 @@ import '../../features/receptionist/presentation/widgets/live_queue_widget.dart'
 import 'receptionist_dashboard_screen.dart';
 import 'reservation_summary_screen.dart';
 import 'floor_overview_screen.dart';
+import 'receptionist_profile_screen.dart';
 
 class LiveQueueScreen extends StatefulWidget {
   final UserProfile profile;
@@ -51,6 +52,8 @@ class _LiveQueueScreenState extends State<LiveQueueScreen> {
       destination = ReservationSummaryScreen(profile: widget.profile);
     } else if (index == 2) {
       destination = FloorOverviewScreen(profile: widget.profile);
+    } else if (index == 4) {
+      destination = ReceptionistProfileScreen(profile: widget.profile);
     } else {
       return;
     }
@@ -108,3 +111,4 @@ class _LiveQueueScreenState extends State<LiveQueueScreen> {
     );
   }
 }
+

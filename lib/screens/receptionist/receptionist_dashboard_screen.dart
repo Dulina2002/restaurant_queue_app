@@ -3,6 +3,9 @@ import '../../models/user_profile.dart';
 import '../../services/auth_service.dart';
 import '../home_screen.dart';
 import 'reservation_summary_screen.dart';
+import 'floor_overview_screen.dart';
+import 'live_queue_screen.dart';
+import 'receptionist_profile_screen.dart';
 import '../../shared/widgets/role_header_widget.dart';
 import '../../shared/widgets/role_bottom_nav_widget.dart';
 
@@ -53,11 +56,22 @@ class _ReceptionistDashboardScreenState extends State<ReceptionistDashboardScree
       bottomNavigationBar: RoleBottomNavWidget(
         selectedIndex: 0,
         onDestinationSelected: (index) {
+          if (index == 0) return; // already here
+          Widget? destination;
           if (index == 1) {
+            destination = ReservationSummaryScreen(profile: widget.profile);
+          } else if (index == 2) {
+            destination = FloorOverviewScreen(profile: widget.profile);
+          } else if (index == 3) {
+            destination = LiveQueueScreen(profile: widget.profile);
+          } else if (index == 4) {
+            destination = ReceptionistProfileScreen(profile: widget.profile);
+          }
+          if (destination != null) {
             Navigator.pushReplacement(
               context,
               PageRouteBuilder(
-                pageBuilder: (context, animation1, animation2) => ReservationSummaryScreen(profile: widget.profile),
+                pageBuilder: (_, __, ___) => destination!,
                 transitionDuration: Duration.zero,
                 reverseTransitionDuration: Duration.zero,
               ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../data/models/floor_table_model.dart';
+import '../../../../core/utils/shared_mock_data.dart';
 import 'table_status_dialog.dart';
 
 class FloorOverviewWidget extends StatefulWidget {
@@ -11,19 +12,21 @@ class FloorOverviewWidget extends StatefulWidget {
 }
 
 class _FloorOverviewWidgetState extends State<FloorOverviewWidget> {
-  late List<FloorTable> _tables;
+  List<FloorTable> get _tables => SharedMockData().tables;
 
   @override
   void initState() {
     super.initState();
-    _tables = FloorTable.mockList();
   }
 
   void _updateTableStatus(FloorTable table, FloorTableStatus newStatus) {
     setState(() {
       final index = _tables.indexWhere((t) => t.id == table.id);
       if (index != -1) {
-        _tables[index] = table.copyWith(status: newStatus);
+        _tables[index] = table.copyWith(
+          status: newStatus,
+          guestName: newStatus == FloorTableStatus.available ? '' : table.guestName,
+        );
       }
     });
   }
