@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/user_profile.dart';
 import '../models/user_role.dart';
 import '../services/auth_service.dart';
+import '../shared/widgets/top_toast.dart';
 import 'auth_gate.dart';
 
 class SignUpScreen extends StatefulWidget {
@@ -53,18 +54,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.check_circle, color: Colors.white, size: 20),
-              const SizedBox(width: 8),
-              Text('Account created as ${_selectedRole.displayName}! Welcome, ${profile.fullName}.'),
-            ],
-          ),
-          backgroundColor: const Color(0xFF00E676),
-          behavior: SnackBarBehavior.floating,
-        ),
+      TopToast.showSuccess(
+        context,
+        message: 'Account created as ${_selectedRole.displayName}! Welcome, ${profile.fullName}.',
       );
 
       Navigator.pushAndRemoveUntil(
@@ -79,12 +71,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
       setState(() {
         _errorMessage = error.toString();
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_errorMessage ?? 'Registration failed'),
-          backgroundColor: Colors.redAccent,
-          behavior: SnackBarBehavior.floating,
-        ),
+      TopToast.showError(
+        context,
+        message: _errorMessage ?? 'Registration failed',
       );
     } finally {
       if (mounted) {
