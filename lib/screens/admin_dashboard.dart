@@ -1208,7 +1208,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   ),
                   const SizedBox(height: 15),
                   DropdownButtonFormField<String>(
-                    initialValue: priority,
+                    value: priority,
                     decoration: const InputDecoration(
                       labelText: 'Alert type / priority',
                       border: OutlineInputBorder(),

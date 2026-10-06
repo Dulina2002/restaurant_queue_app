@@ -532,6 +532,33 @@ class FirestoreService {
     return item;
   }
 
+  /// Update an existing reservation
+  Future<void> updateReservation(ReservationModel reservation) async {
+    final client = _supabase;
+    if (client != null) {
+      try {
+        await client.from('reservations').upsert(reservation.toFirestore());
+      } catch (_) {}
+    }
+  }
+
+  /// Cancel reservation
+  Future<void> cancelReservation(String reservationId) async {
+    final client = _supabase;
+    if (client != null) {
+      try {
+        await client.from('reservations').update({'status': 'cancelled'}).eq('id', reservationId);
+      } catch (_) {}
+    }
+  }
+
+  /// Leave queue
+  Future<void> leaveQueue({String? queueId, String? restaurantId}) async {
+    if (queueId != null && queueId.isNotEmpty) {
+      await updateQueueStatus(queueId, QueueStatus.cancelled);
+    }
+  }
+
   /// Stream total bookings count for Manager Dashboard
   Stream<int> streamTotalBookingsCount({String restaurantId = 'ocean_bistro', bool isThisWeek = false}) {
     final client = _supabase;
