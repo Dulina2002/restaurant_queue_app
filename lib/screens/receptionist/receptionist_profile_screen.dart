@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../models/user_profile.dart';
-import '../../models/user_role.dart';
 import '../../services/auth_service.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/widgets/user_avatar.dart';

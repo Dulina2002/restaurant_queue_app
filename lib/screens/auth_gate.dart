@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../models/user_profile.dart';
 import '../models/user_role.dart';
 import '../services/auth_service.dart';
@@ -29,7 +28,7 @@ class AuthGate extends StatelessWidget {
   Widget build(BuildContext context) {
     final authService = AuthService();
 
-    return StreamBuilder<User?>(
+    return StreamBuilder<dynamic>(
       stream: authService.onAuthStateChange,
       builder: (context, snapshot) {
         return FutureBuilder<UserProfile?>(
