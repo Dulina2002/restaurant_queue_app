@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/widgets/app_toast.dart';
 import '../../data/models/queue_entry_model.dart';
 import '../../../../core/utils/shared_mock_data.dart';
 import 'seat_table_dialog.dart';
@@ -38,26 +39,21 @@ class _LiveQueueWidgetState extends State<LiveQueueWidget> {
         }
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${entry.guestName} seated at ${selectedTable.name}!'),
-            backgroundColor: const Color(0xFF2E9B60),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
+        AppToast.showSuccess(
+          context,
+          '${entry.guestName} seated at ${selectedTable.name}!',
+          title: 'Guest Seated',
         );
       }
     }
   }
 
   void _notify(QueueEntry entry) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Notification sent to ${entry.guestName} (${entry.queueNumber})'),
-        backgroundColor: const Color(0xFFF27B50),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
+    AppToast.show(
+      context,
+      message: 'Notification sent to ${entry.guestName} (${entry.queueNumber})',
+      title: 'Notification Sent',
+      type: ToastType.info,
     );
   }
 
@@ -90,13 +86,11 @@ class _LiveQueueWidgetState extends State<LiveQueueWidget> {
                 _queue.removeWhere((e) => e.id == entry.id);
                 _recalculatePositions();
               });
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('${entry.guestName} removed from queue.'),
-                  backgroundColor: AppColors.error,
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
+              AppToast.show(
+                context,
+                message: '${entry.guestName} removed from queue.',
+                title: 'Queue Updated',
+                type: ToastType.warning,
               );
             },
             style: ElevatedButton.styleFrom(

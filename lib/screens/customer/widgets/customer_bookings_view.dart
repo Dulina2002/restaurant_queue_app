@@ -3,6 +3,7 @@ import '../../../models/reservation_model.dart';
 import '../../../models/user_profile.dart';
 import '../../../services/firestore_service.dart';
 import '../../../shared/theme/app_colors.dart';
+import '../../../shared/widgets/app_toast.dart';
 import 'create_booking_modal.dart';
 
 import '../booking/reservation_details_screen.dart';
@@ -57,16 +58,17 @@ class _CustomerBookingsViewState extends State<CustomerBookingsView> {
               try {
                 await _firestoreService.cancelReservation(reservation.id);
                 if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Cancelled reservation ${reservation.reservationCode}'),
-                    backgroundColor: const Color(0xFFEF4444),
-                  ),
+                AppToast.show(
+                  context,
+                  title: 'Reservation Cancelled',
+                  message: 'Cancelled booking ${reservation.reservationCode} at ${reservation.restaurantName}',
+                  type: ToastType.error,
                 );
               } catch (e) {
                 if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Failed to cancel reservation: $e')),
+                AppToast.showError(
+                  context,
+                  'Failed to cancel reservation: $e',
                 );
               }
             },
@@ -109,7 +111,7 @@ class _CustomerBookingsViewState extends State<CustomerBookingsView> {
 
   @override
   Widget build(BuildContext context) {
-    final userId = widget.profile?.id ?? 'current_customer_id';
+    final userId = (widget.profile?.id.isNotEmpty == true) ? widget.profile!.id : 'guest_id';
 
     return StreamBuilder<List<ReservationModel>>(
       stream: _firestoreService.streamUserReservations(userId),

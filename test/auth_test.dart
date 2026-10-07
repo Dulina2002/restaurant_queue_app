@@ -39,6 +39,11 @@ void main() {
     test('UserRole string conversion and defaults', () {
       expect(UserRole.fromString('customer'), UserRole.customer);
       expect(UserRole.fromString('receptionist'), UserRole.receptionist);
+      expect(UserRole.fromString('reception'), UserRole.receptionist);
+      expect(UserRole.fromString('Reception'), UserRole.receptionist);
+      expect(UserRole.fromString('reception_staff'), UserRole.receptionist);
+      expect(UserRole.fromString('frontdesk'), UserRole.receptionist);
+      expect(UserRole.fromString('host'), UserRole.receptionist);
       expect(UserRole.fromString('manager'), UserRole.manager);
       expect(UserRole.fromString('admin'), UserRole.admin);
       expect(UserRole.fromString('administrator'), UserRole.admin);
@@ -50,20 +55,30 @@ void main() {
       final json = {
         'id': 'usr_123',
         'full_name': 'John Doe',
-        'role': 'receptionist',
+        'role': 'reception',
         'phone_number': '+94771234567',
       };
 
-      final profile = UserProfile.fromJson(json, defaultEmail: 'john@example.com');
+      final profile = UserProfile.fromJson(json, defaultEmail: 'reception@example.com');
       expect(profile.id, 'usr_123');
       expect(profile.fullName, 'John Doe');
       expect(profile.role, UserRole.receptionist);
-      expect(profile.email, 'john@example.com');
+      expect(profile.email, 'reception@example.com');
       expect(profile.phoneNumber, '+94771234567');
 
       final serialized = profile.toJson();
       expect(serialized['role'], 'receptionist');
       expect(serialized['full_name'], 'John Doe');
+    });
+
+    test('AuthService sign in as reception resolves to UserRole.receptionist', () async {
+      final auth = AuthService();
+      final profile = await auth.signIn(
+        email: 'reception@dinequeue.com',
+        password: 'password123',
+      );
+      expect(profile.role, UserRole.receptionist);
+      expect(profile.email, 'reception@dinequeue.com');
     });
   });
 }

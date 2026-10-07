@@ -3,6 +3,7 @@ import '../../../models/queue_entry_model.dart';
 import '../../../models/user_profile.dart';
 import '../../../services/firestore_service.dart';
 import '../../../shared/theme/app_colors.dart';
+import '../../../shared/widgets/app_toast.dart';
 
 class CustomerQueueView extends StatefulWidget {
   final UserProfile? profile;
@@ -55,16 +56,17 @@ class _CustomerQueueViewState extends State<CustomerQueueView> {
                   restaurantId: queue.restaurantId,
                 );
                 if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Left ${queue.restaurantName} waitlist.'),
-                    backgroundColor: const Color(0xFFEF4444),
-                  ),
+                AppToast.show(
+                  context,
+                  title: 'Left Waitlist',
+                  message: 'Left ${queue.restaurantName} waitlist.',
+                  type: ToastType.error,
                 );
               } catch (e) {
                 if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Failed to leave waitlist: $e')),
+                AppToast.showError(
+                  context,
+                  'Failed to leave waitlist: $e',
                 );
               } finally {
                 if (mounted) setState(() => _isLeaving = false);

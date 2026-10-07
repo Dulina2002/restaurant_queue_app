@@ -4,6 +4,7 @@ import '../../services/auth_service.dart';
 import '../home_screen.dart';
 import '../../shared/widgets/role_header_widget.dart';
 import '../../shared/widgets/role_bottom_nav_widget.dart';
+import '../../shared/widgets/app_toast.dart';
 import '../../features/receptionist/presentation/widgets/live_queue_widget.dart';
 import 'receptionist_dashboard_screen.dart';
 import 'reservation_summary_screen.dart';
@@ -35,8 +36,10 @@ class _LiveQueueScreenState extends State<LiveQueueScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to sign out: $e')),
+      AppToast.showError(
+        context,
+        'Failed to sign out: $e',
+        title: 'Sign Out Error',
       );
     } finally {
       if (mounted) setState(() => _isSigningOut = false);
@@ -77,6 +80,7 @@ class _LiveQueueScreenState extends State<LiveQueueScreen> {
         roleColor: const Color(0xFFFF6B35),
         isSigningOut: _isSigningOut,
         onSignOut: _signOut,
+        profile: widget.profile,
       ),
       body: const SingleChildScrollView(
         padding: EdgeInsets.all(20),

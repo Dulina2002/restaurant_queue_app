@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/user_profile.dart';
 import '../../services/auth_service.dart';
 import '../../services/admin_supabase_service.dart';
+import '../../shared/widgets/app_toast.dart';
 import '../home_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
@@ -34,8 +35,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to sign out: $e')),
+      AppToast.showError(
+        context,
+        'Failed to sign out: $e',
+        title: 'Sign Out Error',
       );
     } finally {
       if (mounted) setState(() => _isSigningOut = false);

@@ -7,6 +7,7 @@ import '../../../services/firestore_service.dart';
 import '../../../services/supabase_service.dart';
 import '../../../features/manager/data/models/physical_table_model.dart';
 import '../../../shared/theme/app_colors.dart';
+import '../../../shared/widgets/app_toast.dart';
 
 class ModifyReservationScreen extends StatefulWidget {
   final ReservationModel reservation;
@@ -160,7 +161,7 @@ class _ModifyReservationScreenState extends State<ModifyReservationScreen> {
       error = '$formatted is fully booked. Please choose another time.';
     }
     if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error), backgroundColor: Colors.red));
+      AppToast.showError(context, error);
       return;
     }
     setState(() => _selectedTime = formatted);
@@ -199,11 +200,9 @@ class _ModifyReservationScreenState extends State<ModifyReservationScreen> {
 
   Future<void> _handleSaveChanges() async {
     if (_isSlotFull(_selectedDate, _selectedTime) || _isPast(_selectedDate, _selectedTime)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('That slot is no longer available. Please choose another date or time.'),
-          backgroundColor: Colors.red,
-        ),
+      AppToast.showError(
+        context,
+        'That slot is no longer available. Please choose another date or time.',
       );
       return;
     }
@@ -218,12 +217,18 @@ class _ModifyReservationScreenState extends State<ModifyReservationScreen> {
       await _firestoreService.updateReservation(updated);
       if (!mounted) return;
       setState(() => _isSaving = false);
+      AppToast.showSuccess(
+        context,
+        'Reservation updated successfully!',
+        title: 'Booking Modified',
+      );
       Navigator.pop(context, updated);
     } catch (e) {
       if (!mounted) return;
       setState(() => _isSaving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update: $e'), backgroundColor: Colors.red),
+      AppToast.showError(
+        context,
+        'Failed to update: $e',
       );
     }
   }
