@@ -10,6 +10,7 @@ import '../../features/receptionist/presentation/widgets/add_walk_in_dialog.dart
 import '../../features/receptionist/presentation/widgets/add_walk_in_dialog.dart';
 import '../../shared/widgets/role_header_widget.dart';
 import '../../shared/widgets/role_bottom_nav_widget.dart';
+import '../../shared/widgets/top_toast.dart';
 
 class ReceptionistDashboardScreen extends StatefulWidget {
   final UserProfile profile;
@@ -21,6 +22,8 @@ class ReceptionistDashboardScreen extends StatefulWidget {
 }
 
 class _ReceptionistDashboardScreenState extends State<ReceptionistDashboardScreen> {
+  bool _isFirstArrivalCompleted = false;
+
   final AuthService _authService = AuthService();
   bool _isSigningOut = false;
 
@@ -181,7 +184,20 @@ class _ReceptionistDashboardScreenState extends State<ReceptionistDashboardScree
           _buildArrivalCard(
             name: 'Ayesha Perera', time: '7:30 PM', guests: '4 Guests', table: 'Table 04',
             requirement: 'Req: Window seat facing the ocean, celebrating an anniversary.',
-            status: 'Confirmed', isConfirmed: true, showActions: true,
+            status: _isFirstArrivalCompleted ? 'Completed' : 'Confirmed', 
+            isConfirmed: !_isFirstArrivalCompleted, 
+            showActions: !_isFirstArrivalCompleted,
+            onCheckInPressed: () {
+              setState(() {
+                _isFirstArrivalCompleted = true;
+              });
+              TopToast.show(
+                context,
+                message: 'Ayesha Perera checked in and seated at Table 04',
+                backgroundColor: const Color(0xFF2E9B60),
+                icon: Icons.check_circle,
+              );
+            },
           ),
           const SizedBox(height: 16),
           _buildArrivalCard(
@@ -233,6 +249,7 @@ class _ReceptionistDashboardScreenState extends State<ReceptionistDashboardScree
     required String status,
     required bool isConfirmed,
     required bool showActions,
+    VoidCallback? onCheckInPressed,
   }) {
     final statusColor = isConfirmed ? const Color(0xFF10B981) : const Color(0xFF059669);
     final statusBgColor = isConfirmed ? const Color(0xFFECFDF5) : const Color(0xFFD1FAE5);
@@ -282,7 +299,7 @@ class _ReceptionistDashboardScreenState extends State<ReceptionistDashboardScree
               children: [
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: () {},
+                    onPressed: onCheckInPressed ?? () {},
                     icon: const Icon(Icons.check, color: Colors.white, size: 18),
                     label: const Text('Check In & Seat', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                     style: ElevatedButton.styleFrom(
