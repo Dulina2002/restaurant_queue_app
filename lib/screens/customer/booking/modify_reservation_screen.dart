@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../models/reservation_model.dart';
 import '../../../models/restaurant_model.dart';
 import '../../../models/user_profile.dart';
-import '../../../services/firestore_service.dart';
+import '../../../services/restaurant_database_service.dart';
 import '../../../services/supabase_service.dart';
 import '../../../features/manager/data/models/physical_table_model.dart';
 import '../../../shared/theme/app_colors.dart';
@@ -26,7 +26,7 @@ class ModifyReservationScreen extends StatefulWidget {
 }
 
 class _ModifyReservationScreenState extends State<ModifyReservationScreen> {
-  final FirestoreService _firestoreService = FirestoreService();
+  final RestaurantDatabaseService _firestoreService = RestaurantDatabaseService();
   late String _selectedDate;
   late String _selectedTime;
   late int _partySize;

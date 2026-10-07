@@ -7,7 +7,7 @@ import '../../models/reservation_model.dart';
 import '../../models/customer_notification_model.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/widgets/user_avatar.dart';
-import '../../services/firestore_service.dart';
+import '../../services/restaurant_database_service.dart';
 import '../../services/customer_notification_center.dart';
 import '../home_screen.dart';
 import '../../features/profile/presentation/screens/edit_profile_screen.dart';
@@ -37,7 +37,7 @@ class CustomerDashboardScreen extends StatefulWidget {
 }
 
 class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
-  final FirestoreService _firestoreService = FirestoreService();
+  final RestaurantDatabaseService _firestoreService = RestaurantDatabaseService();
   int _selectedCategoryIndex = 0;
   int _selectedExploreCuisineIndex = 0;
   late int _bottomNavIndex;

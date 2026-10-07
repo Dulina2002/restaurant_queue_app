@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_toast.dart';
-import '../../../../services/firestore_service.dart';
+import '../../../../services/restaurant_database_service.dart';
 import '../../data/models/live_menu_dish_model.dart';
 
 class LiveMenuTabWidget extends StatefulWidget {
@@ -12,7 +12,7 @@ class LiveMenuTabWidget extends StatefulWidget {
 }
 
 class _LiveMenuTabWidgetState extends State<LiveMenuTabWidget> {
-  final FirestoreService _firestoreService = FirestoreService();
+  final RestaurantDatabaseService _firestoreService = RestaurantDatabaseService();
   String _selectedRestaurantFilter = 'All';
 
   final List<String> _restaurantOptions = [

@@ -3,7 +3,7 @@ import '../../models/user_profile.dart';
 import '../../models/restaurant_model.dart';
 import '../../models/queue_entry_model.dart';
 import '../../services/auth_service.dart';
-import '../../services/firestore_service.dart';
+import '../../services/restaurant_database_service.dart';
 import '../../shared/widgets/app_toast.dart';
 import '../home_screen.dart';
 
@@ -18,7 +18,7 @@ class AdminDashboardScreen extends StatefulWidget {
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   final AuthService _authService = AuthService();
-  final FirestoreService _dbService = FirestoreService();
+  final RestaurantDatabaseService _dbService = RestaurantDatabaseService();
   bool _isSigningOut = false;
 
   Future<void> _signOut() async {

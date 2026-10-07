@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../models/queue_entry_model.dart';
 import '../../../models/user_profile.dart';
-import '../../../services/firestore_service.dart';
+import '../../../services/restaurant_database_service.dart';
 import '../../../shared/theme/app_colors.dart';
 import '../../../shared/widgets/app_toast.dart';
 
@@ -20,7 +20,7 @@ class CustomerQueueView extends StatefulWidget {
 }
 
 class _CustomerQueueViewState extends State<CustomerQueueView> {
-  final FirestoreService _firestoreService = FirestoreService();
+  final RestaurantDatabaseService _firestoreService = RestaurantDatabaseService();
   bool _isLeaving = false;
 
   void _confirmLeaveQueue(QueueEntryModel queue) {

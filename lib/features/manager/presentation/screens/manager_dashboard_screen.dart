@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../models/user_profile.dart';
 import '../../../../models/queue_entry_model.dart';
-import '../../../../services/firestore_service.dart';
+import '../../../../services/restaurant_database_service.dart';
 import '../../../../screens/home_screen.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../profile/presentation/screens/edit_profile_screen.dart';
@@ -22,7 +22,7 @@ class ManagerDashboardScreen extends StatefulWidget {
 }
 
 class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
-  final FirestoreService _firestoreService = FirestoreService();
+  final RestaurantDatabaseService _firestoreService = RestaurantDatabaseService();
   int _selectedTab = 0; // 0: Overview, 1: Tables, 2: Live Menu
   int _selectedTimeFilter = 1; // 0: Today, 1: This Week
   int _bottomNavIndex = 0; // 0: Dashboard, 1: Profile

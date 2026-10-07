@@ -7,10 +7,10 @@ import '../features/manager/data/models/live_menu_dish_model.dart';
 import '../features/manager/data/models/manager_dashboard_model.dart';
 import 'supabase_service.dart';
 
-class FirestoreService {
-  static final FirestoreService _instance = FirestoreService._internal();
-  factory FirestoreService() => _instance;
-  FirestoreService._internal();
+class RestaurantDatabaseService {
+  static final RestaurantDatabaseService _instance = RestaurantDatabaseService._internal();
+  factory RestaurantDatabaseService() => _instance;
+  RestaurantDatabaseService._internal();
 
   final SupabaseService _supabaseService = SupabaseService();
 
@@ -440,3 +440,6 @@ class FirestoreService {
     // Initial data is handled by Supabase / in-memory fallbacks
   }
 }
+
+// Backward compatibility alias for any un-updated references
+typedef FirestoreService = RestaurantDatabaseService;

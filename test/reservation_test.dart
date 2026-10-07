@@ -1,13 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restaurant_queue_app/models/reservation_model.dart';
-import 'package:restaurant_queue_app/services/firestore_service.dart';
+import 'package:restaurant_queue_app/services/restaurant_database_service.dart';
 import 'package:restaurant_queue_app/services/auth_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('Reservation Lifecycle & User Isolation', () {
-    final firestoreService = FirestoreService();
+    final firestoreService = RestaurantDatabaseService();
     final authService = AuthService();
 
     test('AuthService generates consistent deterministic IDs for email logins', () async {
