@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user_role.dart';
 import 'supabase_service.dart';
@@ -38,24 +39,32 @@ class AdminSupabaseService {
   Future<List<Map<String, dynamic>>?> loadUsers() async {
     final client = _client;
     if (client == null) return null;
-    final rows = await client
-        .from('profiles')
-        .select(
-          'id,full_name,email,role',
-        )
-        .timeout(const Duration(seconds: 15));
-    return rows
-        .map((row) => <String, dynamic>{
-              'id': row['id'].toString(),
-              'name': row['full_name']?.toString() ?? 'User',
-              'email': row['email']?.toString() ?? '',
-              'role': UserRole.fromString(row['role']?.toString()) ==
-                      UserRole.admin
-                  ? 'Admin'
-                  : UserRole.fromString(row['role']?.toString()).displayName,
-              // No persisted suspension column is established in this repository.
-              'suspended': false,
-            })
-        .toList();
+    try {
+      final rows = await client
+          .from('profiles')
+          .select(
+            'id,full_name,role',
+          )
+          .timeout(const Duration(seconds: 15));
+      return rows
+          .map((row) => <String, dynamic>{
+                'id': row['id'].toString(),
+                'name': row['full_name']?.toString() ?? 'User',
+                'email': 'Email not available',
+                'role': UserRole.fromString(row['role']?.toString()) ==
+                        UserRole.admin
+                    ? 'Admin'
+                    : UserRole.fromString(row['role']?.toString()).displayName,
+                // No persisted suspension column is established in this repository.
+                'suspended': false,
+              })
+          .toList();
+    } catch (error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('Admin Supabase profiles read failed: $error');
+        debugPrintStack(stackTrace: stackTrace);
+      }
+      rethrow;
+    }
   }
 }
