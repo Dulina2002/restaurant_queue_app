@@ -4,7 +4,7 @@ import 'how_it_works_screen.dart';
 
 import 'sign_in_screen.dart';
 
-import 'admin_dashboard.dart';
+import 'admin/admin_dashboard_screen.dart';
 import '../models/user_profile.dart';
 import '../models/user_role.dart';
 import 'customer/customer_dashboard_screen.dart';
@@ -429,8 +429,16 @@ class HomeScreen extends StatelessWidget {
                                           email: '',
                                           fullName: 'Demo Manager',
                                           role: UserRole.manager))),
-                              _demoButton(context, 'Admin', width,
-                                  const AdminDashboard()),
+                              _demoButton(
+                                  context,
+                                  'Admin',
+                                  width,
+                                  const AdminDashboardScreen(
+                                      profile: UserProfile(
+                                          id: 'demo_admin',
+                                          email: '',
+                                          fullName: 'Demo Admin',
+                                          role: UserRole.admin))),
                             ]);
                       }),
                     ],
