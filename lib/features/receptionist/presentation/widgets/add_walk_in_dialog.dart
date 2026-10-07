@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/utils/shared_mock_data.dart';
+import '../../../../services/supabase_service.dart';
 import '../../../../shared/widgets/app_toast.dart';
 import '../../data/models/queue_entry_model.dart';
 
@@ -20,38 +21,69 @@ class AddWalkInDialog extends StatefulWidget {
 class _AddWalkInDialogState extends State<AddWalkInDialog> {
   final TextEditingController _nameController = TextEditingController();
   int _partySize = 2;
+  bool _isSubmitting = false;
 
-  void _addWalkIn() {
+  Future<void> _addWalkIn() async {
     final name = _nameController.text.trim();
-    if (name.isEmpty) return;
+    if (name.isEmpty || _isSubmitting) return;
 
-    final queue = SharedMockData().queue;
-    
-    // Generate a simple mock ID and Queue Number
-    final newId = DateTime.now().millisecondsSinceEpoch.toString();
-    final latestQ = queue.isEmpty 
-        ? 10 
-        : int.tryParse(queue.last.queueNumber.replaceAll('Q', '')) ?? 10;
-    
-    final newEntry = QueueEntry(
-      id: newId,
-      queueNumber: 'Q${latestQ + 1}',
-      guestName: name,
-      partySize: _partySize,
-      waitingMinutes: 0,
-      position: queue.length + 1,
-    );
+    setState(() => _isSubmitting = true);
 
-    setState(() {
+    try {
+      // 1. Create walk-in entry directly in Supabase queue_entries table
+      final createdEntry = await SupabaseService().addWalkIn(
+        guestName: name,
+        partySize: _partySize,
+        restaurantId: 'ocean_bistro',
+        restaurantName: 'Ocean Bistro',
+      );
+
+      // 2. Sync to local receptionist mock state for seamless immediate UI update
+      final queue = SharedMockData().queue;
+      final newEntry = QueueEntry(
+        id: createdEntry.id,
+        queueNumber: createdEntry.queueNumber,
+        guestName: createdEntry.guestName,
+        partySize: createdEntry.partySize,
+        waitingMinutes: 0,
+        position: createdEntry.position,
+      );
       queue.add(newEntry);
-    });
 
-    Navigator.pop(context);
-    AppToast.showSuccess(
-      context,
-      '$name added to the waitlist!',
-      title: 'Waitlist Added',
-    );
+      if (!mounted) return;
+      Navigator.pop(context);
+      AppToast.showSuccess(
+        context,
+        '$name added to the waitlist!',
+        title: 'Waitlist Added',
+      );
+    } catch (e) {
+      // Graceful offline fallback
+      final queue = SharedMockData().queue;
+      final newId = 'q_${DateTime.now().millisecondsSinceEpoch}';
+      final latestQ = queue.isEmpty 
+          ? 10 
+          : int.tryParse(queue.last.queueNumber.replaceAll('Q', '').replaceAll('-', '')) ?? 10;
+      final newEntry = QueueEntry(
+        id: newId,
+        queueNumber: 'Q-${latestQ + 1}',
+        guestName: name,
+        partySize: _partySize,
+        waitingMinutes: 0,
+        position: queue.length + 1,
+      );
+      queue.add(newEntry);
+
+      if (!mounted) return;
+      Navigator.pop(context);
+      AppToast.showSuccess(
+        context,
+        '$name added to the waitlist!',
+        title: 'Waitlist Added',
+      );
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
   }
 
   @override
@@ -178,7 +210,7 @@ class _AddWalkInDialogState extends State<AddWalkInDialog> {
                 ),
                 const SizedBox(width: 16),
                 ElevatedButton(
-                  onPressed: _addWalkIn,
+                  onPressed: _isSubmitting ? null : _addWalkIn,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF0D3B2E), // Dark green matches 'Add to Queue'
                     foregroundColor: Colors.white,
@@ -188,10 +220,19 @@ class _AddWalkInDialogState extends State<AddWalkInDialog> {
                     ),
                     elevation: 0,
                   ),
-                  child: const Text(
-                    'Add to Queue',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
+                  child: _isSubmitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text(
+                          'Add to Queue',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
                 ),
               ],
             ),
