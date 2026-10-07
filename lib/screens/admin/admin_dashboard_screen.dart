@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/user_profile.dart';
 import '../../services/auth_service.dart';
+import '../../shared/widgets/app_toast.dart';
 import '../home_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
@@ -37,8 +38,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to sign out: $e')),
+      AppToast.showError(
+        context,
+        'Failed to sign out: $e',
+        title: 'Sign Out Error',
       );
     } finally {
       if (mounted) setState(() => _isSigningOut = false);
@@ -242,8 +245,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 subtitle: 'Configure floor plans, capacities, QR codes',
                 icon: Icons.restaurant_menu,
                 onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Restaurant branch manager opened (Firestore connected)')),
+                  AppToast.showInfo(
+                    context,
+                    'Restaurant branch manager opened (Firestore connected)',
+                    title: 'Branch Manager',
                   );
                 },
               ),
@@ -253,8 +258,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 subtitle: 'Promote users to Receptionist, Manager, or Admin',
                 icon: Icons.security,
                 onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Role and permission controls opened')),
+                  AppToast.showInfo(
+                    context,
+                    'Role and permission controls opened',
+                    title: 'Access Permissions',
                   );
                 },
               ),
@@ -264,8 +271,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 subtitle: 'Inspect live Firestore telemetry & events',
                 icon: Icons.terminal,
                 onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Audit logs connected to Firestore')),
+                  AppToast.showInfo(
+                    context,
+                    'Audit logs connected to Firestore',
+                    title: 'Telemetry Logs',
                   );
                 },
               ),

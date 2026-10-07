@@ -7,6 +7,7 @@ import '../../../services/firestore_service.dart';
 import '../../../services/supabase_service.dart';
 import '../../../features/manager/data/models/physical_table_model.dart';
 import '../../../shared/theme/app_colors.dart';
+import '../../../shared/widgets/app_toast.dart';
 import '../../../features/manager/data/models/live_menu_dish_model.dart';
 import 'booking_confirmation_screen.dart';
 
@@ -155,9 +156,7 @@ class _ReserveTableStepperScreenState extends State<ReserveTableStepperScreen> {
     }
 
     if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error), backgroundColor: Colors.red),
-      );
+      AppToast.showError(context, error);
       return;
     }
     setState(() => _selectedTime = formatted);
@@ -276,11 +275,9 @@ class _ReserveTableStepperScreenState extends State<ReserveTableStepperScreen> {
   Future<void> _handleConfirmReservation() async {
     final selectedDateStr = _dateSlots[_selectedDateIndex]['date'] as String;
     if (_isSlotFull(selectedDateStr, _selectedTime) || _isPast(_selectedTime)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Sorry, that time slot was just booked. Please choose another time.'),
-          backgroundColor: Colors.red,
-        ),
+      AppToast.showError(
+        context,
+        'Sorry, that time slot was just booked. Please choose another time.',
       );
       setState(() => _currentStep = 1);
       return;
@@ -305,8 +302,8 @@ class _ReserveTableStepperScreenState extends State<ReserveTableStepperScreen> {
           id: '',
           restaurantId: widget.restaurant.id,
           restaurantName: widget.restaurant.name,
-          userId: widget.profile?.id ?? 'current_customer_id',
-          guestName: (widget.profile?.fullName.isNotEmpty == true) ? widget.profile!.fullName : 'Ayesha Perera',
+          userId: (widget.profile?.id.isNotEmpty == true) ? widget.profile!.id : 'guest_id',
+          guestName: (widget.profile?.fullName.isNotEmpty == true) ? widget.profile!.fullName : 'Guest',
           reservationCode: '',
           date: selectedDateStr,
           time: _selectedTime,
@@ -333,8 +330,9 @@ class _ReserveTableStepperScreenState extends State<ReserveTableStepperScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _isSubmitting = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to confirm reservation: $e'), backgroundColor: Colors.red),
+      AppToast.showError(
+        context,
+        'Failed to confirm reservation: $e',
       );
     }
   }

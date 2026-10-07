@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/widgets/app_toast.dart';
 import '../../../../services/firestore_service.dart';
 import '../../data/models/live_menu_dish_model.dart';
 
@@ -32,16 +33,18 @@ class _LiveMenuTabWidgetState extends State<LiveMenuTabWidget> {
     try {
       await _firestoreService.toggleDishAvailability(id, val);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(val ? 'Dish marked AVAILABLE in Firestore' : 'Dish marked 86\'D in Firestore'),
-          duration: const Duration(seconds: 1),
-        ),
+      AppToast.showSuccess(
+        context,
+        val ? 'Dish marked AVAILABLE in Firestore' : 'Dish marked 86\'D in Firestore',
+        title: 'Menu Status Updated',
+        duration: const Duration(seconds: 2),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error updating status: $e')),
+      AppToast.showError(
+        context,
+        'Error updating status: $e',
+        title: 'Error',
       );
     }
   }
@@ -50,13 +53,17 @@ class _LiveMenuTabWidgetState extends State<LiveMenuTabWidget> {
     try {
       await _firestoreService.addDish(newDish);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Dish added to Firestore Live Menu')),
+      AppToast.showSuccess(
+        context,
+        'Dish added to Firestore Live Menu',
+        title: 'Dish Added',
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error adding dish: $e')),
+      AppToast.showError(
+        context,
+        'Error adding dish: $e',
+        title: 'Error',
       );
     }
   }
@@ -65,13 +72,17 @@ class _LiveMenuTabWidgetState extends State<LiveMenuTabWidget> {
     try {
       await _firestoreService.updateDish(updatedDish);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Dish updated in Firestore Live Menu')),
+      AppToast.showSuccess(
+        context,
+        'Dish updated in Firestore Live Menu',
+        title: 'Dish Updated',
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error updating dish: $e')),
+      AppToast.showError(
+        context,
+        'Error updating dish: $e',
+        title: 'Error',
       );
     }
   }
@@ -80,13 +91,17 @@ class _LiveMenuTabWidgetState extends State<LiveMenuTabWidget> {
     try {
       await _firestoreService.deleteDish(id);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Dish removed from Firestore')),
+      AppToast.showSuccess(
+        context,
+        'Dish removed from Firestore',
+        title: 'Dish Removed',
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error deleting dish: $e')),
+      AppToast.showError(
+        context,
+        'Error deleting dish: $e',
+        title: 'Error',
       );
     }
   }

@@ -74,6 +74,9 @@ class FirestoreService {
     ),
   ];
 
+  final List<ReservationModel> _fallbackReservations = [];
+  final StreamController<List<ReservationModel>> _reservationsStreamController = StreamController<List<ReservationModel>>.broadcast();
+
   final List<RestaurantModel> _fallbackRestaurants = [
     const RestaurantModel(
       id: 'ocean_bistro',
@@ -493,7 +496,7 @@ class FirestoreService {
   Stream<List<ReservationModel>> streamUserReservations(String userId) {
     final client = _supabase;
     if (client == null) {
-      return Stream.value(<ReservationModel>[]);
+      return Stream.value(_fallbackReservations.where((r) => r.userId == userId).toList());
     }
     try {
       return client
@@ -501,27 +504,38 @@ class FirestoreService {
           .stream(primaryKey: ['id'])
           .eq('user_id', userId)
           .map((data) => data.map((item) => ReservationModel.fromFirestore(item)).toList())
-          .handleError((_) => <ReservationModel>[]);
+          .handleError((_) => _fallbackReservations.where((r) => r.userId == userId).toList());
     } catch (_) {
-      return Stream.value(<ReservationModel>[]);
+      return Stream.value(_fallbackReservations.where((r) => r.userId == userId).toList());
     }
   }
 
   /// Create reservation
   Future<ReservationModel> createReservation(ReservationModel reservation) async {
     final item = ReservationModel(
-      id: 'rsv_${DateTime.now().millisecondsSinceEpoch}',
+      id: reservation.id.isNotEmpty ? reservation.id : 'rsv_${DateTime.now().millisecondsSinceEpoch}',
       restaurantId: reservation.restaurantId,
       restaurantName: reservation.restaurantName,
       userId: reservation.userId,
       guestName: reservation.guestName,
-      reservationCode: '#RSV${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
+      reservationCode: reservation.reservationCode.isNotEmpty
+          ? reservation.reservationCode
+          : '#RSV${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
       date: reservation.date,
       time: reservation.time,
       partySize: reservation.partySize,
       status: 'confirmed',
-      createdAt: DateTime.now(),
+      specialNotes: reservation.specialNotes,
+      createdAt: reservation.createdAt ?? DateTime.now(),
     );
+
+    final existingIdx = _fallbackReservations.indexWhere((r) => r.id == item.id);
+    if (existingIdx != -1) {
+      _fallbackReservations[existingIdx] = item;
+    } else {
+      _fallbackReservations.insert(0, item);
+    }
+    _reservationsStreamController.add(List.from(_fallbackReservations));
 
     final client = _supabase;
     if (client != null) {

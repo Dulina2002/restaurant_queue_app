@@ -4,6 +4,7 @@ import '../../../models/reservation_model.dart';
 import '../../../models/user_profile.dart';
 import '../../../services/firestore_service.dart';
 import '../../../shared/theme/app_colors.dart';
+import '../../../shared/widgets/app_toast.dart';
 
 class CreateBookingModal extends StatefulWidget {
   final RestaurantModel? preselectedRestaurant;
@@ -81,9 +82,7 @@ class _CreateBookingModalState extends State<CreateBookingModal> {
 
   Future<void> _handleConfirmBooking() async {
     if (_selectedRestaurant == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a restaurant first.')),
-      );
+      AppToast.showError(context, 'Please select a restaurant first.');
       return;
     }
 
@@ -95,8 +94,8 @@ class _CreateBookingModalState extends State<CreateBookingModal> {
           id: '',
           restaurantId: _selectedRestaurant!.id,
           restaurantName: _selectedRestaurant!.name,
-          userId: widget.profile?.id ?? 'current_customer_id',
-          guestName: (widget.profile?.fullName.isNotEmpty == true) ? widget.profile!.fullName : 'Ayesha Perera',
+          userId: (widget.profile?.id.isNotEmpty == true) ? widget.profile!.id : 'guest_id',
+          guestName: (widget.profile?.fullName.isNotEmpty == true) ? widget.profile!.fullName : 'Guest',
           reservationCode: '',
           date: _formatDate(_selectedDate),
           time: _selectedTimeSlot,
@@ -112,18 +111,17 @@ class _CreateBookingModalState extends State<CreateBookingModal> {
 
       widget.onBookingSuccess?.call();
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Table Booked at ${_selectedRestaurant!.name}! Ticket: ${reservation.reservationCode}'),
-          backgroundColor: const Color(0xFF10B981),
-          duration: const Duration(seconds: 4),
-        ),
+      AppToast.showSuccess(
+        context,
+        'Table booked at ${_selectedRestaurant!.name}! Ticket: ${reservation.reservationCode}',
+        title: 'Reservation Confirmed',
       );
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to book table: $e'), backgroundColor: Colors.red),
+      AppToast.showError(
+        context,
+        'Failed to book table: $e',
       );
     }
   }

@@ -34,7 +34,6 @@ class AuthGate extends StatelessWidget {
       builder: (context, snapshot) {
         final currentUser = snapshot.data ?? authService.currentUser;
 
-        // Default to HomeScreen as the primary landing page on app startup
         if (currentUser == null) {
           return const HomeScreen();
         }
@@ -50,7 +49,7 @@ class AuthGate extends StatelessWidget {
                 UserProfile(
                   id: currentUser.id,
                   email: currentUser.email ?? '',
-                  fullName: currentUser.userMetadata?['full_name'] ?? 'Diner Guest',
+                  fullName: currentUser.userMetadata?['full_name'] as String? ?? 'Diner Guest',
                   role: UserRole.customer,
                 );
 

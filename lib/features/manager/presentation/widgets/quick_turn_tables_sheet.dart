@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/widgets/app_toast.dart';
 import '../../../../services/firestore_service.dart';
 import '../../data/models/physical_table_model.dart';
 
@@ -343,14 +344,10 @@ class _QuickTurnTablesSheetState extends State<QuickTurnTablesSheet> {
                               }
                               if (!context.mounted) return;
                               Navigator.pop(context);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    '⚡ $selectedNumbers marked Available! Queue notified.',
-                                  ),
-                                  backgroundColor: AppColors.primary,
-                                  behavior: SnackBarBehavior.floating,
-                                ),
+                              AppToast.showSuccess(
+                                context,
+                                '$selectedNumbers marked Available! Queue notified.',
+                                title: 'Tables Turned',
                               );
                             },
                       icon: const Icon(Icons.bolt, size: 20),

@@ -6,6 +6,7 @@ import '../models/queue_entry_model.dart';
 import '../models/reservation_model.dart';
 import '../features/manager/data/models/physical_table_model.dart';
 import '../features/manager/data/models/live_menu_dish_model.dart';
+import 'reservation_storage_service.dart';
 
 class SupabaseService {
   static final SupabaseService _instance = SupabaseService._internal();
@@ -96,21 +97,7 @@ class SupabaseService {
     ),
   ];
 
-  final List<ReservationModel> _fallbackReservations = [
-    ReservationModel(
-      id: 'rsv_1',
-      restaurantId: 'ocean_bistro',
-      restaurantName: 'Ocean Bistro',
-      userId: 'current_customer_id',
-      guestName: 'Ayesha Perera',
-      reservationCode: '#RSV10245',
-      date: 'Saturday, 12 Oct',
-      time: '7:30 PM',
-      partySize: 4,
-      status: 'confirmed',
-      createdAt: DateTime.now().subtract(const Duration(days: 1)),
-    ),
-  ];
+  final List<ReservationModel> _fallbackReservations = [];
 
   final StreamController<List<QueueEntryModel>> _queueStreamController = StreamController<List<QueueEntryModel>>.broadcast();
   final StreamController<List<ReservationModel>> _reservationsStreamController = StreamController<List<ReservationModel>>.broadcast();
@@ -301,14 +288,27 @@ class SupabaseService {
   // ==========================================
 
   Stream<List<ReservationModel>> streamUserReservations(String userId) {
-    final effectiveUid = (userId.isNotEmpty && userId != 'guest_id') ? userId : 'current_customer_id';
+    final effectiveUid = userId.isNotEmpty ? userId : 'guest_id';
     final client = _client;
 
+    // Load locally persisted reservations immediately
+    Future.microtask(() async {
+      final stored = await ReservationStorageService().getStoredReservations();
+      for (final r in stored) {
+        final idx = _fallbackReservations.indexWhere((existing) => existing.id == r.id);
+        if (idx != -1) {
+          _fallbackReservations[idx] = r;
+        } else {
+          _fallbackReservations.add(r);
+        }
+      }
+      _reservationsStreamController.add(List.from(_fallbackReservations));
+    });
+
     if (client == null) {
-      Future.microtask(() => _reservationsStreamController.add(List.from(_fallbackReservations)));
       return _reservationsStreamController.stream.map((all) {
         final filtered = all
-            .where((r) => r.userId == effectiveUid || r.userId == 'guest_id' || userId.isEmpty)
+            .where((r) => r.userId == effectiveUid)
             .toList();
         filtered.sort((a, b) => (b.createdAt ?? DateTime.now()).compareTo(a.createdAt ?? DateTime.now()));
         return filtered;
@@ -319,8 +319,9 @@ class SupabaseService {
       return client
           .from('reservations')
           .stream(primaryKey: ['id'])
-          .map((data) {
-            final list = data
+          .asyncMap((data) async {
+            final stored = await ReservationStorageService().getStoredReservations();
+            final remoteList = data
                 .where((row) => row['user_id']?.toString() == effectiveUid)
                 .map((row) => ReservationModel(
                       id: row['id'].toString(),
@@ -337,12 +338,27 @@ class SupabaseService {
                       createdAt: row['created_at'] != null ? DateTime.tryParse(row['created_at'].toString()) : null,
                     ))
                 .toList();
+
+            // Merge remote items with local storage items
+            final mergedMap = <String, ReservationModel>{};
+            for (final r in stored.where((r) => r.userId == effectiveUid)) {
+              mergedMap[r.id] = r;
+            }
+            for (final r in remoteList) {
+              mergedMap[r.id] = r;
+            }
+
+            final list = mergedMap.values.toList();
             list.sort((a, b) => (b.createdAt ?? DateTime.now()).compareTo(a.createdAt ?? DateTime.now()));
-            return list.isEmpty ? _fallbackReservations : list;
+            await ReservationStorageService().saveReservations(mergedMap.values.toList());
+            return list;
           })
-          .handleError((_) => _fallbackReservations);
+          .handleError((e) {
+            debugPrint('Supabase streamUserReservations error: $e');
+            return _fallbackReservations.where((r) => r.userId == effectiveUid).toList();
+          });
     } catch (_) {
-      return Stream.value(_fallbackReservations);
+      return _reservationsStreamController.stream.map((all) => all.where((r) => r.userId == effectiveUid).toList());
     }
   }
 
@@ -350,7 +366,7 @@ class SupabaseService {
   Stream<List<ReservationModel>> streamRestaurantReservations(String restaurantId) async* {
     final client = _client;
     List<ReservationModel> fallbackFor() => _fallbackReservations
-        .where((r) => r.restaurantId == restaurantId && r.status != 'cancelled')
+        .where((r) => r.restaurantId == restaurantId && r.status.toLowerCase() != 'cancelled')
         .toList();
 
     if (client == null) {
@@ -362,7 +378,7 @@ class SupabaseService {
     try {
       yield* client.from('reservations').stream(primaryKey: ['id']).map((data) {
         return data
-            .where((row) => row['restaurant_id']?.toString() == restaurantId && row['status'] != 'cancelled')
+            .where((row) => row['restaurant_id']?.toString() == restaurantId && row['status']?.toString().toLowerCase() != 'cancelled')
             .map((row) => ReservationModel(
                   id: row['id'].toString(),
                   restaurantId: restaurantId,
@@ -399,16 +415,22 @@ class SupabaseService {
       partySize: reservation.partySize,
       status: 'confirmed',
       specialNotes: reservation.specialNotes,
-      createdAt: DateTime.now(),
+      createdAt: reservation.createdAt ?? DateTime.now(),
     );
 
-    _fallbackReservations.insert(0, item);
+    final existingIdx = _fallbackReservations.indexWhere((r) => r.id == item.id);
+    if (existingIdx != -1) {
+      _fallbackReservations[existingIdx] = item;
+    } else {
+      _fallbackReservations.insert(0, item);
+    }
     _reservationsStreamController.add(List.from(_fallbackReservations));
+    await ReservationStorageService().upsertReservation(item);
 
     final client = _client;
     if (client != null) {
       try {
-        await client.from('reservations').insert({
+        await client.from('reservations').upsert({
           'id': item.id,
           'restaurant_id': item.restaurantId,
           'restaurant_name': item.restaurantName,
@@ -420,7 +442,7 @@ class SupabaseService {
           'party_size': item.partySize,
           'status': 'confirmed',
           'special_notes': item.specialNotes,
-          'created_at': DateTime.now().toIso8601String(),
+          'created_at': item.createdAt?.toIso8601String() ?? DateTime.now().toIso8601String(),
         });
       } catch (e) {
         debugPrint('Supabase createReservation error: $e');
@@ -436,6 +458,7 @@ class SupabaseService {
       _fallbackReservations[idx] = _fallbackReservations[idx].copyWith(status: 'cancelled');
       _reservationsStreamController.add(List.from(_fallbackReservations));
     }
+    await ReservationStorageService().updateStatus(reservationId, 'cancelled');
 
     final client = _client;
     if (client != null) {
@@ -456,6 +479,7 @@ class SupabaseService {
       _fallbackReservations[idx] = reservation;
       _reservationsStreamController.add(List.from(_fallbackReservations));
     }
+    await ReservationStorageService().upsertReservation(reservation);
 
     final client = _client;
     if (client != null) {
