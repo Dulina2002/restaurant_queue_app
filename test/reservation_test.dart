@@ -1,16 +1,25 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:restaurant_queue_app/models/reservation_model.dart';
+import 'package:restaurant_queue_app/models/user_role.dart';
 import 'package:restaurant_queue_app/services/firestore_service.dart';
 import 'package:restaurant_queue_app/services/auth_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  SharedPreferences.setMockInitialValues({});
 
   group('Reservation Lifecycle & User Isolation', () {
     final firestoreService = FirestoreService();
     final authService = AuthService();
 
     test('AuthService generates consistent deterministic IDs for email logins', () async {
+      await authService.signUp(
+        email: 'dulina@gmail.com',
+        password: 'password123',
+        fullName: 'Dulina Test',
+        role: UserRole.customer,
+      );
       final profile1 = await authService.signIn(email: 'dulina@gmail.com', password: 'password123');
       final id1 = profile1.id;
 
@@ -70,6 +79,12 @@ void main() {
     });
 
     test('Cancelled reservation remains in History tab across simulated logout and relogin', () async {
+      await authService.signUp(
+        email: 'diner_history@example.com',
+        password: 'password123',
+        fullName: 'History Diner',
+        role: UserRole.customer,
+      );
       final user = await authService.signIn(email: 'diner_history@example.com', password: 'password123');
       final userId = user.id;
 

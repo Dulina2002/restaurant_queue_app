@@ -8,7 +8,6 @@ import '../../shared/widgets/role_bottom_nav_widget.dart';
 import '../../shared/widgets/app_toast.dart';
 import '../../features/profile/presentation/screens/edit_profile_screen.dart';
 import '../home_screen.dart';
-import '../sign_in_screen.dart';
 import 'receptionist_dashboard_screen.dart';
 import 'floor_overview_screen.dart';
 import 'reservation_summary_screen.dart';
@@ -47,7 +46,7 @@ class _ReceptionistProfileScreenState extends State<ReceptionistProfileScreen> {
       if (!mounted) return;
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (context) => const SignInScreen()),
+        MaterialPageRoute(builder: (context) => const HomeScreen()),
         (route) => false,
       );
     } catch (e) {
@@ -278,7 +277,7 @@ class _ReceptionistProfileScreenState extends State<ReceptionistProfileScreen> {
         roleName: 'RECEPTIONIST',
         roleColor: const Color(0xFFFF6B35),
         isSigningOut: _isSigningOut,
-        onSignOut: _showRoleSwitchSheet,
+        onSignOut: _signOut,
         profile: activeProfile,
         onProfileUpdated: (updated) => setState(() => _currentProfile = updated),
       ),

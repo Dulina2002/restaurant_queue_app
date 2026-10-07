@@ -35,7 +35,14 @@ class AuthGate extends StatelessWidget {
           future: authService.getCurrentUserProfile(),
           builder: (context, profileSnapshot) {
             if (profileSnapshot.connectionState == ConnectionState.waiting) {
-              return const HomeScreen();
+              return const Scaffold(
+                backgroundColor: Color(0xFF0B1910),
+                body: Center(
+                  child: CircularProgressIndicator(
+                    color: Color(0xFFF27B50),
+                  ),
+                ),
+              );
             }
 
             final userProfile = profileSnapshot.data;
