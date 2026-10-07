@@ -1,9 +1,16 @@
 import 'package:flutter/material.dart';
 import '../../models/user_profile.dart';
-import '../../models/queue_entry_model.dart';
 import '../../services/auth_service.dart';
-import '../../services/firestore_service.dart';
 import '../home_screen.dart';
+import 'reservation_summary_screen.dart';
+import 'floor_overview_screen.dart';
+import 'live_queue_screen.dart';
+import 'receptionist_profile_screen.dart';
+import '../../features/receptionist/presentation/widgets/add_walk_in_dialog.dart';
+import '../../features/receptionist/presentation/widgets/add_walk_in_dialog.dart';
+import '../../shared/widgets/role_header_widget.dart';
+import '../../shared/widgets/role_bottom_nav_widget.dart';
+import '../../shared/widgets/top_toast.dart';
 
 class ReceptionistDashboardScreen extends StatefulWidget {
   final UserProfile profile;
@@ -15,8 +22,9 @@ class ReceptionistDashboardScreen extends StatefulWidget {
 }
 
 class _ReceptionistDashboardScreenState extends State<ReceptionistDashboardScreen> {
+  bool _isFirstArrivalCompleted = false;
+
   final AuthService _authService = AuthService();
-  final FirestoreService _firestoreService = FirestoreService();
   bool _isSigningOut = false;
 
   Future<void> _signOut() async {
@@ -39,451 +47,286 @@ class _ReceptionistDashboardScreenState extends State<ReceptionistDashboardScree
     }
   }
 
-  void _callParty(QueueEntryModel item) async {
-    try {
-      await _firestoreService.updateQueueStatus(item.id, QueueStatus.called);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Alert sent to ${item.guestName}! Table is ready.'),
-          backgroundColor: const Color(0xFFF27B50),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error updating status: $e')),
-      );
-    }
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: RoleHeaderWidget(
+        roleName: 'RECEPTIONIST',
+        roleColor: const Color(0xFFFF6B35),
+        isSigningOut: _isSigningOut,
+        onSignOut: _signOut,
+      ),
+      body: _buildDashboardBody(),
+      bottomNavigationBar: RoleBottomNavWidget(
+        selectedIndex: 0,
+        onDestinationSelected: (index) {
+          if (index == 0) return; // already here
+          Widget? destination;
+          if (index == 1) {
+            destination = ReservationSummaryScreen(profile: widget.profile);
+          } else if (index == 2) {
+            destination = FloorOverviewScreen(profile: widget.profile);
+          } else if (index == 3) {
+            destination = LiveQueueScreen(profile: widget.profile);
+          } else if (index == 4) {
+            destination = ReceptionistProfileScreen(profile: widget.profile);
+          }
+          if (destination != null) {
+            Navigator.pushReplacement(
+              context,
+              PageRouteBuilder(
+                pageBuilder: (_, __, ___) => destination!,
+                transitionDuration: Duration.zero,
+                reverseTransitionDuration: Duration.zero,
+              ),
+            );
+          }
+        },
+        destinations: const [
+          NavigationDestination(icon: Icon(Icons.grid_view_rounded), label: 'Dashboard'),
+          NavigationDestination(icon: Icon(Icons.calendar_today_outlined), label: 'Reservation'),
+          NavigationDestination(icon: Icon(Icons.table_restaurant_outlined), label: 'Tables'),
+          NavigationDestination(icon: Icon(Icons.people_outline), label: 'Queue'),
+          NavigationDestination(icon: Icon(Icons.person_outline), label: 'Profile'),
+        ],
+      ),
+    );
   }
 
-  void _seatParty(QueueEntryModel item) async {
-    try {
-      await _firestoreService.updateQueueStatus(item.id, QueueStatus.seated);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${item.guestName} has been marked as SEATED.'),
-          backgroundColor: const Color(0xFF00E676),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error marking seated: $e')),
-      );
-    }
-  }
-
-  void _showAddWalkInDialog() {
-    final nameController = TextEditingController();
-    final partySizeController = TextEditingController(text: '2');
-    final phoneController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF162C1E),
-        title: const Text(
-          'Add Walk-In Guest',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+  Widget _buildDashboardBody() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              TextField(
-                controller: nameController,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  labelText: 'Guest Name',
-                  labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
-                  enabledBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Ocean Bistro',
+                    style: TextStyle(color: Color(0xFF1E293B), fontSize: 28, fontWeight: FontWeight.w900),
                   ),
-                  focusedBorder: const OutlineInputBorder(
-                    borderSide: BorderSide(color: Color(0xFFF27B50)),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Receptionist Desk • Live Operations',
+                    style: TextStyle(color: const Color(0xFF64748B), fontSize: 14, fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+              Row(
+                children: [
+                  Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFF10B981), shape: BoxShape.circle)),
+                  const SizedBox(width: 6),
+                  const Text('On Duty', style: TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.w600, fontSize: 14)),
+                ],
+              )
+            ],
+          ),
+          const SizedBox(height: 24),
+          GridView.count(
+            crossAxisCount: 2,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 16,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            childAspectRatio: 1.5,
+            children: [
+              _buildStatCard('Today\'s RSV', '2', Icons.calendar_today_outlined, const Color(0xFFF8FAFC), const Color(0xFF1E293B), const Color(0xFF64748B)),
+              _buildStatCard('Available', '5/12', Icons.check_circle_outline, const Color(0xFFF0FDF4), const Color(0xFF10B981), const Color(0xFF10B981)),
+              _buildStatCard('Waiting Queue', '4', Icons.people_outline, const Color(0xFFFFF7ED), const Color(0xFFD97706), const Color(0xFFD97706)),
+              _buildStatCard('Occupied', '4', Icons.restaurant, const Color(0xFFFEF2F2), const Color(0xFFDC2626), const Color(0xFFDC2626)),
+            ],
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => AddWalkInDialog.show(context),
+                  icon: const Icon(Icons.person_add_alt_1, color: Colors.white, size: 20),
+                  label: const Text('+ Walk-In', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF143621),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: partySizeController,
-                keyboardType: TextInputType.number,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  labelText: 'Party Size',
-                  labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
-                  enabledBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
-                  ),
-                  focusedBorder: const OutlineInputBorder(
-                    borderSide: BorderSide(color: Color(0xFFF27B50)),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: phoneController,
-                keyboardType: TextInputType.phone,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  labelText: 'Phone Number (SMS Alert)',
-                  labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
-                  enabledBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
-                  ),
-                  focusedBorder: const OutlineInputBorder(
-                    borderSide: BorderSide(color: Color(0xFFF27B50)),
+              const SizedBox(width: 16),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () {},
+                  icon: const Icon(Icons.grid_view, color: Color(0xFF1E293B), size: 20),
+                  label: const Text('Floor Plan', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    side: const BorderSide(color: Color(0xFFE2E8F0)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                 ),
               ),
             ],
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+          const SizedBox(height: 32),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Upcoming Arrivals', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF1E293B))),
+              Text('View All (2)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: const Color(0xFF64748B))),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () async {
-              if (nameController.text.trim().isEmpty) return;
-              final partySize = int.tryParse(partySizeController.text) ?? 2;
-              final messenger = ScaffoldMessenger.of(context);
-              Navigator.pop(context);
-
-              try {
-                await _firestoreService.addWalkInGuest(
-                  restaurantId: 'ocean_bistro',
-                  restaurantName: 'Ocean Bistro',
-                  guestName: nameController.text.trim(),
-                  partySize: partySize,
-                  phoneNumber: phoneController.text.trim(),
-                );
-                messenger.showSnackBar(
-                  const SnackBar(content: Text('Walk-in added to live Firestore queue')),
-                );
-              } catch (e) {
-                messenger.showSnackBar(
-                  SnackBar(content: Text('Failed to add walk-in: $e')),
-                );
-              }
+          const SizedBox(height: 16),
+          _buildArrivalCard(
+            name: 'Ayesha Perera', time: '7:30 PM', guests: '4 Guests', table: 'Table 04',
+            requirement: 'Req: Window seat facing the ocean, celebrating an anniversary.',
+            status: _isFirstArrivalCompleted ? 'Completed' : 'Confirmed', 
+            isConfirmed: !_isFirstArrivalCompleted, 
+            showActions: !_isFirstArrivalCompleted,
+            onCheckInPressed: () {
+              setState(() {
+                _isFirstArrivalCompleted = true;
+              });
+              TopToast.show(
+                context,
+                message: 'Ayesha Perera checked in and seated at Table 04',
+                backgroundColor: const Color(0xFF2E9B60),
+                icon: Icons.check_circle,
+              );
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFF27B50),
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Add to Queue'),
+          ),
+          const SizedBox(height: 16),
+          _buildArrivalCard(
+            name: 'Ayesha Perera', time: '8:00 PM', guests: '2 Guests', table: 'Table 02',
+            requirement: 'Req: Quiet corner table.',
+            status: 'Completed', isConfirmed: false, showActions: false,
           ),
         ],
       ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0B1910),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF0B1910),
-        elevation: 0,
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF1C77F).withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFF1C77F).withValues(alpha: 0.4)),
-              ),
-              child: const Text(
-                'HOST & RECEPTION DESK',
-                style: TextStyle(
-                  color: Color(0xFFF1C77F),
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.0,
-                ),
-              ),
-            ),
-          ],
+  Widget _buildStatCard(String title, String value, IconData icon, Color bgColor, Color valueColor, Color iconColor) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: bgColor == const Color(0xFFF8FAFC) 
+              ? const Color(0xFFE2E8F0) 
+              : bgColor.withOpacity(0.5),
         ),
-        actions: [
-          IconButton(
-            icon: _isSigningOut
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white70),
-                  )
-                : const Icon(Icons.logout, color: Colors.white70),
-            tooltip: 'Sign Out',
-            onPressed: _isSigningOut ? null : _signOut,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 18, color: iconColor),
+              const SizedBox(width: 8),
+              Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF475569))),
+            ],
           ),
+          const Spacer(),
+          Text(value, style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: valueColor)),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showAddWalkInDialog,
-        backgroundColor: const Color(0xFFF27B50),
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.person_add),
-        label: const Text('Add Walk-In'),
+    );
+  }
+
+  Widget _buildArrivalCard({
+    required String name,
+    required String time,
+    required String guests,
+    required String table,
+    required String requirement,
+    required String status,
+    required bool isConfirmed,
+    required bool showActions,
+    VoidCallback? onCheckInPressed,
+  }) {
+    final statusColor = isConfirmed ? const Color(0xFF10B981) : const Color(0xFF059669);
+    final statusBgColor = isConfirmed ? const Color(0xFFECFDF5) : const Color(0xFFD1FAE5);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
-      body: SafeArea(
-        child: StreamBuilder<List<QueueEntryModel>>(
-          stream: _firestoreService.streamQueue('ocean_bistro'),
-          builder: (context, snapshot) {
-            final queue = snapshot.data ?? [];
-            final isLoading = snapshot.connectionState == ConnectionState.waiting;
-
-            return SingleChildScrollView(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Host Greeting Banner
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF162C1E),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-                    ),
-                    child: Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 26,
-                          backgroundColor: const Color(0xFFF1C77F).withValues(alpha: 0.2),
-                          child: const Icon(Icons.room_service, color: Color(0xFFF1C77F), size: 26),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Host Station • ${widget.profile.fullName}',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                '${queue.length} parties currently waiting',
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.6),
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Live Waiting List',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.05),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          'Firestore Realtime',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.5),
-                            fontSize: 11,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-
-                  if (isLoading)
-                    const Padding(
-                      padding: EdgeInsets.all(32.0),
-                      child: Center(
-                        child: CircularProgressIndicator(color: Color(0xFFF27B50)),
-                      ),
-                    )
-                  else if (queue.isEmpty)
-                    Container(
-                      padding: const EdgeInsets.all(32),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF162C1E),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Center(
-                        child: Text(
-                          'No guests in queue right now. Great job!',
-                          style: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
-                        ),
-                      ),
-                    )
-                  else
-                    ListView.separated(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: queue.length,
-                      separatorBuilder: (context, i) => const SizedBox(height: 12),
-                      itemBuilder: (context, index) {
-                        final item = queue[index];
-                        final isCalled = item.status == QueueStatus.called;
-
-                        return Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF162C1E),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: isCalled
-                                  ? const Color(0xFFF27B50)
-                                  : Colors.white.withValues(alpha: 0.08),
-                              width: isCalled ? 1.5 : 1,
-                            ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF0B1910),
-                                          borderRadius: BorderRadius.circular(6),
-                                        ),
-                                        child: Text(
-                                          item.queueNumber,
-                                          style: const TextStyle(
-                                            color: Color(0xFFF1C77F),
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Text(
-                                        item.guestName,
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      color: isCalled
-                                          ? const Color(0xFFF27B50).withValues(alpha: 0.2)
-                                          : Colors.white.withValues(alpha: 0.05),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      isCalled ? 'TABLE READY (CALLED)' : 'WAITING',
-                                      style: TextStyle(
-                                        color: isCalled ? const Color(0xFFF27B50) : Colors.white60,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 10),
-                              Row(
-                                children: [
-                                  Icon(Icons.group, size: 14, color: Colors.white.withValues(alpha: 0.5)),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '${item.partySize} Guests',
-                                    style: TextStyle(
-                                      color: Colors.white.withValues(alpha: 0.7),
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Icon(Icons.access_time, size: 14, color: Colors.white.withValues(alpha: 0.5)),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    'Est. ${item.estimatedWaitMinutes} min',
-                                    style: TextStyle(
-                                      color: Colors.white.withValues(alpha: 0.7),
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 14),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: OutlinedButton.icon(
-                                      onPressed: () => _callParty(item),
-                                      icon: const Icon(Icons.notifications_active, size: 16),
-                                      label: const Text('Call Party'),
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: const Color(0xFFF27B50),
-                                        side: const BorderSide(color: Color(0xFFF27B50)),
-                                        padding: const EdgeInsets.symmetric(vertical: 10),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: ElevatedButton.icon(
-                                      onPressed: () => _seatParty(item),
-                                      icon: const Icon(Icons.check_circle_outline, size: 16),
-                                      label: const Text('Seat Table'),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(0xFF00E676),
-                                        foregroundColor: Colors.black,
-                                        padding: const EdgeInsets.symmetric(vertical: 10),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  const SizedBox(height: 80),
-                ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusBgColor,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: statusColor.withOpacity(0.3)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.check, size: 14, color: statusColor),
+                    const SizedBox(width: 4),
+                    Text(status, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: statusColor)),
+                  ],
+                ),
               ),
-            );
-          },
-        ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text('$time • $guests • $table', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Color(0xFF64748B))),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(8)),
+            child: Text(requirement, style: const TextStyle(fontSize: 14, color: Color(0xFF334155))),
+          ),
+          if (showActions) ...[
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: onCheckInPressed ?? () {},
+                    icon: const Icon(Icons.check, color: Colors.white, size: 18),
+                    label: const Text('Check In & Seat', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2E9B60),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () {},
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      side: const BorderSide(color: Color(0xFFE2E8F0)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    child: const Text('Reassign Table', style: TextStyle(color: Color(0xFF475569), fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
       ),
     );
   }
 }
+

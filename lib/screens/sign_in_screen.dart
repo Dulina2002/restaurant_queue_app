@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/user_profile.dart';
 import '../services/auth_service.dart';
+import '../shared/widgets/top_toast.dart';
 import 'auth_gate.dart';
 import 'sign_up_screen.dart';
 
@@ -49,18 +50,9 @@ class _SignInScreenState extends State<SignInScreen> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.check_circle, color: Colors.white, size: 20),
-              const SizedBox(width: 8),
-              Text('Welcome back, ${profile.fullName}! (${profile.role.displayName})'),
-            ],
-          ),
-          backgroundColor: const Color(0xFF00E676),
-          behavior: SnackBarBehavior.floating,
-        ),
+      TopToast.showSuccess(
+        context,
+        message: 'Welcome back, ${profile.fullName}! (${profile.role.displayName})',
       );
 
       // Navigate to the role's dashboard
@@ -76,12 +68,9 @@ class _SignInScreenState extends State<SignInScreen> {
       setState(() {
         _errorMessage = error.toString();
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_errorMessage ?? 'Authentication failed'),
-          backgroundColor: Colors.redAccent,
-          behavior: SnackBarBehavior.floating,
-        ),
+      TopToast.showError(
+        context,
+        message: _errorMessage ?? 'Authentication failed',
       );
     } finally {
       if (mounted) {

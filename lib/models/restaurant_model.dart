@@ -71,4 +71,36 @@ class RestaurantModel {
       'created_at': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
     };
   }
+
+  RestaurantModel copyWith({
+    String? id,
+    String? name,
+    String? cuisine,
+    String? tag,
+    String? location,
+    double? rating,
+    int? reviewsCount,
+    bool? isActive,
+    bool? isQueueAvailable,
+    String? estWait,
+    int? waitlistCount,
+    String? imageUrl,
+    DateTime? createdAt,
+  }) {
+    return RestaurantModel(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      cuisine: cuisine ?? this.cuisine,
+      tag: tag ?? this.tag,
+      location: location ?? this.location,
+      rating: rating ?? this.rating,
+      reviewsCount: reviewsCount ?? this.reviewsCount,
+      isActive: isActive ?? this.isActive,
+      isQueueAvailable: isQueueAvailable ?? this.isQueueAvailable,
+      estWait: estWait ?? this.estWait,
+      waitlistCount: waitlistCount ?? this.waitlistCount,
+      imageUrl: imageUrl ?? this.imageUrl,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
 }
