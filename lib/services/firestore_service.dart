@@ -79,21 +79,7 @@ class FirestoreService {
     ),
   ];
 
-  final List<ReservationModel> _fallbackReservations = [
-    ReservationModel(
-      id: 'rsv_1',
-      restaurantId: 'ocean_bistro',
-      restaurantName: 'Ocean Bistro',
-      userId: 'guest_id',
-      guestName: 'Ayesha Perera',
-      reservationCode: '#RSV10245',
-      date: 'Saturday, 12 Oct',
-      time: '7:30 PM',
-      partySize: 4,
-      status: 'confirmed',
-      createdAt: DateTime.now().subtract(const Duration(days: 1)),
-    ),
-  ];
+  final List<ReservationModel> _fallbackReservations = [];
   final StreamController<List<ReservationModel>> _reservationsStreamController = StreamController<List<ReservationModel>>.broadcast();
 
   final List<RestaurantModel> _fallbackRestaurants = [
@@ -638,76 +624,69 @@ class FirestoreService {
 
   /// Stream of user reservations with reactive stream update
   Stream<List<ReservationModel>> streamUserReservations(String userId) {
-    if (!isLiveFirebaseProject) {
-      final list = _fallbackReservations
-          .where((r) => r.userId == userId || r.userId == 'guest_id' || userId.isEmpty)
-          .toList();
-      list.sort((a, b) {
-        if (a.createdAt == null) return 1;
-        if (b.createdAt == null) return -1;
-        return b.createdAt!.compareTo(a.createdAt!);
-      });
-      Future.microtask(() => _reservationsStreamController.add(List.from(_fallbackReservations)));
-      return _reservationsStreamController.stream.map((all) {
-        final filtered = all
-            .where((r) => r.userId == userId || r.userId == 'guest_id' || userId.isEmpty)
-            .toList();
-        filtered.sort((a, b) {
-          if (a.createdAt == null) return 1;
-          if (b.createdAt == null) return -1;
-          return b.createdAt!.compareTo(a.createdAt!);
-        });
-        return filtered;
-      });
-    }
-    try {
-      final effectiveUid = userId.isNotEmpty ? userId : 'guest_id';
-      return _reservationsRef
-          .where('user_id', isEqualTo: effectiveUid)
-          .snapshots()
-          .map((snapshot) {
-            if (snapshot.docs.isEmpty) {
-              final list = _fallbackReservations.where((r) => r.userId == effectiveUid || r.userId == 'guest_id').toList();
+    final effectiveUid = userId.isNotEmpty ? userId : 'guest_id';
+
+    if (isLiveFirebaseProject) {
+      try {
+        return _reservationsRef
+            .where('user_id', isEqualTo: effectiveUid)
+            .snapshots()
+            .map((snapshot) {
+              final list = snapshot.docs.map((doc) => ReservationModel.fromFirestore(doc)).toList();
               list.sort((a, b) {
                 if (a.createdAt == null) return 1;
                 if (b.createdAt == null) return -1;
                 return b.createdAt!.compareTo(a.createdAt!);
               });
               return list;
-            }
-            final list = snapshot.docs.map((doc) => ReservationModel.fromFirestore(doc)).toList();
-            list.sort((a, b) {
-              if (a.createdAt == null) return 1;
-              if (b.createdAt == null) return -1;
-              return b.createdAt!.compareTo(a.createdAt!);
-            });
-            return list;
-          })
-          .handleError((_) => _fallbackReservations.where((r) => r.userId == effectiveUid || r.userId == 'guest_id').toList());
-    } catch (_) {
-      final list = _fallbackReservations.where((r) => r.userId == userId || r.userId == 'guest_id' || userId.isEmpty).toList();
-      Future.microtask(() => _reservationsStreamController.add(list));
-      return _reservationsStreamController.stream;
+            })
+            .handleError((_) => _fallbackReservations.where((r) => r.userId == effectiveUid).toList());
+      } catch (_) {}
     }
+
+    if (SupabaseService().isSupabaseConfigured) {
+      return SupabaseService().streamUserReservations(effectiveUid);
+    }
+
+    Future.microtask(() => _reservationsStreamController.add(List.from(_fallbackReservations)));
+    return _reservationsStreamController.stream.map((all) {
+      final filtered = all
+          .where((r) => r.userId == effectiveUid)
+          .toList();
+      filtered.sort((a, b) {
+        if (a.createdAt == null) return 1;
+        if (b.createdAt == null) return -1;
+        return b.createdAt!.compareTo(a.createdAt!);
+      });
+      return filtered;
+    });
   }
 
   /// Create reservation
   Future<ReservationModel> createReservation(ReservationModel reservation) async {
     final item = ReservationModel(
-      id: 'rsv_${DateTime.now().millisecondsSinceEpoch}',
+      id: reservation.id.isNotEmpty ? reservation.id : 'rsv_${DateTime.now().millisecondsSinceEpoch}',
       restaurantId: reservation.restaurantId,
       restaurantName: reservation.restaurantName,
       userId: reservation.userId,
       guestName: reservation.guestName,
-      reservationCode: '#RSV${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
+      reservationCode: reservation.reservationCode.isNotEmpty
+          ? reservation.reservationCode
+          : '#RSV${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
       date: reservation.date,
       time: reservation.time,
       partySize: reservation.partySize,
       status: 'confirmed',
-      createdAt: DateTime.now(),
+      specialNotes: reservation.specialNotes,
+      createdAt: reservation.createdAt ?? DateTime.now(),
     );
 
-    _fallbackReservations.insert(0, item);
+    final existingIdx = _fallbackReservations.indexWhere((r) => r.id == item.id);
+    if (existingIdx != -1) {
+      _fallbackReservations[existingIdx] = item;
+    } else {
+      _fallbackReservations.insert(0, item);
+    }
     _reservationsStreamController.add(List.from(_fallbackReservations));
 
     if (isLiveFirebaseProject) {
@@ -718,7 +697,7 @@ class FirestoreService {
 
     // Sync with Supabase backend
     try {
-      SupabaseService().createReservation(item);
+      await SupabaseService().createReservation(item);
     } catch (_) {}
 
     return item;
@@ -742,7 +721,7 @@ class FirestoreService {
 
     // Sync with Supabase backend
     try {
-      SupabaseService().cancelReservation(reservationId);
+      await SupabaseService().cancelReservation(reservationId);
     } catch (_) {}
   }
 
@@ -761,7 +740,7 @@ class FirestoreService {
 
     // Sync with Supabase backend
     try {
-      SupabaseService().updateReservation(reservation);
+      await SupabaseService().updateReservation(reservation);
     } catch (_) {}
 
     return reservation;

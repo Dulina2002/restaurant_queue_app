@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/widgets/app_toast.dart';
 import '../../../../services/firestore_service.dart';
 import '../../data/models/physical_table_model.dart';
 
@@ -247,12 +248,10 @@ class _AiFloorOptimizerSheetState extends State<AiFloorOptimizerSheet> {
                     child: ElevatedButton.icon(
                       onPressed: () {
                         Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('⚡ AI Optimal floor plan applied successfully!'),
-                            backgroundColor: AppColors.primary,
-                            behavior: SnackBarBehavior.floating,
-                          ),
+                        AppToast.showSuccess(
+                          context,
+                          'AI Optimal floor plan applied successfully!',
+                          title: 'Floor Plan Updated',
                         );
                       },
                       icon: const Icon(Icons.check_circle_outline, size: 20),

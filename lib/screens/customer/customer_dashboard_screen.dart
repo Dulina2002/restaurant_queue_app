@@ -18,6 +18,7 @@ import 'widgets/customer_queue_view.dart';
 import 'widgets/customer_bookings_view.dart';
 import 'widgets/customer_profile_view.dart';
 import 'widgets/top_notification_banner.dart';
+import '../../shared/widgets/app_toast.dart';
 import 'booking/restaurant_details_screen.dart';
 import 'booking/reservation_details_screen.dart';
 
@@ -190,31 +191,32 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
           ElevatedButton(
             onPressed: () async {
               final size = int.tryParse(partySizeController.text) ?? 2;
-              final messenger = ScaffoldMessenger.of(context);
               Navigator.pop(context);
 
               try {
                 final entry = await _firestoreService.joinQueue(
                   restaurantId: restaurant.id,
                   restaurantName: restaurant.name,
-                  userId: widget.profile?.id ?? 'current_customer_id',
-                  guestName: (widget.profile?.fullName.isNotEmpty == true) ? widget.profile!.fullName : 'Ayesha Perera',
+                  userId: (widget.profile?.id.isNotEmpty == true) ? widget.profile!.id : 'guest_id',
+                  guestName: (widget.profile?.fullName.isNotEmpty == true) ? widget.profile!.fullName : 'Guest',
                   partySize: size,
                   phoneNumber: widget.profile?.phoneNumber ?? '+94 77 123 4567',
                 );
 
-                messenger.showSnackBar(
-                  SnackBar(
-                    content: Text('Joined ${restaurant.name} Queue! Ticket ${entry.queueNumber} (#${entry.position} in line)'),
-                    backgroundColor: const Color(0xFF00E676),
-                  ),
+                if (!mounted) return;
+                AppToast.showSuccess(
+                  context,
+                  'Joined ${restaurant.name} Queue! Ticket ${entry.queueNumber} (#${entry.position} in line)',
+                  title: 'Queue Joined',
                 );
 
                 // Switch to live queue tab
                 setState(() => _bottomNavIndex = 3);
               } catch (e) {
-                messenger.showSnackBar(
-                  SnackBar(content: Text('Failed to join queue: $e')),
+                if (!mounted) return;
+                AppToast.showError(
+                  context,
+                  'Failed to join queue: $e',
                 );
               }
             },

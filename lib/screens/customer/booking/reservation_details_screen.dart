@@ -4,6 +4,7 @@ import '../../../models/restaurant_model.dart';
 import '../../../models/user_profile.dart';
 import '../../../services/firestore_service.dart';
 import '../../../shared/theme/app_colors.dart';
+import '../../../shared/widgets/app_toast.dart';
 import 'modify_reservation_screen.dart';
 
 class ReservationDetailsScreen extends StatefulWidget {
@@ -67,17 +68,18 @@ class _ReservationDetailsScreenState extends State<ReservationDetailsScreen> {
                   _currentReservation = _currentReservation.copyWith(status: 'cancelled');
                   _isCancelling = false;
                 });
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Reservation Cancelled.'),
-                    backgroundColor: Color(0xFFEF4444),
-                  ),
+                AppToast.show(
+                  context,
+                  title: 'Reservation Cancelled',
+                  message: 'Your booking ${_currentReservation.reservationCode} at ${_currentReservation.restaurantName} was cancelled.',
+                  type: ToastType.error,
                 );
               } catch (e) {
                 if (!mounted) return;
                 setState(() => _isCancelling = false);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Failed to cancel: $e')),
+                AppToast.showError(
+                  context,
+                  'Failed to cancel: $e',
                 );
               }
             },

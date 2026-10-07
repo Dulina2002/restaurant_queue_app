@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/utils/shared_mock_data.dart';
+import '../../../../shared/widgets/app_toast.dart';
 import '../../data/models/queue_entry_model.dart';
 import 'dart:math';
 
@@ -47,13 +48,10 @@ class _AddWalkInDialogState extends State<AddWalkInDialog> {
     });
 
     Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$name added to the waitlist!'),
-        backgroundColor: const Color(0xFF143621),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
+    AppToast.showSuccess(
+      context,
+      '$name added to the waitlist!',
+      title: 'Waitlist Added',
     );
   }
 
