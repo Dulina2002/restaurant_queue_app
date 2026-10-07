@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../../../services/supabase_service.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_toast.dart';
 import '../../data/models/queue_entry_model.dart';
@@ -15,10 +17,38 @@ class LiveQueueWidget extends StatefulWidget {
 
 class _LiveQueueWidgetState extends State<LiveQueueWidget> {
   List<QueueEntry> get _queue => SharedMockData().queue;
+  StreamSubscription<dynamic>? _queueSub;
 
   @override
   void initState() {
     super.initState();
+    _queueSub = SupabaseService().streamRestaurantQueue().listen((list) {
+      if (!mounted) return;
+      if (list.isNotEmpty) {
+        setState(() {
+          final existingIds = _queue.map((e) => e.id).toSet();
+          for (final item in list) {
+            if (!existingIds.contains(item.id)) {
+              _queue.add(QueueEntry(
+                id: item.id,
+                queueNumber: item.queueNumber,
+                guestName: item.guestName,
+                partySize: item.partySize,
+                waitingMinutes: 0,
+                position: item.position,
+              ));
+            }
+          }
+          _recalculatePositions();
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _queueSub?.cancel();
+    super.dispose();
   }
 
   void _seatAtTable(QueueEntry entry) async {
@@ -86,6 +116,7 @@ class _LiveQueueWidgetState extends State<LiveQueueWidget> {
                 _queue.removeWhere((e) => e.id == entry.id);
                 _recalculatePositions();
               });
+              SupabaseService().leaveQueue(queueId: entry.id, restaurantId: 'ocean_bistro');
               AppToast.show(
                 context,
                 message: '${entry.guestName} removed from queue.',

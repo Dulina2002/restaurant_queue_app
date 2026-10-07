@@ -19,7 +19,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _passwordController = TextEditingController();
   final _authService = AuthService();
 
-  UserRole _selectedRole = UserRole.customer;
   bool _isLoading = false;
   bool _obscurePassword = true;
   String? _errorMessage;
@@ -49,14 +48,14 @@ class _SignUpScreenState extends State<SignUpScreen> {
         email: _emailController.text,
         password: _passwordController.text,
         fullName: _nameController.text,
-        role: _selectedRole,
+        role: UserRole.customer,
       );
 
       if (!mounted) return;
 
       TopToast.showSuccess(
         context,
-        message: 'Account created as ${_selectedRole.displayName}! Welcome, ${profile.fullName}.',
+        message: 'Welcome to DineQueue, ${profile.fullName}!',
       );
 
       Navigator.pushAndRemoveUntil(
@@ -68,12 +67,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
       );
     } catch (error) {
       if (!mounted) return;
+      final cleanMessage = error.toString().replaceFirst('Exception: ', '');
       setState(() {
-        _errorMessage = error.toString();
+        _errorMessage = cleanMessage;
       });
       TopToast.showError(
         context,
-        message: _errorMessage ?? 'Registration failed',
+        message: cleanMessage,
       );
     } finally {
       if (mounted) {
@@ -102,7 +102,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const Text(
-                    'Create Account',
+                    'Create Diner Account',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 28,
@@ -113,14 +113,14 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Join to experience instant queue alerts and smart seating',
+                    'Join to experience instant queue alerts and smart table reservations',
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.6),
                       fontSize: 13,
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 24),
 
                   if (_errorMessage != null) ...[
                     Container(
@@ -260,64 +260,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 20),
-
-                  // Role Selector
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Account Type / Role',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.8),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF162C1E),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<UserRole>(
-                            value: _selectedRole,
-                            dropdownColor: const Color(0xFF162C1E),
-                            isExpanded: true,
-                            icon: const Icon(Icons.arrow_drop_down, color: Colors.white70),
-                            items: UserRole.values.map((role) {
-                              return DropdownMenuItem<UserRole>(
-                                value: role,
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      _getRoleIcon(role),
-                                      size: 18,
-                                      color: _getRoleColor(role),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Text(
-                                      role.displayName,
-                                      style: const TextStyle(color: Colors.white, fontSize: 14),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }).toList(),
-                            onChanged: (role) {
-                              if (role != null) {
-                                setState(() => _selectedRole = role);
-                              }
-                            },
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 24),
 
                   // Sign Up Button
                   ElevatedButton(
@@ -342,7 +285,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                             ),
                           )
                         : const Text(
-                            'Create Account',
+                            'Create Diner Account',
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
@@ -350,7 +293,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                             ),
                           ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 28),
 
                   // Sign In Link
                   Row(
@@ -383,31 +326,5 @@ class _SignUpScreenState extends State<SignUpScreen> {
         ),
       ),
     );
-  }
-
-  IconData _getRoleIcon(UserRole role) {
-    switch (role) {
-      case UserRole.customer:
-        return Icons.person_outline;
-      case UserRole.receptionist:
-        return Icons.room_service_outlined;
-      case UserRole.manager:
-        return Icons.analytics_outlined;
-      case UserRole.admin:
-        return Icons.admin_panel_settings_outlined;
-    }
-  }
-
-  Color _getRoleColor(UserRole role) {
-    switch (role) {
-      case UserRole.customer:
-        return const Color(0xFF00E676);
-      case UserRole.receptionist:
-        return const Color(0xFFF1C77F);
-      case UserRole.manager:
-        return const Color(0xFFCE93D8);
-      case UserRole.admin:
-        return const Color(0xFF81D4FA);
-    }
   }
 }

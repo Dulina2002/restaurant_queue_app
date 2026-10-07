@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../models/user_profile.dart';
 import '../../../../models/queue_entry_model.dart';
+import '../../../../services/auth_service.dart';
 import '../../../../services/restaurant_database_service.dart';
 import '../../../../screens/home_screen.dart';
 import '../../../../shared/theme/app_colors.dart';
@@ -23,6 +24,8 @@ class ManagerDashboardScreen extends StatefulWidget {
 
 class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
   final RestaurantDatabaseService _firestoreService = RestaurantDatabaseService();
+  final AuthService _authService = AuthService();
+  bool _isSigningOut = false;
   int _selectedTab = 0; // 0: Overview, 1: Tables, 2: Live Menu
   int _selectedTimeFilter = 1; // 0: Today, 1: This Week
   int _bottomNavIndex = 0; // 0: Dashboard, 1: Profile
@@ -35,6 +38,55 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     super.initState();
     _currentProfile = widget.profile;
     _dashboardData = ManagerDashboardData.mock();
+  }
+
+  Future<void> _signOut() async {
+    final shouldLogout = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Text(
+          'Log Out',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+        ),
+        content: const Text(
+          'Are you sure you want to log out of your Manager session?',
+          style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              elevation: 0,
+            ),
+            child: const Text('Log Out'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldLogout == true) {
+      setState(() => _isSigningOut = true);
+      try {
+        await _authService.signOut();
+        if (!mounted) return;
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+          (route) => false,
+        );
+      } finally {
+        if (mounted) setState(() => _isSigningOut = false);
+      }
+    }
   }
 
   String _getAvatarInitials(String name) {
@@ -141,6 +193,34 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                                     color: AppColors.primary,
                                   ),
                                 ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            GestureDetector(
+                              onTap: _isSigningOut ? null : _signOut,
+                              child: Container(
+                                width: 28,
+                                height: 28,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: AppColors.border),
+                                ),
+                                alignment: Alignment.center,
+                                child: _isSigningOut
+                                    ? const SizedBox(
+                                        width: 12,
+                                        height: 12,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 1.8,
+                                          color: AppColors.primary,
+                                        ),
+                                      )
+                                    : const Icon(
+                                        Icons.logout_rounded,
+                                        size: 15,
+                                        color: AppColors.textSecondary,
+                                      ),
                               ),
                             ),
                           ],

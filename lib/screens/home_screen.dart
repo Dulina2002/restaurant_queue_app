@@ -1,15 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'how_it_works_screen.dart';
-
 import 'sign_in_screen.dart';
-
-import 'admin_dashboard.dart';
-import '../models/user_profile.dart';
-import '../models/user_role.dart';
-import 'customer/customer_dashboard_screen.dart';
-import 'receptionist/receptionist_dashboard_screen.dart';
-import 'manager/manager_dashboard_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -379,60 +371,6 @@ class HomeScreen extends StatelessWidget {
                       ),
 
                       const SizedBox(height: 16),
-
-                      const SizedBox(height: 12),
-                      Text('OR DEMO QUICK-LAUNCH AS',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.5),
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1.2)),
-                      const SizedBox(height: 12),
-                      LayoutBuilder(builder: (context, constraints) {
-                        final scale =
-                            MediaQuery.textScalerOf(context).scale(11) / 11;
-                        final columns = constraints.maxWidth >= 350 * scale
-                            ? 4
-                            : constraints.maxWidth >= 180 * scale
-                                ? 2
-                                : 1;
-                        final width =
-                            ((constraints.maxWidth - (columns - 1) * 8) /
-                                    columns)
-                                .clamp(0.0, 160.0 * scale)
-                                .toDouble();
-                        return Wrap(
-                            alignment: WrapAlignment.center,
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              _demoButton(context, 'Customer', width,
-                                  const CustomerDashboardScreen()),
-                              _demoButton(
-                                  context,
-                                  'Receptionist',
-                                  width,
-                                  const ReceptionistDashboardScreen(
-                                      profile: UserProfile(
-                                          id: 'demo_receptionist',
-                                          email: '',
-                                          fullName: 'Demo Receptionist',
-                                          role: UserRole.receptionist))),
-                              _demoButton(
-                                  context,
-                                  'Manager',
-                                  width,
-                                  const ManagerDashboardScreen(
-                                      profile: UserProfile(
-                                          id: 'demo_manager',
-                                          email: '',
-                                          fullName: 'Demo Manager',
-                                          role: UserRole.manager))),
-                              _demoButton(context, 'Admin', width,
-                                  const AdminDashboard()),
-                            ]);
-                      }),
                     ],
                   ),
                 ),
@@ -442,25 +380,6 @@ class HomeScreen extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  Widget _demoButton(
-      BuildContext context, String label, double width, Widget screen) {
-    return SizedBox(
-        width: width,
-        child: OutlinedButton(
-          onPressed: () => Navigator.push(
-              context, MaterialPageRoute(builder: (context) => screen)),
-          style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.white70,
-              side: BorderSide(color: Colors.white.withValues(alpha: 0.15)),
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 12),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10))),
-          child: Text(label,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 11)),
-        ));
   }
 
   void _showHowItWorksDialog(BuildContext context) {

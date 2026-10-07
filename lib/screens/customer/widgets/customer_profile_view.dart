@@ -6,7 +6,6 @@ import '../../../shared/theme/app_colors.dart';
 import '../../../shared/widgets/user_avatar.dart';
 import '../../../features/profile/presentation/screens/edit_profile_screen.dart';
 import '../../home_screen.dart';
-import '../../sign_in_screen.dart';
 import '../../receptionist/receptionist_dashboard_screen.dart';
 import '../../../features/manager/presentation/screens/manager_dashboard_screen.dart';
 import '../../admin/admin_dashboard_screen.dart';
@@ -386,7 +385,7 @@ class _CustomerProfileViewState extends State<CustomerProfileView> {
               if (!mounted) return;
               Navigator.pushAndRemoveUntil(
                 context,
-                MaterialPageRoute(builder: (context) => const SignInScreen()),
+                MaterialPageRoute(builder: (context) => const HomeScreen()),
                 (route) => false,
               );
             },
