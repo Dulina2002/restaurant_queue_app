@@ -50,7 +50,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         _phoneController.text = currentProf.phoneNumber ?? '';
         _currentAvatarUrl = currentProf.avatarUrl;
       } else {
-        _nameController.text = _authService.currentUser?.displayName ?? 'Customer';
+        _nameController.text = (_authService.currentUser?.userMetadata?['full_name'] as String?) ?? 'Customer';
         _emailController.text = _authService.currentUser?.email ?? 'customer@dinequeue.com';
       }
     }
@@ -383,7 +383,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   void _handleSave() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final userId = widget.profile?.id ?? _authService.currentUser?.uid ?? 'user_profile_id';
+    final userId = widget.profile?.id ?? _authService.currentUser?.id ?? 'user_profile_id';
 
     setState(() => _isSaving = true);
 
@@ -400,7 +400,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         avatarUrlToSave = null;
       }
 
-      // 2. Update profile in Firestore, Supabase, and local session
+      // 2. Update profile in Supabase and local session
       final updatedProf = await _authService.updateProfile(
         userId: userId,
         fullName: _nameController.text.trim(),
