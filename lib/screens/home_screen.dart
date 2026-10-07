@@ -4,7 +4,9 @@ import 'how_it_works_screen.dart';
 
 import 'sign_in_screen.dart';
 
-import 'admin_dashboard.dart';
+import 'admin/admin_dashboard_screen.dart';
+import '../services/auth_service.dart';
+import '../models/user_role.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -337,13 +339,28 @@ class HomeScreen extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
-                  onPressed: () {
+                  onPressed: () async {
+                    final profile = await AuthService().getCurrentUserProfile();
+                    if (!context.mounted) return;
+                    if (profile == null || profile.role != UserRole.admin) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                            content: Text(
+                                'Sign in with an Admin account to open the dashboard.')),
+                      );
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const SignInScreen(),
+                          ));
+                      return;
+                    }
                     Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const AdminDashboard(),
-                      ),
-                    );
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              AdminDashboardScreen(profile: profile),
+                        ));
                   },
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.white,
