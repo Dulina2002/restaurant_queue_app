@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class RestaurantModel {
   final String id;
   final String name;
@@ -31,30 +29,29 @@ class RestaurantModel {
     this.createdAt,
   });
 
-  factory RestaurantModel.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
-    final data = doc.data() ?? {};
+  factory RestaurantModel.fromJson(Map<String, dynamic> json) {
     return RestaurantModel(
-      id: doc.id,
-      name: data['name'] as String? ?? '',
-      cuisine: data['cuisine'] as String? ?? 'General',
-      tag: data['tag'] as String? ?? '',
-      location: data['location'] as String? ?? '',
-      rating: (data['rating'] as num?)?.toDouble() ?? 4.5,
-      reviewsCount: (data['reviews_count'] as num?)?.toInt() ?? 0,
-      isActive: data['is_active'] as bool? ?? true,
-      isQueueAvailable: data['is_queue_available'] as bool? ?? true,
-      estWait: data['est_wait'] as String? ?? 'Direct Seating',
-      waitlistCount: (data['waitlist_count'] as num?)?.toInt() ?? 0,
-      imageUrl: data['image_url'] as String?,
-      createdAt: data['created_at'] != null
-          ? (data['created_at'] is Timestamp
-              ? (data['created_at'] as Timestamp).toDate()
-              : DateTime.tryParse(data['created_at'].toString()))
+      id: json['id'] as String? ?? '',
+      name: json['name'] as String? ?? '',
+      cuisine: json['cuisine'] as String? ?? 'General',
+      tag: json['tag'] as String? ?? '',
+      location: json['location'] as String? ?? '',
+      rating: (json['rating'] as num?)?.toDouble() ?? 4.5,
+      reviewsCount: (json['reviews_count'] as num?)?.toInt() ?? 0,
+      isActive: json['is_active'] as bool? ?? true,
+      isQueueAvailable: json['is_queue_available'] as bool? ?? true,
+      estWait: json['est_wait'] as String? ?? 'Direct Seating',
+      waitlistCount: (json['waitlist_count'] as num?)?.toInt() ?? 0,
+      imageUrl: json['image_url'] as String?,
+      createdAt: json['created_at'] != null
+          ? DateTime.tryParse(json['created_at'].toString())
           : null,
     );
   }
 
-  Map<String, dynamic> toFirestore() {
+  factory RestaurantModel.fromMap(Map<String, dynamic> map) => RestaurantModel.fromJson(map);
+
+  Map<String, dynamic> toJson() {
     return {
       'id': id,
       'name': name,
@@ -68,9 +65,11 @@ class RestaurantModel {
       'est_wait': estWait,
       'waitlist_count': waitlistCount,
       if (imageUrl != null) 'image_url': imageUrl,
-      'created_at': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
+      if (createdAt != null) 'created_at': createdAt!.toIso8601String(),
     };
   }
+
+  Map<String, dynamic> toMap() => toJson();
 
   RestaurantModel copyWith({
     String? id,

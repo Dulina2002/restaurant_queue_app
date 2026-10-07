@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class ReservationModel {
   final String id;
   final String restaurantId;
@@ -29,26 +27,42 @@ class ReservationModel {
     this.createdAt,
   });
 
-  factory ReservationModel.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
-    final data = doc.data() ?? {};
+  factory ReservationModel.fromJson(Map<String, dynamic> json) {
     return ReservationModel(
-      id: doc.id,
-      restaurantId: data['restaurant_id'] as String? ?? '',
-      restaurantName: data['restaurant_name'] as String? ?? 'Restaurant',
-      userId: data['user_id'] as String? ?? '',
-      guestName: data['guest_name'] as String? ?? 'Guest',
-      reservationCode: data['reservation_code'] as String? ?? '#RSV1000',
-      date: data['date'] as String? ?? '',
-      time: data['time'] as String? ?? '',
-      partySize: (data['party_size'] as num?)?.toInt() ?? 2,
-      status: data['status'] as String? ?? 'confirmed',
-      specialNotes: data['special_notes'] as String?,
-      createdAt: data['created_at'] != null
-          ? (data['created_at'] is Timestamp
-              ? (data['created_at'] as Timestamp).toDate()
-              : DateTime.tryParse(data['created_at'].toString()))
-          : null,
+      id: json['id'] as String? ?? '',
+      restaurantId: json['restaurant_id'] as String? ?? '',
+      restaurantName: json['restaurant_name'] as String? ?? 'Restaurant',
+      userId: json['user_id'] as String? ?? '',
+      guestName: json['guest_name'] as String? ?? 'Guest',
+      reservationCode: json['reservation_code'] as String? ?? '#RSV1000',
+      date: json['date'] as String? ?? '',
+      time: json['time'] as String? ?? '',
+      partySize: (json['party_size'] as num?)?.toInt() ?? 2,
+      status: json['status'] as String? ?? 'confirmed',
+      specialNotes: json['special_notes'] as String?,
+      createdAt: json['created_at'] != null ? DateTime.tryParse(json['created_at'].toString()) : null,
     );
+  }
+
+  factory ReservationModel.fromMap(Map<String, dynamic> map) => ReservationModel.fromJson(map);
+
+  Map<String, dynamic> toMap() => toJson();
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'restaurant_id': restaurantId,
+      'restaurant_name': restaurantName,
+      'user_id': userId,
+      'guest_name': guestName,
+      'reservation_code': reservationCode,
+      'date': date,
+      'time': time,
+      'party_size': partySize,
+      'status': status,
+      if (specialNotes != null) 'special_notes': specialNotes,
+      'created_at': createdAt?.toIso8601String(),
+    };
   }
 
   ReservationModel copyWith({
@@ -78,57 +92,6 @@ class ReservationModel {
       status: status ?? this.status,
       specialNotes: specialNotes ?? this.specialNotes,
       createdAt: createdAt ?? this.createdAt,
-    );
-  }
-
-  Map<String, dynamic> toFirestore() {
-    return {
-      'id': id,
-      'restaurant_id': restaurantId,
-      'restaurant_name': restaurantName,
-      'user_id': userId,
-      'guest_name': guestName,
-      'reservation_code': reservationCode,
-      'date': date,
-      'time': time,
-      'party_size': partySize,
-      'status': status,
-      if (specialNotes != null) 'special_notes': specialNotes,
-      'created_at': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
-    };
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'restaurant_id': restaurantId,
-      'restaurant_name': restaurantName,
-      'user_id': userId,
-      'guest_name': guestName,
-      'reservation_code': reservationCode,
-      'date': date,
-      'time': time,
-      'party_size': partySize,
-      'status': status,
-      if (specialNotes != null) 'special_notes': specialNotes,
-      'created_at': createdAt?.toIso8601String(),
-    };
-  }
-
-  factory ReservationModel.fromJson(Map<String, dynamic> json) {
-    return ReservationModel(
-      id: json['id'] as String? ?? '',
-      restaurantId: json['restaurant_id'] as String? ?? '',
-      restaurantName: json['restaurant_name'] as String? ?? 'Restaurant',
-      userId: json['user_id'] as String? ?? '',
-      guestName: json['guest_name'] as String? ?? 'Guest',
-      reservationCode: json['reservation_code'] as String? ?? '#RSV1000',
-      date: json['date'] as String? ?? '',
-      time: json['time'] as String? ?? '',
-      partySize: (json['party_size'] as num?)?.toInt() ?? 2,
-      status: json['status'] as String? ?? 'confirmed',
-      specialNotes: json['special_notes'] as String?,
-      createdAt: json['created_at'] != null ? DateTime.tryParse(json['created_at'].toString()) : null,
     );
   }
 }

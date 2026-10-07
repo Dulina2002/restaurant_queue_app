@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 enum TableStatus {
   occupied,
   reserved,
@@ -46,19 +44,20 @@ class PhysicalTable {
     required this.status,
   });
 
-  factory PhysicalTable.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
-    final data = doc.data() ?? {};
+  factory PhysicalTable.fromJson(Map<String, dynamic> json) {
     return PhysicalTable(
-      id: doc.id,
-      restaurantId: data['restaurant_id'] as String? ?? 'ocean_bistro',
-      name: data['name'] as String? ?? '',
-      seats: (data['seats'] as num?)?.toInt() ?? 2,
-      guestName: data['guest_name'] as String? ?? 'No Guest',
-      status: TableStatus.fromString(data['status'] as String?),
+      id: json['id'] as String? ?? '',
+      restaurantId: json['restaurant_id'] as String? ?? 'ocean_bistro',
+      name: json['name'] as String? ?? '',
+      seats: (json['seats'] as num?)?.toInt() ?? 2,
+      guestName: json['guest_name'] as String? ?? 'No Guest',
+      status: TableStatus.fromString(json['status'] as String?),
     );
   }
 
-  Map<String, dynamic> toFirestore() {
+  factory PhysicalTable.fromMap(Map<String, dynamic> map) => PhysicalTable.fromJson(map);
+
+  Map<String, dynamic> toJson() {
     return {
       'id': id,
       'restaurant_id': restaurantId,
@@ -66,9 +65,10 @@ class PhysicalTable {
       'seats': seats,
       'guest_name': guestName,
       'status': status.value,
-      'updated_at': FieldValue.serverTimestamp(),
     };
   }
+
+  Map<String, dynamic> toMap() => toJson();
 
   PhysicalTable copyWith({
     String? id,

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../../../core/utils/shared_mock_data.dart';
 import '../../../../shared/widgets/app_toast.dart';
 import '../../data/models/queue_entry_model.dart';
-import 'dart:math';
 
 class AddWalkInDialog extends StatefulWidget {
   const AddWalkInDialog({super.key});

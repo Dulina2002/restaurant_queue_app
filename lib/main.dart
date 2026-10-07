@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'firebase_options.dart';
 import 'services/firestore_service.dart';
 import 'screens/auth_gate.dart';
 
@@ -29,17 +27,9 @@ Future<void> main() async {
     }
   }
 
-  try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-  } catch (e) {
-    debugPrint('Firebase initialization notice: $e');
-  }
-
   runApp(const RestaurantQueueApp());
 
-  // Seed sample dataset into Firestore asynchronously in background
+  // Seed sample dataset asynchronously in background
   try {
     FirestoreService().seedInitialDataIfEmpty();
   } catch (_) {}
