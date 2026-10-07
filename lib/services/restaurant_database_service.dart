@@ -133,13 +133,16 @@ class RestaurantDatabaseService {
   // --- 2. LIVE QUEUE ---
   // ==========================================
 
-  Stream<List<QueueEntryModel>> streamQueue(String restaurantId) {
-    Future.microtask(() => _queueStreamController.add(
-      _fallbackQueue.where((q) => q.status != QueueStatus.seated && q.status != QueueStatus.cancelled).toList(),
-    ));
-    return _queueStreamController.stream.map(
-      (list) => list.where((q) => (q.restaurantId == restaurantId || restaurantId == 'ocean_bistro') && q.status != QueueStatus.seated && q.status != QueueStatus.cancelled).toList(),
-    );
+  Stream<List<QueueEntryModel>> streamQueue(String restaurantId) async* {
+    List<QueueEntryModel> filter(List<QueueEntryModel> list) {
+      return list.where((q) => (q.restaurantId == restaurantId || restaurantId == 'ocean_bistro') && q.status != QueueStatus.seated && q.status != QueueStatus.cancelled).toList();
+    }
+
+    yield filter(_fallbackQueue);
+
+    await for (final list in _queueStreamController.stream) {
+      yield filter(list);
+    }
   }
 
   Stream<List<QueueEntryModel>> streamActiveQueue({String restaurantId = 'ocean_bistro'}) {
@@ -150,11 +153,16 @@ class RestaurantDatabaseService {
     return _supabaseService.streamCustomerActiveQueue(userId);
   }
 
-  Stream<List<QueueEntryModel>> streamAllQueueEntries({String restaurantId = 'ocean_bistro'}) {
-    Future.microtask(() => _queueStreamController.add(List.from(_fallbackQueue)));
-    return _queueStreamController.stream.map(
-      (list) => list.where((q) => q.restaurantId == restaurantId || restaurantId == 'ocean_bistro').toList(),
-    );
+  Stream<List<QueueEntryModel>> streamAllQueueEntries({String restaurantId = 'ocean_bistro'}) async* {
+    List<QueueEntryModel> filter(List<QueueEntryModel> list) {
+      return list.where((q) => q.restaurantId == restaurantId || restaurantId == 'ocean_bistro').toList();
+    }
+
+    yield filter(_fallbackQueue);
+
+    await for (final list in _queueStreamController.stream) {
+      yield filter(list);
+    }
   }
 
   Future<QueueEntryModel> joinQueue({
@@ -224,8 +232,16 @@ class RestaurantDatabaseService {
   // --- 3. TABLES MANAGEMENT ---
   // ==========================================
 
-  Stream<List<PhysicalTable>> streamTables({String restaurantId = 'ocean_bistro'}) {
-    return _supabaseService.streamTables(restaurantId: restaurantId);
+  Stream<List<PhysicalTable>> streamTables({String restaurantId = 'ocean_bistro'}) async* {
+    List<PhysicalTable> filter(List<PhysicalTable> list) {
+      return list.where((t) => t.restaurantId == restaurantId || restaurantId == 'ocean_bistro').toList();
+    }
+
+    yield filter(_fallbackTables);
+
+    await for (final list in _tablesStreamController.stream) {
+      yield filter(list);
+    }
   }
 
   Future<List<PhysicalTable>> getTables({String restaurantId = 'ocean_bistro'}) async {
@@ -316,8 +332,19 @@ class RestaurantDatabaseService {
   // --- 4. LIVE MENU DISHES ---
   // ==========================================
 
-  Stream<List<LiveMenuDish>> streamLiveMenu({String restaurantId = 'ocean_bistro'}) {
-    return _supabaseService.streamMenuDishes(restaurantId: restaurantId);
+  Stream<List<LiveMenuDish>> streamLiveMenu({String restaurantId = 'All'}) async* {
+    List<LiveMenuDish> filter(List<LiveMenuDish> list) {
+      if (restaurantId == 'All' || restaurantId.isEmpty) {
+        return list;
+      }
+      return list.where((d) => d.restaurantId == restaurantId || d.restaurant == restaurantId).toList();
+    }
+
+    yield filter(_fallbackDishes);
+
+    await for (final list in _dishesStreamController.stream) {
+      yield filter(list);
+    }
   }
 
   Future<LiveMenuDish> addMenuItem(LiveMenuDish dish) async {

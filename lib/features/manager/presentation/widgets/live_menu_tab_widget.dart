@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_toast.dart';
 import '../../../../services/restaurant_database_service.dart';
@@ -530,7 +531,10 @@ class _LiveMenuTabWidgetState extends State<LiveMenuTabWidget> {
                     // Price (Rs.) Field
                     TextField(
                       controller: priceController,
-                      keyboardType: TextInputType.number,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+                      ],
                       decoration: InputDecoration(
                         labelText: 'Price (Rs.)',
                         hintText: '2500',
@@ -571,32 +575,49 @@ class _LiveMenuTabWidgetState extends State<LiveMenuTabWidget> {
                         ElevatedButton(
                           onPressed: () {
                             final name = nameController.text.trim();
-                            final price = double.tryParse(priceController.text.trim()) ?? 0;
+                            final priceText = priceController.text.trim();
+                            final price = double.tryParse(priceText);
                             final desc = descController.text.trim();
 
-                            if (name.isNotEmpty && price > 0) {
-                              if (isEditing) {
-                                _editDish(dish.copyWith(
-                                  name: name,
-                                  restaurant: selectedRestaurant,
-                                  category: selectedCategory,
-                                  price: price,
-                                  description: desc,
-                                ));
-                              } else {
-                                _addDish(LiveMenuDish(
-                                  id: DateTime.now().millisecondsSinceEpoch.toString(),
-                                  restaurantId: 'ocean_bistro',
-                                  name: name,
-                                  restaurant: selectedRestaurant,
-                                  category: selectedCategory,
-                                  price: price,
-                                  description: desc,
-                                  isAvailable: true,
-                                ));
-                              }
-                              Navigator.pop(context);
+                            if (name.isEmpty) {
+                              AppToast.showError(
+                                context,
+                                'Please enter a dish name',
+                                title: 'Missing Information',
+                              );
+                              return;
                             }
+
+                            if (price == null || price <= 0) {
+                              AppToast.showError(
+                                context,
+                                'Please enter a valid numeric price (e.g. 1500)',
+                                title: 'Invalid Price',
+                              );
+                              return;
+                            }
+
+                            if (isEditing) {
+                              _editDish(dish.copyWith(
+                                name: name,
+                                restaurant: selectedRestaurant,
+                                category: selectedCategory,
+                                price: price,
+                                description: desc,
+                              ));
+                            } else {
+                              _addDish(LiveMenuDish(
+                                id: DateTime.now().millisecondsSinceEpoch.toString(),
+                                restaurantId: 'ocean_bistro',
+                                name: name,
+                                restaurant: selectedRestaurant,
+                                category: selectedCategory,
+                                price: price,
+                                description: desc,
+                                isAvailable: true,
+                              ));
+                            }
+                            Navigator.pop(context);
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primary,

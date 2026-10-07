@@ -609,12 +609,13 @@ class SupabaseService {
   }
 
   Stream<List<LiveMenuDish>> streamMenuDishes({String? restaurantId}) {
+    final showAll = restaurantId == null || restaurantId == 'All' || restaurantId.isEmpty;
     final client = _client;
     if (client == null) {
       return Stream.value(
-        restaurantId != null
-            ? LiveMenuDish.mockList().where((d) => d.restaurantId == restaurantId).toList()
-            : LiveMenuDish.mockList(),
+        showAll
+            ? LiveMenuDish.mockList()
+            : LiveMenuDish.mockList().where((d) => d.restaurantId == restaurantId || d.restaurant == restaurantId).toList(),
       );
     }
 
@@ -624,7 +625,7 @@ class SupabaseService {
           .stream(primaryKey: ['id'])
           .map((data) {
             final list = data
-                .where((row) => restaurantId == null || row['restaurant_id']?.toString() == restaurantId)
+                .where((row) => showAll || row['restaurant_id']?.toString() == restaurantId || row['restaurant']?.toString() == restaurantId)
                 .map((row) => LiveMenuDish(
                       id: row['id'].toString(),
                       restaurantId: row['restaurant_id']?.toString() ?? 'ocean_bistro',
@@ -637,18 +638,18 @@ class SupabaseService {
                     ))
                 .toList();
             return list.isEmpty
-                ? (restaurantId != null
-                    ? LiveMenuDish.mockList().where((d) => d.restaurantId == restaurantId).toList()
-                    : LiveMenuDish.mockList())
+                ? (showAll
+                    ? LiveMenuDish.mockList()
+                    : LiveMenuDish.mockList().where((d) => d.restaurantId == restaurantId || d.restaurant == restaurantId).toList())
                 : list;
           })
-          .handleError((_) => restaurantId != null
-              ? LiveMenuDish.mockList().where((d) => d.restaurantId == restaurantId).toList()
-              : LiveMenuDish.mockList());
+          .handleError((_) => showAll
+              ? LiveMenuDish.mockList()
+              : LiveMenuDish.mockList().where((d) => d.restaurantId == restaurantId || d.restaurant == restaurantId).toList());
     } catch (_) {
-      return Stream.value(restaurantId != null
-          ? LiveMenuDish.mockList().where((d) => d.restaurantId == restaurantId).toList()
-          : LiveMenuDish.mockList());
+      return Stream.value(showAll
+          ? LiveMenuDish.mockList()
+          : LiveMenuDish.mockList().where((d) => d.restaurantId == restaurantId || d.restaurant == restaurantId).toList());
     }
   }
 }
