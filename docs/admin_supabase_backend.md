@@ -2,6 +2,48 @@
 
 ## VERIFIED CURRENT STATE
 
+### Applied SCRUM-24 Admin security update (2026-10-08)
+
+The project owner confirmed these changes are already live, applied manually in
+the Supabase SQL Editor. The exact policy/helper definitions and a guarded,
+re-runnable SQL record are in
+[admin_supabase_security_applied.sql](admin_supabase_security_applied.sql).
+No SQL was executed as part of this documentation task.
+
+- **Profile creation:** `"Users can insert own profile."` now checks
+  `auth.uid() = id AND role = 'customer'`, scoped `TO public`. The signup UI may
+  still display privileged role options, but the database rejects non-customer
+  self-profile creation under the recorded policy set.
+- **Private authorization:** `admin_private.is_admin()` accepts no arguments,
+  checks only `auth.uid()` against `public.profiles.role = 'admin'`, uses
+  `SECURITY DEFINER` with an empty `search_path`, and is owned by `postgres`.
+  PUBLIC/anon execution is revoked; authenticated receives schema USAGE and
+  function EXECUTE. Keep this schema outside exposed API schemas and verify the
+  owner's profiles RLS bypass, including FORCE RLS considerations.
+- **Profile reads:** the separate permissive `"Admin read all profiles"` SELECT
+  policy calls the helper for authenticated users. The existing own-profile
+  SELECT policy remains intact. Admins can read all profiles; normal users retain
+  self-only reads, assuming no other policy grants broader access.
+- **Restaurant authorization:** `"Public manage restaurants"` was removed.
+  `"Admin manage restaurants"` is permissive FOR ALL TO authenticated, with the
+  helper in both USING and WITH CHECK. Existing public restaurant SELECT remains
+  unchanged. Admin dashboard restaurant CRUD now persists to Supabase and is
+  protected by this policy; price and phone remain session-only.
+
+These changes do not authorize client self-promotion or privileged account
+management. Audit other policies/grants and trusted role-provisioning paths to
+ensure they cannot bypass these checks. No Broadcast, System, or queue changes
+are included in this update.
+
+The sections below preserve the earlier baseline and future requirements. Where
+they describe self-only Admin reads, unrestricted restaurant mutations,
+session-only restaurant CRUD, no database functions, or pending Auth integration, the applied update
+above supersedes that historical state. The broad
+`admin_supabase_migration_draft.sql` remains a future draft, not the record of
+these applied changes; do not replay it to reproduce this update.
+
+### Historical baseline and remaining proposals
+
 The deployed database facts below were verified by the project owner in the
 Supabase Table Editor and supplied for this documentation update. No database
 migration or policy change is applied by this document.
