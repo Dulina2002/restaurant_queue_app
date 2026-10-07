@@ -7,6 +7,7 @@ import '../../shared/widgets/role_header_widget.dart';
 import '../../shared/widgets/role_bottom_nav_widget.dart';
 import 'floor_overview_screen.dart';
 import 'live_queue_screen.dart';
+import 'receptionist_profile_screen.dart';
 
 class ReservationSummaryScreen extends StatefulWidget {
   final UserProfile profile;
@@ -20,6 +21,53 @@ class ReservationSummaryScreen extends StatefulWidget {
 class _ReservationSummaryScreenState extends State<ReservationSummaryScreen> {
   final AuthService _authService = AuthService();
   bool _isSigningOut = false;
+  String _selectedTab = 'All';
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
+
+  final List<Map<String, String>> _mockReservations = [
+    {
+      'name': 'Ayesha Perera',
+      'time': '7:30 PM',
+      'guests': '4 Guests',
+      'table': 'Table 04',
+      'requirement': 'Req: Window seat facing the ocean, celebrating an anniversary.',
+      'status': 'Confirmed',
+    },
+    {
+      'name': 'Kamal Silva',
+      'time': '8:00 PM',
+      'guests': '2 Guests',
+      'table': 'Table 02',
+      'requirement': 'Req: Quiet corner table.',
+      'status': 'Completed',
+    },
+    {
+      'name': 'Nadeeshani Fernando',
+      'time': '7:00 PM',
+      'guests': '6 Guests',
+      'table': 'Table 06',
+      'requirement': 'Req: Tatami seating if possible.',
+      'status': 'Cancelled',
+    },
+    {
+      'name': 'John Doe',
+      'time': '8:30 PM',
+      'guests': '3 Guests',
+      'table': 'Table 08',
+      'requirement': 'Req: High chair needed.',
+      'status': 'Confirmed',
+    },
+  ];
+
+  List<Map<String, String>> get _filteredReservations {
+    return _mockReservations.where((res) {
+      final matchesTab = _selectedTab == 'All' || res['status'] == _selectedTab;
+      final matchesSearch = res['name']!.toLowerCase().contains(_searchQuery.toLowerCase()) || 
+                            res['table']!.toLowerCase().contains(_searchQuery.toLowerCase());
+      return matchesTab && matchesSearch;
+    }).toList();
+  }
 
   Future<void> _signOut() async {
     setState(() => _isSigningOut = true);
@@ -63,6 +111,12 @@ class _ReservationSummaryScreenState extends State<ReservationSummaryScreen> {
             const SizedBox(height: 20),
             
             TextField(
+              controller: _searchController,
+              onChanged: (value) {
+                setState(() {
+                  _searchQuery = value;
+                });
+              },
               decoration: InputDecoration(
                 hintText: 'Search guest name or reservation ID',
                 hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 14),
@@ -86,38 +140,31 @@ class _ReservationSummaryScreenState extends State<ReservationSummaryScreen> {
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
-                  _buildFilterChip('All', true),
+                  _buildFilterChip('All'),
                   const SizedBox(width: 12),
-                  _buildFilterChip('Confirmed', false),
+                  _buildFilterChip('Confirmed'),
                   const SizedBox(width: 12),
-                  _buildFilterChip('Completed', false),
+                  _buildFilterChip('Completed'),
                   const SizedBox(width: 12),
-                  _buildFilterChip('Cancelled', false),
+                  _buildFilterChip('Cancelled'),
                 ],
               ),
             ),
             const SizedBox(height: 24),
 
-            _buildReservationListCard(
-              name: 'Ayesha Perera',
-              time: '7:30 PM', guests: '4 Guests', table: 'Table 04',
-              requirement: 'Req: Window seat facing the ocean, celebrating an anniversary.',
-              status: 'Completed',
-            ),
-            const SizedBox(height: 16),
-            _buildReservationListCard(
-              name: 'Ayesha Perera',
-              time: '8:00 PM', guests: '2 Guests', table: 'Table 02',
-              requirement: 'Req: Quiet corner table.',
-              status: 'Completed',
-            ),
-            const SizedBox(height: 16),
-            _buildReservationListCard(
-              name: 'Ayesha Perera',
-              time: '7:00 PM', guests: '6 Guests', table: 'Table 06',
-              requirement: 'Req: Tatami seating if possible.',
-              status: 'Cancelled',
-            ),
+            ..._filteredReservations.map((res) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: _buildReservationListCard(
+                  name: res['name']!,
+                  time: res['time']!,
+                  guests: res['guests']!,
+                  table: res['table']!,
+                  requirement: res['requirement']!,
+                  status: res['status']!,
+                ),
+              );
+            }),
           ],
         ),
       ),
@@ -164,19 +211,27 @@ class _ReservationSummaryScreenState extends State<ReservationSummaryScreen> {
     );
   }
 
-  Widget _buildFilterChip(String label, bool isSelected) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      decoration: BoxDecoration(
-        color: isSelected ? const Color(0xFF143621) : Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: isSelected ? Colors.white : const Color(0xFF4B5563),
-          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-          fontSize: 14,
+  Widget _buildFilterChip(String label) {
+    final isSelected = _selectedTab == label;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedTab = label;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF143621) : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : const Color(0xFF4B5563),
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+            fontSize: 14,
+          ),
         ),
       ),
     );
@@ -247,3 +302,4 @@ class _ReservationSummaryScreenState extends State<ReservationSummaryScreen> {
     );
   }
 }
+
