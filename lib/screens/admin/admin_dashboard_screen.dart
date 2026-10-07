@@ -19,7 +19,6 @@ class AdminDashboardScreen extends StatefulWidget {
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   final AuthService _authService = AuthService();
-  final RestaurantDatabaseService _dbService = RestaurantDatabaseService();
   bool _isSigningOut = false;
   bool _loading = true;
   String _restaurantSource = 'Loading restaurants';

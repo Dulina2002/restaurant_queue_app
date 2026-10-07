@@ -6,7 +6,14 @@ import '../../../../services/restaurant_database_service.dart';
 import '../../data/models/live_menu_dish_model.dart';
 
 class LiveMenuTabWidget extends StatefulWidget {
-  const LiveMenuTabWidget({super.key});
+  final String? selectedRestaurant;
+  final List<String>? availableRestaurants;
+
+  const LiveMenuTabWidget({
+    super.key,
+    this.selectedRestaurant,
+    this.availableRestaurants,
+  });
 
   @override
   State<LiveMenuTabWidget> createState() => _LiveMenuTabWidgetState();
@@ -14,14 +21,54 @@ class LiveMenuTabWidget extends StatefulWidget {
 
 class _LiveMenuTabWidgetState extends State<LiveMenuTabWidget> {
   final RestaurantDatabaseService _firestoreService = RestaurantDatabaseService();
-  String _selectedRestaurantFilter = 'All';
+  late String _selectedRestaurantFilter;
+  String _selectedCategoryFilter = 'All Categories';
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  bool _isGridView = false;
+  bool? _availabilityFilter;
 
-  final List<String> _restaurantOptions = [
-    'All',
-    'Ocean Bistro',
-    'The Mango Tree',
-    'Nihonbashi',
+  final List<String> _categoryFilterOptions = [
+    'All Categories',
+    'Starters',
+    'Mains',
+    'Desserts',
+    'Beverages',
   ];
+
+  List<String> get _filterOptions {
+    final list = <String>['All'];
+    if (widget.selectedRestaurant != null && widget.selectedRestaurant != 'All') {
+      list.add(widget.selectedRestaurant!);
+    }
+    return list;
+  }
+
+  List<String> get _allAvailableRestaurants {
+    return widget.availableRestaurants ?? ['Ocean Bistro', 'The Mango Tree', 'Nihonbashi'];
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedRestaurantFilter = widget.selectedRestaurant ?? 'All';
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(LiveMenuTabWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.selectedRestaurant != null && widget.selectedRestaurant != oldWidget.selectedRestaurant) {
+      setState(() {
+        _selectedRestaurantFilter = widget.selectedRestaurant!;
+      });
+    }
+  }
 
   final List<String> _categoryOptions = [
     'Starters',
@@ -112,7 +159,27 @@ class _LiveMenuTabWidgetState extends State<LiveMenuTabWidget> {
     return StreamBuilder<List<LiveMenuDish>>(
       stream: _firestoreService.streamLiveMenu(restaurantId: _selectedRestaurantFilter),
       builder: (context, snapshot) {
-        final dishes = snapshot.data ?? LiveMenuDish.mockList();
+        final rawDishes = snapshot.data ?? LiveMenuDish.mockList();
+
+        final availCount = rawDishes.where((d) => d.isAvailable).length;
+        final outOfStockCount = rawDishes.where((d) => !d.isAvailable).length;
+
+        final dishes = rawDishes.where((d) {
+          if (_selectedCategoryFilter != 'All Categories' && d.category.toLowerCase() != _selectedCategoryFilter.toLowerCase()) {
+            return false;
+          }
+          if (_availabilityFilter != null && d.isAvailable != _availabilityFilter) {
+            return false;
+          }
+          if (_searchQuery.isNotEmpty) {
+            final q = _searchQuery.toLowerCase();
+            final nameMatch = d.name.toLowerCase().contains(q);
+            final descMatch = d.description.toLowerCase().contains(q);
+            final catMatch = d.category.toLowerCase().contains(q);
+            if (!nameMatch && !descMatch && !catMatch) return false;
+          }
+          return true;
+        }).toList();
         final isLoading = snapshot.connectionState == ConnectionState.waiting;
 
         return Column(
@@ -151,7 +218,7 @@ class _LiveMenuTabWidgetState extends State<LiveMenuTabWidget> {
             ),
             const SizedBox(height: 16),
 
-            // --- Header Section: Title & + Add Dish Button ---
+            // --- Header Section: Title, View Switcher & + Add Dish Button ---
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -180,62 +247,183 @@ class _LiveMenuTabWidgetState extends State<LiveMenuTabWidget> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                ElevatedButton.icon(
-                  onPressed: () => _showAddOrEditDishDialog(),
-                  icon: const Icon(Icons.add, size: 16, color: Colors.white),
-                  label: const Text(
-                    'Add Dish',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
+                Row(
+                  children: [
+                    // Layout Toggle Button (List vs Grid)
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: IconButton(
+                        tooltip: _isGridView ? 'Switch to List View' : 'Switch to Grid View',
+                        icon: Icon(
+                          _isGridView ? Icons.view_list_rounded : Icons.grid_view_rounded,
+                          size: 18,
+                          color: AppColors.primary,
+                        ),
+                        onPressed: () => setState(() => _isGridView = !_isGridView),
+                      ),
                     ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      onPressed: () => _showAddOrEditDishDialog(),
+                      icon: const Icon(Icons.add, size: 16, color: Colors.white),
+                      label: const Text(
+                        'Add Dish',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
               ],
             ),
             const SizedBox(height: 14),
 
-            // --- Restaurant Filter Pills ---
+            // --- Live Menu Summary KPI Counter Chips ---
+            Row(
+              children: [
+                _buildKpiChip(
+                  label: 'Available',
+                  count: availCount,
+                  color: const Color(0xFF10B981),
+                  isSelected: _availabilityFilter == true,
+                  onTap: () {
+                    setState(() {
+                      _availabilityFilter = _availabilityFilter == true ? null : true;
+                    });
+                  },
+                ),
+                const SizedBox(width: 8),
+                _buildKpiChip(
+                  label: "86'd Out of Stock",
+                  count: outOfStockCount,
+                  color: const Color(0xFFEF4444),
+                  isSelected: _availabilityFilter == false,
+                  onTap: () {
+                    setState(() {
+                      _availabilityFilter = _availabilityFilter == false ? null : false;
+                    });
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+
+            // --- Instant Search Bar ---
+            TextField(
+              controller: _searchController,
+              onChanged: (val) => setState(() => _searchQuery = val.trim()),
+              decoration: InputDecoration(
+                hintText: 'Search dish name, description, or category...',
+                hintStyle: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+                prefixIcon: const Icon(Icons.search, size: 18, color: AppColors.textSecondary),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, size: 16, color: AppColors.textMuted),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                      )
+                    : null,
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: AppColors.border),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: AppColors.border),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: AppColors.primary),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // --- Restaurant & Category Filter Pills ---
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
-                children: _restaurantOptions.map((rest) {
-                  final isSelected = _selectedRestaurantFilter == rest;
-                  return GestureDetector(
-                    onTap: () => setState(() => _selectedRestaurantFilter = rest),
-                    child: Container(
-                      margin: const EdgeInsets.only(right: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: isSelected ? AppColors.primary : Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        border: isSelected ? null : Border.all(color: AppColors.border),
-                      ),
-                      child: Text(
-                        rest,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                          color: isSelected ? Colors.white : AppColors.textSecondary,
+                children: [
+                  ..._filterOptions.map((rest) {
+                    final isSelected = _selectedRestaurantFilter == rest;
+                    return GestureDetector(
+                      onTap: () => setState(() => _selectedRestaurantFilter = rest),
+                      child: Container(
+                        margin: const EdgeInsets.only(right: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: isSelected ? AppColors.primary : Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          border: isSelected ? null : Border.all(color: AppColors.border),
+                        ),
+                        child: Text(
+                          rest,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                            color: isSelected ? Colors.white : AppColors.textSecondary,
+                          ),
                         ),
                       ),
-                    ),
-                  );
-                }).toList(),
+                    );
+                  }),
+                  Container(
+                    height: 20,
+                    width: 1,
+                    color: AppColors.border,
+                    margin: const EdgeInsets.symmetric(horizontal: 6),
+                  ),
+                  ..._categoryFilterOptions.map((cat) {
+                    final isSelected = _selectedCategoryFilter == cat;
+                    return GestureDetector(
+                      onTap: () => setState(() => _selectedCategoryFilter = cat),
+                      child: Container(
+                        margin: const EdgeInsets.only(right: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: isSelected ? const Color(0xFFE8F5E9) : Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: isSelected ? AppColors.primary : Colors.transparent,
+                          ),
+                        ),
+                        child: Text(
+                          cat,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                            color: isSelected ? AppColors.primary : AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                ],
               ),
             ),
             const SizedBox(height: 16),
 
-            // --- Dish Cards List ---
+            // --- Dish Cards (Grid or List View) ---
             if (isLoading)
               const Center(
                 child: Padding(
@@ -253,10 +441,26 @@ class _LiveMenuTabWidgetState extends State<LiveMenuTabWidget> {
                 ),
                 child: const Center(
                   child: Text(
-                    'No dishes found in menu. Tap + Add Dish to create one.',
+                    'No dishes found for this selection. Tap + Add Dish to create one.',
                     style: TextStyle(color: AppColors.textMuted, fontSize: 13),
                   ),
                 ),
+              )
+            else if (_isGridView)
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  mainAxisExtent: 160,
+                ),
+                itemCount: dishes.length,
+                itemBuilder: (context, index) {
+                  final dish = dishes[index];
+                  return _buildGridDishCard(dish);
+                },
               )
             else
               ListView.separated(
@@ -272,6 +476,154 @@ class _LiveMenuTabWidgetState extends State<LiveMenuTabWidget> {
           ],
         );
       },
+    );
+  }
+
+  Widget _buildKpiChip({
+    required String label,
+    required int count,
+    required Color color,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? color.withValues(alpha: 0.15) : Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? color : AppColors.border,
+            width: isSelected ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 7,
+              height: 7,
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 5),
+            Text(
+              '$label: $count',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                color: isSelected ? color : AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGridDishCard(LiveMenuDish dish) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: dish.isAvailable ? AppColors.border : const Color(0xFFEF4444).withValues(alpha: 0.35),
+          width: dish.isAvailable ? 1 : 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8F5E9),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  dish.category,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+              _buildAvailabilityBadge(dish.isAvailable),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            dish.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          Text(
+            'Rs. ${dish.price.toStringAsFixed(0)}',
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: AppColors.primary,
+            ),
+          ),
+          Text(
+            dish.description,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 10,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Transform.scale(
+                scale: 0.7,
+                child: Switch(
+                  value: dish.isAvailable,
+                  activeColor: AppColors.primary,
+                  onChanged: (val) => _toggleAvailability(dish.id, val),
+                ),
+              ),
+              Row(
+                children: [
+                  GestureDetector(
+                    onTap: () => _showAddOrEditDishDialog(dish: dish),
+                    child: const Icon(Icons.edit_outlined, size: 16, color: AppColors.textMuted),
+                  ),
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: () => _deleteDish(dish.id),
+                    child: const Icon(Icons.delete_outline, size: 16, color: Colors.redAccent),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -454,7 +806,7 @@ class _LiveMenuTabWidgetState extends State<LiveMenuTabWidget> {
                     ),
                     const SizedBox(height: 8),
                     Row(
-                      children: _restaurantOptions.where((r) => r != 'All').map((rest) {
+                      children: _allAvailableRestaurants.map((rest) {
                         final isSel = selectedRestaurant == rest;
                         return GestureDetector(
                           onTap: () => setSheetState(() => selectedRestaurant = rest),
