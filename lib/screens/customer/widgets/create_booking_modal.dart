@@ -200,7 +200,18 @@ class _CreateBookingModalState extends State<CreateBookingModal> {
               StreamBuilder<List<RestaurantModel>>(
                 stream: _firestoreService.streamActiveRestaurants(),
                 builder: (context, snapshot) {
-                  final restaurants = snapshot.data ?? [];
+                  final rawRestaurants = snapshot.data ?? [];
+                  final uniqueMap = <String, RestaurantModel>{};
+                  for (final r in rawRestaurants) {
+                    if (r.id.isNotEmpty) {
+                      uniqueMap[r.id] = r;
+                    }
+                  }
+                  final restaurants = uniqueMap.values.toList();
+                  final selectedId = restaurants.any((r) => r.id == _selectedRestaurant?.id)
+                      ? _selectedRestaurant?.id
+                      : null;
+
                   return Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14),
                     decoration: BoxDecoration(
@@ -209,17 +220,21 @@ class _CreateBookingModalState extends State<CreateBookingModal> {
                       border: Border.all(color: AppColors.border),
                     ),
                     child: DropdownButtonHideUnderline(
-                      child: DropdownButton<RestaurantModel>(
-                        value: _selectedRestaurant,
+                      child: DropdownButton<String>(
+                        value: selectedId,
                         hint: const Text('Choose a Restaurant', style: TextStyle(fontSize: 13, color: AppColors.textMuted)),
                         isExpanded: true,
                         items: restaurants.map((r) {
-                          return DropdownMenuItem<RestaurantModel>(
-                            value: r,
+                          return DropdownMenuItem<String>(
+                            value: r.id,
                             child: Text(r.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                           );
                         }).toList(),
-                        onChanged: (val) => setState(() => _selectedRestaurant = val),
+                        onChanged: (val) {
+                          if (val != null && uniqueMap.containsKey(val)) {
+                            setState(() => _selectedRestaurant = uniqueMap[val]);
+                          }
+                        },
                       ),
                     ),
                   );
