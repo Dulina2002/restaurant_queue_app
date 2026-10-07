@@ -65,12 +65,13 @@ class _SignInScreenState extends State<SignInScreen> {
       );
     } catch (error) {
       if (!mounted) return;
+      final cleanMessage = error.toString().replaceFirst('Exception: ', '');
       setState(() {
-        _errorMessage = error.toString();
+        _errorMessage = cleanMessage;
       });
       TopToast.showError(
         context,
-        message: _errorMessage ?? 'Authentication failed',
+        message: cleanMessage,
       );
     } finally {
       if (mounted) {
@@ -281,7 +282,7 @@ class _SignInScreenState extends State<SignInScreen> {
                             ),
                           ),
                   ),
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 28),
 
                   // Create Account Link
                   Row(
