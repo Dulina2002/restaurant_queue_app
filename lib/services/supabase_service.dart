@@ -578,10 +578,16 @@ class SupabaseService {
   // --- 4. TABLES & MENU STREAMING ---
   // ==========================================
 
-  Stream<List<PhysicalTable>> streamTables({String restaurantId = 'ocean_bistro'}) {
+  Stream<List<PhysicalTable>> streamTables({String? restaurantId}) {
+    final showAll = restaurantId == null || restaurantId == 'All' || restaurantId.isEmpty;
+    final targetId = _mapRestaurantToId(restaurantId ?? '');
     final client = _client;
     if (client == null) {
-      return Stream.value(PhysicalTable.mockList().where((t) => t.restaurantId == restaurantId).toList());
+      return Stream.value(
+        showAll
+            ? PhysicalTable.mockList()
+            : PhysicalTable.mockList().where((t) => t.restaurantId == restaurantId || t.restaurantId == targetId).toList(),
+      );
     }
 
     try {
@@ -590,22 +596,72 @@ class SupabaseService {
           .stream(primaryKey: ['id'])
           .map((data) {
             final list = data
-                .where((row) => row['restaurant_id']?.toString() == restaurantId)
+                .where((row) => showAll || row['restaurant_id']?.toString() == restaurantId || row['restaurant_id']?.toString() == targetId)
                 .map((row) => PhysicalTable(
                       id: row['id'].toString(),
-                      restaurantId: row['restaurant_id']?.toString() ?? restaurantId,
+                      restaurantId: row['restaurant_id']?.toString() ?? 'ocean_bistro',
                       name: row['name']?.toString() ?? '',
                       seats: (row['seats'] is num) ? (row['seats'] as num).toInt() : 2,
                       guestName: row['guest_name']?.toString() ?? 'No Guest',
                       status: TableStatus.fromString(row['status']?.toString()),
                     ))
                 .toList();
-            return list.isEmpty ? PhysicalTable.mockList().where((t) => t.restaurantId == restaurantId).toList() : list;
+            return list.isEmpty
+                ? (showAll
+                    ? PhysicalTable.mockList()
+                    : PhysicalTable.mockList().where((t) => t.restaurantId == restaurantId || t.restaurantId == targetId).toList())
+                : list;
           })
-          .handleError((_) => PhysicalTable.mockList().where((t) => t.restaurantId == restaurantId).toList());
+          .handleError((_) => showAll
+              ? PhysicalTable.mockList()
+              : PhysicalTable.mockList().where((t) => t.restaurantId == restaurantId || t.restaurantId == targetId).toList());
     } catch (_) {
-      return Stream.value(PhysicalTable.mockList().where((t) => t.restaurantId == restaurantId).toList());
+      return Stream.value(showAll
+          ? PhysicalTable.mockList()
+          : PhysicalTable.mockList().where((t) => t.restaurantId == restaurantId || t.restaurantId == targetId).toList());
     }
+  }
+
+  Future<PhysicalTable> addTable(PhysicalTable table) async {
+    final client = _client;
+    if (client != null) {
+      try {
+        await client.from('tables').upsert({
+          'id': table.id,
+          'restaurant_id': table.restaurantId,
+          'name': table.name,
+          'seats': table.seats,
+          'guest_name': table.guestName,
+          'status': table.status.value,
+        });
+      } catch (e) {
+        debugPrint('Supabase addTable error: $e');
+      }
+    }
+    return table;
+  }
+
+  Future<PhysicalTable> updateTable(PhysicalTable table) async {
+    return addTable(table);
+  }
+
+  Future<void> deleteTable(String id) async {
+    final client = _client;
+    if (client != null) {
+      try {
+        await client.from('tables').delete().eq('id', id);
+      } catch (e) {
+        debugPrint('Supabase deleteTable error: $e');
+      }
+    }
+  }
+
+  String _mapRestaurantToId(String name) {
+    final lower = name.toLowerCase();
+    if (lower.contains('ocean')) return 'ocean_bistro';
+    if (lower.contains('mango')) return 'mango_tree';
+    if (lower.contains('nihon')) return 'nihonbashi';
+    return name;
   }
 
   Stream<List<LiveMenuDish>> streamMenuDishes({String? restaurantId}) {

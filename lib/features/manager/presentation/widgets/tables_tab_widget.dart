@@ -13,6 +13,22 @@ class TablesTabWidget extends StatefulWidget {
 
 class _TablesTabWidgetState extends State<TablesTabWidget> {
   final RestaurantDatabaseService _firestoreService = RestaurantDatabaseService();
+  String _selectedRestaurantFilter = 'All';
+
+  final List<String> _restaurantOptions = [
+    'All',
+    'Ocean Bistro',
+    'The Mango Tree',
+    'Nihonbashi',
+  ];
+
+  String _mapRestaurantNameToId(String name) {
+    final lower = name.toLowerCase();
+    if (lower.contains('ocean')) return 'ocean_bistro';
+    if (lower.contains('mango')) return 'mango_tree';
+    if (lower.contains('nihon')) return 'nihonbashi';
+    return 'ocean_bistro';
+  }
 
   Future<void> _addNewTable(PhysicalTable newTable) async {
     try {
@@ -74,7 +90,7 @@ class _TablesTabWidgetState extends State<TablesTabWidget> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<PhysicalTable>>(
-      stream: _firestoreService.streamTables(restaurantId: 'ocean_bistro'),
+      stream: _firestoreService.streamTables(restaurantId: _selectedRestaurantFilter),
       builder: (context, snapshot) {
         final tables = snapshot.data ?? PhysicalTable.mockList();
         final isLoading = snapshot.connectionState == ConnectionState.waiting;
@@ -143,7 +159,38 @@ class _TablesTabWidgetState extends State<TablesTabWidget> {
                 ),
               ],
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 14),
+
+            // --- Restaurant Filter Pills ---
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: _restaurantOptions.map((rest) {
+                  final isSelected = _selectedRestaurantFilter == rest;
+                  return GestureDetector(
+                    onTap: () => setState(() => _selectedRestaurantFilter = rest),
+                    child: Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: isSelected ? AppColors.primary : Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: isSelected ? null : Border.all(color: AppColors.border),
+                      ),
+                      child: Text(
+                        rest,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                          color: isSelected ? Colors.white : AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+            const SizedBox(height: 16),
 
             // --- Table Cards List ---
             if (isLoading)
@@ -336,6 +383,14 @@ class _TablesTabWidgetState extends State<TablesTabWidget> {
     final guestController = TextEditingController(text: isEditing ? table.guestName : 'No Guest');
     TableStatus selectedStatus = isEditing ? table.status : TableStatus.available;
 
+    String selectedRestaurant = isEditing
+        ? (table.restaurantId == 'mango_tree'
+            ? 'The Mango Tree'
+            : table.restaurantId == 'nihonbashi'
+                ? 'Nihonbashi'
+                : 'Ocean Bistro')
+        : (_selectedRestaurantFilter == 'All' ? 'Ocean Bistro' : _selectedRestaurantFilter);
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -379,6 +434,43 @@ class _TablesTabWidgetState extends State<TablesTabWidget> {
                       ),
                     ),
                     const SizedBox(height: 16),
+
+                    // Restaurant Selector Pills
+                    const Text(
+                      'Restaurant',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: _restaurantOptions.where((r) => r != 'All').map((rest) {
+                        final isSel = selectedRestaurant == rest;
+                        return GestureDetector(
+                          onTap: () => setSheetState(() => selectedRestaurant = rest),
+                          child: Container(
+                            margin: const EdgeInsets.only(right: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: isSel ? AppColors.primary : Colors.grey.shade100,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Text(
+                              rest,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                                color: isSel ? Colors.white : AppColors.textSecondary,
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 16),
+
                     TextField(
                       controller: nameController,
                       decoration: InputDecoration(
@@ -492,6 +584,7 @@ class _TablesTabWidgetState extends State<TablesTabWidget> {
                           if (name.isNotEmpty) {
                             if (isEditing) {
                               _editTable(table.copyWith(
+                                restaurantId: _mapRestaurantNameToId(selectedRestaurant),
                                 name: name,
                                 seats: seats,
                                 guestName: guest,
@@ -500,7 +593,7 @@ class _TablesTabWidgetState extends State<TablesTabWidget> {
                             } else {
                               _addNewTable(PhysicalTable(
                                 id: DateTime.now().millisecondsSinceEpoch.toString(),
-                                restaurantId: 'ocean_bistro',
+                                restaurantId: _mapRestaurantNameToId(selectedRestaurant),
                                 name: name,
                                 seats: seats,
                                 guestName: guest,

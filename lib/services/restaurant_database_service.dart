@@ -232,9 +232,20 @@ class RestaurantDatabaseService {
   // --- 3. TABLES MANAGEMENT ---
   // ==========================================
 
-  Stream<List<PhysicalTable>> streamTables({String restaurantId = 'ocean_bistro'}) async* {
+  Stream<List<PhysicalTable>> streamTables({String restaurantId = 'All'}) async* {
     List<PhysicalTable> filter(List<PhysicalTable> list) {
-      return list.where((t) => t.restaurantId == restaurantId || restaurantId == 'ocean_bistro').toList();
+      if (restaurantId == 'All' || restaurantId.isEmpty) {
+        return list;
+      }
+      final lower = restaurantId.toLowerCase();
+      String targetId = lower.contains('ocean')
+          ? 'ocean_bistro'
+          : lower.contains('mango')
+              ? 'mango_tree'
+              : lower.contains('nihon')
+                  ? 'nihonbashi'
+                  : restaurantId;
+      return list.where((t) => t.restaurantId == restaurantId || t.restaurantId == targetId).toList();
     }
 
     yield filter(_fallbackTables);
@@ -249,9 +260,15 @@ class RestaurantDatabaseService {
   }
 
   Future<PhysicalTable> addTable(PhysicalTable table) async {
-    final newTable = table.copyWith(id: 'tbl_${DateTime.now().millisecondsSinceEpoch}');
-    _fallbackTables.add(newTable);
+    final newTable = table.copyWith(id: table.id.isEmpty ? 'tbl_${DateTime.now().millisecondsSinceEpoch}' : table.id);
+    final idx = _fallbackTables.indexWhere((t) => t.id == newTable.id);
+    if (idx != -1) {
+      _fallbackTables[idx] = newTable;
+    } else {
+      _fallbackTables.add(newTable);
+    }
     _tablesStreamController.add(List.from(_fallbackTables));
+    await _supabaseService.addTable(newTable);
     return newTable;
   }
 
@@ -261,12 +278,14 @@ class RestaurantDatabaseService {
       _fallbackTables[idx] = table;
       _tablesStreamController.add(List.from(_fallbackTables));
     }
+    await _supabaseService.updateTable(table);
     return table;
   }
 
   Future<void> deleteTable(String id) async {
     _fallbackTables.removeWhere((t) => t.id == id);
     _tablesStreamController.add(List.from(_fallbackTables));
+    await _supabaseService.deleteTable(id);
   }
 
   Future<void> updateTableStatus(String tableId, TableStatus status) async {

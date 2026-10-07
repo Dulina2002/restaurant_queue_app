@@ -122,6 +122,38 @@ class PhysicalTable {
         guestName: 'No Guest',
         status: TableStatus.available,
       ),
+      const PhysicalTable(
+        id: '5',
+        restaurantId: 'mango_tree',
+        name: 'Garden Table A1',
+        seats: 6,
+        guestName: 'Perera Family',
+        status: TableStatus.occupied,
+      ),
+      const PhysicalTable(
+        id: '6',
+        restaurantId: 'mango_tree',
+        name: 'Garden Table A2',
+        seats: 4,
+        guestName: 'No Guest',
+        status: TableStatus.available,
+      ),
+      const PhysicalTable(
+        id: '7',
+        restaurantId: 'nihonbashi',
+        name: 'Sushi Bar 01',
+        seats: 2,
+        guestName: 'Kenji Sato',
+        status: TableStatus.reserved,
+      ),
+      const PhysicalTable(
+        id: '8',
+        restaurantId: 'nihonbashi',
+        name: 'Tatami Room 1',
+        seats: 8,
+        guestName: 'VIP Group',
+        status: TableStatus.occupied,
+      ),
     ];
   }
 }
