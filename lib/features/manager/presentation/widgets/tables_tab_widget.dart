@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/widgets/app_toast.dart';
 import '../../../../services/firestore_service.dart';
 import '../../data/models/physical_table_model.dart';
 
@@ -17,13 +18,17 @@ class _TablesTabWidgetState extends State<TablesTabWidget> {
     try {
       await _firestoreService.addTable(newTable);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Physical table added to Firestore')),
+      AppToast.showSuccess(
+        context,
+        'Physical table added to Firestore',
+        title: 'Table Added',
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error adding table: $e')),
+      AppToast.showError(
+        context,
+        'Error adding table: $e',
+        title: 'Error',
       );
     }
   }
@@ -32,13 +37,17 @@ class _TablesTabWidgetState extends State<TablesTabWidget> {
     try {
       await _firestoreService.updateTable(updatedTable);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Physical table updated in Firestore')),
+      AppToast.showSuccess(
+        context,
+        'Physical table updated in Firestore',
+        title: 'Table Updated',
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error updating table: $e')),
+      AppToast.showError(
+        context,
+        'Error updating table: $e',
+        title: 'Error',
       );
     }
   }
@@ -47,13 +56,17 @@ class _TablesTabWidgetState extends State<TablesTabWidget> {
     try {
       await _firestoreService.deleteTable(id);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Table removed from Firestore')),
+      AppToast.showSuccess(
+        context,
+        'Table removed from Firestore',
+        title: 'Table Removed',
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error deleting table: $e')),
+      AppToast.showError(
+        context,
+        'Error deleting table: $e',
+        title: 'Error',
       );
     }
   }

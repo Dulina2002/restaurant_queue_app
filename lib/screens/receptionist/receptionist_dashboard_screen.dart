@@ -7,10 +7,10 @@ import 'floor_overview_screen.dart';
 import 'live_queue_screen.dart';
 import 'receptionist_profile_screen.dart';
 import '../../features/receptionist/presentation/widgets/add_walk_in_dialog.dart';
-import '../../features/receptionist/presentation/widgets/add_walk_in_dialog.dart';
 import '../../shared/widgets/role_header_widget.dart';
 import '../../shared/widgets/role_bottom_nav_widget.dart';
 import '../../shared/widgets/top_toast.dart';
+import '../../shared/widgets/app_toast.dart';
 
 class ReceptionistDashboardScreen extends StatefulWidget {
   final UserProfile profile;
@@ -23,9 +23,16 @@ class ReceptionistDashboardScreen extends StatefulWidget {
 
 class _ReceptionistDashboardScreenState extends State<ReceptionistDashboardScreen> {
   bool _isFirstArrivalCompleted = false;
+  UserProfile? _currentProfile;
 
   final AuthService _authService = AuthService();
   bool _isSigningOut = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentProfile = widget.profile;
+  }
 
   Future<void> _signOut() async {
     setState(() => _isSigningOut = true);
@@ -39,8 +46,10 @@ class _ReceptionistDashboardScreenState extends State<ReceptionistDashboardScree
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to sign out: $e')),
+      AppToast.showError(
+        context,
+        'Failed to sign out: $e',
+        title: 'Sign Out Error',
       );
     } finally {
       if (mounted) setState(() => _isSigningOut = false);
@@ -49,6 +58,8 @@ class _ReceptionistDashboardScreenState extends State<ReceptionistDashboardScree
 
   @override
   Widget build(BuildContext context) {
+    final activeProfile = _currentProfile ?? widget.profile;
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: RoleHeaderWidget(
@@ -56,6 +67,8 @@ class _ReceptionistDashboardScreenState extends State<ReceptionistDashboardScree
         roleColor: const Color(0xFFFF6B35),
         isSigningOut: _isSigningOut,
         onSignOut: _signOut,
+        profile: activeProfile,
+        onProfileUpdated: (updated) => setState(() => _currentProfile = updated),
       ),
       body: _buildDashboardBody(),
       bottomNavigationBar: RoleBottomNavWidget(

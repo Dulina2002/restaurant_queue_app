@@ -32,13 +32,6 @@ class AuthGate extends StatelessWidget {
     return StreamBuilder<User?>(
       stream: authService.onAuthStateChange,
       builder: (context, snapshot) {
-        final firebaseUser = snapshot.data ?? authService.currentUser;
-
-        // Default to HomeScreen as the primary landing page on app startup
-        if (firebaseUser == null) {
-          return const HomeScreen();
-        }
-
         return FutureBuilder<UserProfile?>(
           future: authService.getCurrentUserProfile(),
           builder: (context, profileSnapshot) {
@@ -46,13 +39,10 @@ class AuthGate extends StatelessWidget {
               return const HomeScreen();
             }
 
-            final userProfile = profileSnapshot.data ??
-                UserProfile(
-                  id: firebaseUser.uid,
-                  email: firebaseUser.email ?? '',
-                  fullName: firebaseUser.displayName ?? 'Diner Guest',
-                  role: UserRole.customer,
-                );
+            final userProfile = profileSnapshot.data;
+            if (userProfile == null) {
+              return const HomeScreen();
+            }
 
             return AuthGate.getScreenForRole(userProfile);
           },

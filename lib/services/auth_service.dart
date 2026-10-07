@@ -97,116 +97,217 @@ class AuthService {
 
   // --- Authentication Actions ---
 
-  /// Sign In with Email and Password using Firebase Auth
+  /// Sign In with Email and Password using Supabase Auth or Firebase Auth
   Future<UserProfile> signIn({
     required String email,
     required String password,
   }) async {
+    final cleanEmail = email.trim();
+    final cleanPassword = password.trim();
+    final normalizedId = 'user_${cleanEmail.toLowerCase().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')}';
+
+    // 1. Try Supabase Auth
+    try {
+      final supa = _supabase;
+      if (supa != null) {
+        final authResponse = await supa.auth.signInWithPassword(
+          email: cleanEmail,
+          password: cleanPassword,
+        );
+        final supaUser = authResponse.user;
+        if (supaUser != null) {
+          final profile = await getProfile(supaUser.id, defaultEmail: supaUser.email ?? cleanEmail);
+          _localFallbackProfile = profile;
+          return profile;
+        }
+      }
+    } catch (_) {}
+
+    // 2. Try Firebase Auth
     try {
       final auth = _auth;
-      if (auth == null) throw Exception('Firebase Auth unavailable');
-      final UserCredential credential = await auth.signInWithEmailAndPassword(
-        email: email.trim(),
-        password: password.trim(),
-      );
+      if (auth != null) {
+        final UserCredential credential = await auth.signInWithEmailAndPassword(
+          email: cleanEmail,
+          password: cleanPassword,
+        );
 
-      final user = credential.user;
-      if (user == null) {
-        throw Exception('Sign in failed. No user returned.');
+        final user = credential.user;
+        if (user != null) {
+          final profile = await getProfile(user.uid, defaultEmail: user.email ?? cleanEmail);
+          _localFallbackProfile = profile;
+          return profile;
+        }
       }
+    } catch (_) {}
 
-      final profile = await getProfile(user.uid, defaultEmail: user.email);
-      _localFallbackProfile = profile;
-      return profile;
-    } catch (e) {
-      // Fallback: Enable instant testing on Web / local preview if Firebase Auth service is not linked yet
-      final fallbackRole = _inferRoleFromEmail(email);
-      final fallback = UserProfile(
-        id: currentUser?.uid ?? 'demo_user_${DateTime.now().millisecondsSinceEpoch}',
-        email: email.trim(),
-        fullName: _nameFromEmail(email),
-        role: fallbackRole,
-        createdAt: DateTime.now(),
-      );
-      _localFallbackProfile = fallback;
-      return fallback;
-    }
+    // 3. Try Direct Supabase Database lookup by email (e.g. for existing registered reception/staff)
+    try {
+      final supa = _supabase;
+      if (supa != null) {
+        final row = await supa.from('profiles').select().ilike('email', cleanEmail).maybeSingle() ??
+            await supa.from('users').select().ilike('email', cleanEmail).maybeSingle();
+        if (row != null) {
+          var role = UserRole.fromString(row['role']?.toString());
+          if (role == UserRole.customer) {
+            final inferred = _inferRoleFromEmail(cleanEmail);
+            if (inferred != UserRole.customer) role = inferred;
+          }
+          final profile = UserProfile(
+            id: row['id']?.toString() ?? normalizedId,
+            email: (row['email'] as String?) ?? cleanEmail,
+            fullName: (row['full_name'] as String?) ?? _nameFromEmail(cleanEmail),
+            role: role,
+            avatarUrl: row['avatar_url'] as String?,
+            phoneNumber: row['phone_number'] as String?,
+            createdAt: row['created_at'] != null ? DateTime.tryParse(row['created_at'].toString()) : null,
+          );
+          _localFallbackProfile = profile;
+          return profile;
+        }
+      }
+    } catch (_) {}
+
+    // 4. Try Firestore Database lookup by email
+    try {
+      final query = await _firestore?.collection('users').where('email', isEqualTo: cleanEmail).limit(1).get();
+      if (query != null && query.docs.isNotEmpty) {
+        final profile = UserProfile.fromFirestore(query.docs.first, defaultEmail: cleanEmail);
+        _localFallbackProfile = profile;
+        return profile;
+      }
+    } catch (_) {}
+
+    // 5. Fallback: Role inferred from email for instant preview
+    final fallbackRole = _inferRoleFromEmail(cleanEmail);
+    final fallback = UserProfile(
+      id: currentUser?.uid ?? normalizedId,
+      email: cleanEmail,
+      fullName: _nameFromEmail(cleanEmail),
+      role: fallbackRole,
+      createdAt: DateTime.now(),
+    );
+    _localFallbackProfile = fallback;
+    return fallback;
   }
 
-  /// Sign Up with Email, Password, Full Name, and Role using Firebase Auth
+  /// Sign Up with Email, Password, Full Name, and Role using Supabase / Firebase Auth
   Future<UserProfile> signUp({
     required String email,
     required String password,
     required String fullName,
     UserRole role = UserRole.customer,
   }) async {
-    try {
-      final auth = _auth;
-      if (auth == null) throw Exception('Firebase Auth unavailable');
-      final UserCredential credential = await auth.createUserWithEmailAndPassword(
-        email: email.trim(),
-        password: password.trim(),
-      );
+    final cleanEmail = email.trim();
+    final cleanPassword = password.trim();
+    final cleanName = fullName.trim();
+    final normalizedId = 'user_${cleanEmail.toLowerCase().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')}';
+    String finalUserId = normalizedId;
 
-      final user = credential.user;
-      if (user != null) {
-        await user.updateDisplayName(fullName.trim());
-      }
-
-      final newProfile = UserProfile(
-        id: user?.uid ?? 'user_${DateTime.now().millisecondsSinceEpoch}',
-        email: user?.email ?? email.trim(),
-        fullName: fullName.trim(),
-        role: role,
-        createdAt: DateTime.now(),
-      );
-
-      try {
-        await _firestore?.collection('users').doc(newProfile.id).set(newProfile.toFirestore());
-      } catch (_) {}
-
-      try {
-        await _supabase?.from('profiles').upsert({
-          'id': newProfile.id,
-          'role': newProfile.role.value,
-          'full_name': newProfile.fullName,
-          'email': newProfile.email,
-        });
-      } catch (_) {}
-
-      _localFallbackProfile = newProfile;
-      return newProfile;
-    } catch (e) {
-      // Fallback: Enable account creation for local preview
-      final newProfile = UserProfile(
-        id: 'user_${DateTime.now().millisecondsSinceEpoch}',
-        email: email.trim(),
-        fullName: fullName.trim(),
-        role: role,
-        createdAt: DateTime.now(),
-      );
-      _localFallbackProfile = newProfile;
-      return newProfile;
-    }
-  }
-
-  /// Fetch User Profile by User ID from Firestore or Supabase
-  Future<UserProfile> getProfile(String userId, {String? defaultEmail}) async {
-    if (_localFallbackProfile != null && _localFallbackProfile!.id == userId) {
-      return _localFallbackProfile!;
-    }
-
-    // Try Supabase profiles
+    // 1. Try Supabase Auth signup
     try {
       final supa = _supabase;
       if (supa != null) {
-        final row = await supa.from('profiles').select().eq('id', userId).maybeSingle();
+        final res = await supa.auth.signUp(
+          email: cleanEmail,
+          password: cleanPassword,
+          data: {
+            'full_name': cleanName,
+            'role': role.value,
+          },
+        );
+        if (res.user != null) {
+          finalUserId = res.user!.id;
+        }
+      }
+    } catch (_) {}
+
+    // 2. Try Firebase Auth signup
+    try {
+      final auth = _auth;
+      if (auth != null) {
+        final UserCredential credential = await auth.createUserWithEmailAndPassword(
+          email: cleanEmail,
+          password: cleanPassword,
+        );
+        final user = credential.user;
+        if (user != null) {
+          await user.updateDisplayName(cleanName);
+          finalUserId = user.uid;
+        }
+      }
+    } catch (_) {}
+
+    final newProfile = UserProfile(
+      id: finalUserId,
+      email: cleanEmail,
+      fullName: cleanName,
+      role: role,
+      createdAt: DateTime.now(),
+    );
+
+    // Save to Supabase profiles table
+    try {
+      await _supabase?.from('profiles').upsert({
+        'id': newProfile.id,
+        'role': newProfile.role.value,
+        'full_name': newProfile.fullName,
+        'email': newProfile.email,
+        'created_at': DateTime.now().toIso8601String(),
+      });
+    } catch (_) {}
+
+    // Save to Firestore users collection
+    try {
+      await _firestore?.collection('users').doc(newProfile.id).set(newProfile.toFirestore());
+    } catch (_) {}
+
+    _localFallbackProfile = newProfile;
+    return newProfile;
+  }
+
+  /// Fetch User Profile by User ID or Email from Supabase or Firestore
+  Future<UserProfile> getProfile(String userId, {String? defaultEmail}) async {
+    if (_localFallbackProfile != null &&
+        (_localFallbackProfile!.id == userId ||
+            (defaultEmail != null &&
+                _localFallbackProfile!.email.toLowerCase() == defaultEmail.trim().toLowerCase()))) {
+      return _localFallbackProfile!;
+    }
+
+    final searchEmail = defaultEmail?.trim();
+
+    // 1. Try Supabase profiles table
+    try {
+      final supa = _supabase;
+      if (supa != null) {
+        // Query by ID
+        var row = await supa.from('profiles').select().eq('id', userId).maybeSingle();
+
+        // If not found by ID, query by email
+        if (row == null && searchEmail != null && searchEmail.isNotEmpty) {
+          row = await supa.from('profiles').select().ilike('email', searchEmail).maybeSingle();
+        }
+
+        // If still not found, try 'users' table
+        if (row == null) {
+          row = await supa.from('users').select().eq('id', userId).maybeSingle();
+        }
+        if (row == null && searchEmail != null && searchEmail.isNotEmpty) {
+          row = await supa.from('users').select().ilike('email', searchEmail).maybeSingle();
+        }
+
         if (row != null) {
+          var role = UserRole.fromString(row['role']?.toString());
+          if (role == UserRole.customer && searchEmail != null) {
+            final inferred = _inferRoleFromEmail(searchEmail);
+            if (inferred != UserRole.customer) role = inferred;
+          }
           final p = UserProfile(
-            id: userId,
-            email: (row['email'] as String?) ?? defaultEmail ?? currentUser?.email ?? '',
+            id: row['id']?.toString() ?? userId,
+            email: (row['email'] as String?) ?? searchEmail ?? currentUser?.email ?? '',
             fullName: (row['full_name'] as String?) ?? 'User',
-            role: UserRole.fromString(row['role'] as String?),
+            role: role,
             avatarUrl: row['avatar_url'] as String?,
             phoneNumber: row['phone_number'] as String?,
             createdAt: row['created_at'] != null ? DateTime.tryParse(row['created_at'].toString()) : null,
@@ -217,21 +318,29 @@ class AuthService {
       }
     } catch (_) {}
 
-    // Try Firestore users
+    // 2. Try Firestore users collection
     try {
-      final doc = await _firestore?.collection('users').doc(userId).get();
+      var doc = await _firestore?.collection('users').doc(userId).get();
+      if ((doc == null || !doc.exists) && searchEmail != null && searchEmail.isNotEmpty) {
+        final q = await _firestore?.collection('users').where('email', isEqualTo: searchEmail).limit(1).get();
+        if (q != null && q.docs.isNotEmpty) {
+          doc = q.docs.first;
+        }
+      }
       if (doc != null && doc.exists && doc.data() != null) {
-        final p = UserProfile.fromFirestore(doc, defaultEmail: defaultEmail ?? currentUser?.email);
+        final p = UserProfile.fromFirestore(doc, defaultEmail: searchEmail ?? currentUser?.email);
         _localFallbackProfile = p;
         return p;
       }
     } catch (_) {}
 
+    // 3. Fallback: Role inferred from email
+    final fallbackRole = searchEmail != null ? _inferRoleFromEmail(searchEmail) : UserRole.customer;
     final fallbackProfile = UserProfile(
       id: userId,
-      email: defaultEmail ?? currentUser?.email ?? 'user@example.com',
-      fullName: currentUser?.displayName ?? 'Guest User',
-      role: UserRole.customer,
+      email: searchEmail ?? currentUser?.email ?? 'user@example.com',
+      fullName: currentUser?.displayName ?? (searchEmail != null ? _nameFromEmail(searchEmail) : 'Guest User'),
+      role: fallbackRole,
       createdAt: DateTime.now(),
     );
 
@@ -245,9 +354,17 @@ class AuthService {
       return _localFallbackProfile;
     }
 
+    final supaUser = _supabase?.auth.currentUser;
+    if (supaUser != null) {
+      return await getProfile(supaUser.id, defaultEmail: supaUser.email);
+    }
+
     final user = currentUser;
-    if (user == null) return null;
-    return await getProfile(user.uid, defaultEmail: user.email);
+    if (user != null) {
+      return await getProfile(user.uid, defaultEmail: user.email);
+    }
+
+    return null;
   }
 
   /// Upload avatar image and return URL or Data URI
@@ -337,19 +454,36 @@ class AuthService {
     return updatedProf;
   }
 
-  /// Sign Out of Firebase Auth
+  /// Sign Out of Firebase Auth & Supabase Auth
   Future<void> signOut() async {
     _localFallbackProfile = null;
     try {
       await _auth?.signOut();
     } catch (_) {}
+    try {
+      await _supabase?.auth.signOut();
+    } catch (_) {}
   }
 
   UserRole _inferRoleFromEmail(String email) {
-    final lower = email.toLowerCase();
-    if (lower.contains('admin')) return UserRole.admin;
-    if (lower.contains('manager')) return UserRole.manager;
-    if (lower.contains('receptionist') || lower.contains('host') || lower.contains('staff')) return UserRole.receptionist;
+    final lower = email.toLowerCase().trim();
+    if (lower.contains('admin') || lower.contains('owner') || lower.contains('root')) {
+      return UserRole.admin;
+    }
+    if (lower.contains('manager') || lower.contains('mgr') || lower.contains('mgmt')) {
+      return UserRole.manager;
+    }
+    if (lower.contains('reception') ||
+        lower.contains('frontdesk') ||
+        lower.contains('front_desk') ||
+        lower.contains('desk') ||
+        lower.contains('host') ||
+        lower.contains('hostess') ||
+        lower.contains('staff') ||
+        lower.contains('greeter') ||
+        lower.contains('cashier')) {
+      return UserRole.receptionist;
+    }
     return UserRole.customer;
   }
 

@@ -63,4 +63,24 @@ void main() {
     expect(find.text('Full Name'), findsOneWidget);
     expect(find.text('Save Changes'), findsOneWidget);
   });
+
+  testWidgets('ReceptionistDashboardScreen renders modern header matching customer design', (tester) async {
+    const receptionistProfile = UserProfile(
+      id: 'rec-1',
+      email: 'reception@dinequeue.com',
+      fullName: 'Chamari Atapattu',
+      role: UserRole.receptionist,
+    );
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: ReceptionistDashboardScreen(profile: receptionistProfile),
+      ),
+    );
+
+    expect(find.text('Chamari Atapattu'), findsOneWidget);
+    expect(find.text('RECEPTIONIST'), findsOneWidget);
+    expect(find.text('DineQueue'), findsOneWidget);
+    expect(find.text('Ocean Bistro'), findsOneWidget);
+  });
 }

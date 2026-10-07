@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../../models/user_profile.dart';
 import '../../../../services/auth_service.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/widgets/app_toast.dart';
 import '../../../../shared/widgets/user_avatar.dart';
 
 class EditProfileScreen extends StatefulWidget {
@@ -82,24 +83,23 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     } catch (e) {
       if (!mounted) return;
       final isMissingPlugin = e.toString().contains('MissingPluginException');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            isMissingPlugin
-                ? 'Camera & Gallery native plugin requires a full app restart. Please restart "flutter run" in your terminal, or pick from our Preset Avatars below.'
-                : 'Could not access image: $e',
-          ),
-          backgroundColor: isMissingPlugin ? const Color(0xFFEA580C) : Colors.redAccent,
-          duration: const Duration(seconds: 4),
-          action: isMissingPlugin
-              ? SnackBarAction(
-                  label: 'Presets',
-                  textColor: Colors.white,
-                  onPressed: _showPresetAvatarsSheet,
-                )
-              : null,
-        ),
-      );
+      if (isMissingPlugin) {
+        AppToast.show(
+          context,
+          title: 'Native Camera Restart Required',
+          message: 'Camera & Gallery native plugin requires a full app restart. Pick from our Preset Avatars below in the meantime.',
+          type: ToastType.warning,
+          duration: const Duration(seconds: 5),
+          actionLabel: 'Presets',
+          onAction: _showPresetAvatarsSheet,
+        );
+      } else {
+        AppToast.showError(
+          context,
+          'Could not access image: $e',
+          title: 'Image Selection Error',
+        );
+      }
     }
   }
 
@@ -413,24 +413,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (!mounted) return;
       setState(() => _isSaving = false);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Row(
-            children: [
-              Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
-              SizedBox(width: 10),
-              Text(
-                'Profile updated successfully!',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-            ],
-          ),
-          backgroundColor: AppColors.primary,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          margin: const EdgeInsets.all(16),
-          duration: const Duration(seconds: 2),
-        ),
+      AppToast.showSuccess(
+        context,
+        'Your profile changes have been saved.',
+        title: 'Profile Updated',
       );
 
       Future.delayed(const Duration(milliseconds: 400), () {
@@ -441,11 +427,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _isSaving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to update profile: $e'),
-          backgroundColor: Colors.redAccent,
-        ),
+      AppToast.showError(
+        context,
+        'Failed to update profile: $e',
+        title: 'Update Error',
       );
     }
   }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../shared/widgets/app_toast.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -1601,8 +1602,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), duration: const Duration(seconds: 1)),
+    AppToast.showInfo(
+      context,
+      message,
+      duration: const Duration(seconds: 2),
     );
   }
 }
