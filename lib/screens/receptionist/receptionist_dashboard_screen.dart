@@ -6,6 +6,8 @@ import 'reservation_summary_screen.dart';
 import 'floor_overview_screen.dart';
 import 'live_queue_screen.dart';
 import 'receptionist_profile_screen.dart';
+import '../../features/receptionist/presentation/widgets/add_walk_in_dialog.dart';
+import '../../features/receptionist/presentation/widgets/add_walk_in_dialog.dart';
 import '../../shared/widgets/role_header_widget.dart';
 import '../../shared/widgets/role_bottom_nav_widget.dart';
 
@@ -142,7 +144,7 @@ class _ReceptionistDashboardScreenState extends State<ReceptionistDashboardScree
             children: [
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: () {},
+                  onPressed: () => AddWalkInDialog.show(context),
                   icon: const Icon(Icons.person_add_alt_1, color: Colors.white, size: 20),
                   label: const Text('+ Walk-In', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
                   style: ElevatedButton.styleFrom(
@@ -310,3 +312,4 @@ class _ReceptionistDashboardScreenState extends State<ReceptionistDashboardScree
     );
   }
 }
+
