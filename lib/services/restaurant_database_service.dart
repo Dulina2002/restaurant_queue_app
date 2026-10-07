@@ -348,9 +348,15 @@ class RestaurantDatabaseService {
   }
 
   Future<LiveMenuDish> addMenuItem(LiveMenuDish dish) async {
-    final newDish = dish.copyWith(id: 'dish_${DateTime.now().millisecondsSinceEpoch}');
-    _fallbackDishes.add(newDish);
+    final newDish = dish.copyWith(id: dish.id.isEmpty ? 'dish_${DateTime.now().millisecondsSinceEpoch}' : dish.id);
+    final idx = _fallbackDishes.indexWhere((d) => d.id == newDish.id);
+    if (idx != -1) {
+      _fallbackDishes[idx] = newDish;
+    } else {
+      _fallbackDishes.add(newDish);
+    }
     _dishesStreamController.add(List.from(_fallbackDishes));
+    await _supabaseService.addMenuItem(newDish);
     return newDish;
   }
 
@@ -362,6 +368,7 @@ class RestaurantDatabaseService {
       _fallbackDishes[idx] = dish;
       _dishesStreamController.add(List.from(_fallbackDishes));
     }
+    await _supabaseService.updateMenuItem(dish);
     return dish;
   }
 
@@ -370,6 +377,7 @@ class RestaurantDatabaseService {
   Future<void> deleteMenuItem(String id) async {
     _fallbackDishes.removeWhere((d) => d.id == id);
     _dishesStreamController.add(List.from(_fallbackDishes));
+    await _supabaseService.deleteMenuItem(id);
   }
 
   Future<void> deleteDish(String id) => deleteMenuItem(id);
@@ -380,6 +388,7 @@ class RestaurantDatabaseService {
       _fallbackDishes[idx] = _fallbackDishes[idx].copyWith(isAvailable: !currentStatus);
       _dishesStreamController.add(List.from(_fallbackDishes));
     }
+    await _supabaseService.toggleDishAvailability(id, currentStatus);
   }
 
   // ==========================================

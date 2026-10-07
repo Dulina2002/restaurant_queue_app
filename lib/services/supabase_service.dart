@@ -652,4 +652,53 @@ class SupabaseService {
           : LiveMenuDish.mockList().where((d) => d.restaurantId == restaurantId || d.restaurant == restaurantId).toList());
     }
   }
+
+  Future<LiveMenuDish> addMenuItem(LiveMenuDish dish) async {
+    final client = _client;
+    if (client != null) {
+      try {
+        await client.from('menu_items').upsert({
+          'id': dish.id,
+          'restaurant_id': dish.restaurantId,
+          'name': dish.name,
+          'restaurant': dish.restaurant,
+          'category': dish.category,
+          'price': dish.price,
+          'description': dish.description,
+          'is_available': dish.isAvailable,
+        });
+      } catch (e) {
+        debugPrint('Supabase addMenuItem error: $e');
+      }
+    }
+    return dish;
+  }
+
+  Future<LiveMenuDish> updateMenuItem(LiveMenuDish dish) async {
+    return addMenuItem(dish);
+  }
+
+  Future<void> deleteMenuItem(String id) async {
+    final client = _client;
+    if (client != null) {
+      try {
+        await client.from('menu_items').delete().eq('id', id);
+      } catch (e) {
+        debugPrint('Supabase deleteMenuItem error: $e');
+      }
+    }
+  }
+
+  Future<void> toggleDishAvailability(String id, bool currentStatus) async {
+    final client = _client;
+    if (client != null) {
+      try {
+        await client.from('menu_items').update({
+          'is_available': !currentStatus,
+        }).eq('id', id);
+      } catch (e) {
+        debugPrint('Supabase toggleDishAvailability error: $e');
+      }
+    }
+  }
 }
