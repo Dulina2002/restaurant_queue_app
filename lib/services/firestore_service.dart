@@ -256,9 +256,60 @@ class FirestoreService {
   Future<void> updateTableStatus(String tableId, TableStatus status) async {
     final idx = _fallbackTables.indexWhere((t) => t.id == tableId);
     if (idx != -1) {
-      _fallbackTables[idx] = _fallbackTables[idx].copyWith(status: status);
+      _fallbackTables[idx] = _fallbackTables[idx].copyWith(
+        status: status,
+        guestName: status == TableStatus.available ? 'No Guest' : _fallbackTables[idx].guestName,
+      );
       _tablesStreamController.add(List.from(_fallbackTables));
     }
+  }
+
+  /// Seat a specific guest at a physical table
+  Future<void> seatGuestAtTable({
+    required String tableId,
+    required String guestName,
+    String? queueId,
+  }) async {
+    final idx = _fallbackTables.indexWhere((t) => t.id == tableId);
+    if (idx != -1) {
+      _fallbackTables[idx] = _fallbackTables[idx].copyWith(
+        status: TableStatus.occupied,
+        guestName: guestName,
+      );
+      _tablesStreamController.add(List.from(_fallbackTables));
+    }
+
+    if (queueId != null && queueId.isNotEmpty) {
+      await updateQueueStatus(queueId, QueueStatus.seated);
+    }
+  }
+
+  /// Seat the next waiting queue party at the specified table
+  Future<QueueEntryModel?> seatNextQueueParty({required String tableId}) async {
+    final waitingParties = _fallbackQueue.where((q) => q.status == QueueStatus.waiting || q.status == QueueStatus.called).toList();
+    if (waitingParties.isEmpty) return null;
+
+    final partyToSeat = waitingParties.first;
+    await seatGuestAtTable(
+      tableId: tableId,
+      guestName: partyToSeat.guestName,
+      queueId: partyToSeat.id,
+    );
+    return partyToSeat;
+  }
+
+  /// Bulk turn specified tables to available
+  Future<void> bulkQuickTurnTables(List<String> tableIds) async {
+    for (final id in tableIds) {
+      final idx = _fallbackTables.indexWhere((t) => t.id == id);
+      if (idx != -1) {
+        _fallbackTables[idx] = _fallbackTables[idx].copyWith(
+          status: TableStatus.available,
+          guestName: 'No Guest',
+        );
+      }
+    }
+    _tablesStreamController.add(List.from(_fallbackTables));
   }
 
   // ==========================================
