@@ -283,6 +283,81 @@ class SupabaseService {
     }
   }
 
+  /// Stream full live queue for a restaurant (receptionist view)
+  Stream<List<QueueEntryModel>> streamRestaurantQueue({String restaurantId = 'ocean_bistro'}) {
+    final client = _client;
+    if (client == null) {
+      Future.microtask(() => _queueStreamController.add(List.from(_fallbackQueue)));
+      return _queueStreamController.stream.map((list) => list
+          .where((q) =>
+              (q.restaurantId == restaurantId || restaurantId == 'ocean_bistro') &&
+              q.status != QueueStatus.seated &&
+              q.status != QueueStatus.cancelled)
+          .toList());
+    }
+
+    try {
+      return client
+          .from('queue_entries')
+          .stream(primaryKey: ['id'])
+          .map((data) {
+            final list = data
+                .where((row) =>
+                    (row['restaurant_id']?.toString() == restaurantId || restaurantId == 'ocean_bistro') &&
+                    row['status'] != 'seated' &&
+                    row['status'] != 'cancelled')
+                .map((row) => QueueEntryModel(
+                      id: row['id'].toString(),
+                      restaurantId: row['restaurant_id']?.toString() ?? restaurantId,
+                      restaurantName: row['restaurant_name']?.toString() ?? 'Ocean Bistro',
+                      userId: row['user_id']?.toString(),
+                      guestName: row['guest_name']?.toString() ?? 'Guest',
+                      partySize: (row['party_size'] is num) ? (row['party_size'] as num).toInt() : 2,
+                      phoneNumber: row['phone_number']?.toString() ?? '',
+                      status: QueueStatus.fromString(row['status']?.toString()),
+                      queueNumber: row['queue_number']?.toString() ?? 'Q-101',
+                      position: (row['position'] is num) ? (row['position'] as num).toInt() : 1,
+                      estimatedWaitMinutes: (row['estimated_wait_minutes'] is num)
+                          ? (row['estimated_wait_minutes'] as num).toInt()
+                          : 5,
+                      createdAt: row['created_at'] != null ? DateTime.tryParse(row['created_at'].toString()) : null,
+                    ))
+                .toList();
+            return list.isEmpty
+                ? _fallbackQueue
+                    .where((q) => q.status != QueueStatus.seated && q.status != QueueStatus.cancelled)
+                    .toList()
+                : list;
+          })
+          .handleError((_) => _fallbackQueue
+              .where((q) => q.status != QueueStatus.seated && q.status != QueueStatus.cancelled)
+              .toList());
+    } catch (_) {
+      return Stream.value(_fallbackQueue
+          .where((q) => q.status != QueueStatus.seated && q.status != QueueStatus.cancelled)
+          .toList());
+    }
+  }
+
+  /// Add a walk-in guest record directly to Supabase queue_entries
+  Future<QueueEntryModel> addWalkIn({
+    required String guestName,
+    required int partySize,
+    String phoneNumber = '',
+    String restaurantId = 'ocean_bistro',
+    String restaurantName = 'Ocean Bistro',
+  }) async {
+    final walkInUid = 'walk_in_${DateTime.now().millisecondsSinceEpoch}';
+    return await joinQueue(
+      restaurantId: restaurantId,
+      restaurantName: restaurantName,
+      userId: walkInUid,
+      guestName: guestName,
+      partySize: partySize,
+      phoneNumber: phoneNumber,
+    );
+  }
+
   // ==========================================
   // --- 3. RESERVATIONS ---
   // ==========================================
