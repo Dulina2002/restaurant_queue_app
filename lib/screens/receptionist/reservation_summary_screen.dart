@@ -8,7 +8,6 @@ import '../../shared/widgets/role_bottom_nav_widget.dart';
 import '../../shared/widgets/app_toast.dart';
 import 'floor_overview_screen.dart';
 import 'live_queue_screen.dart';
-import 'receptionist_profile_screen.dart';
 
 class ReservationSummaryScreen extends StatefulWidget {
   final UserProfile profile;

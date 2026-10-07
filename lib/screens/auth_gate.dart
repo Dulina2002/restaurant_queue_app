@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user_profile.dart';
 import '../models/user_role.dart';
 import '../services/auth_service.dart';
@@ -29,15 +28,9 @@ class AuthGate extends StatelessWidget {
   Widget build(BuildContext context) {
     final authService = AuthService();
 
-    return StreamBuilder<User?>(
+    return StreamBuilder<dynamic>(
       stream: authService.onAuthStateChange,
       builder: (context, snapshot) {
-        final currentUser = snapshot.data ?? authService.currentUser;
-
-        if (currentUser == null) {
-          return const HomeScreen();
-        }
-
         return FutureBuilder<UserProfile?>(
           future: authService.getCurrentUserProfile(),
           builder: (context, profileSnapshot) {
@@ -45,13 +38,10 @@ class AuthGate extends StatelessWidget {
               return const HomeScreen();
             }
 
-            final userProfile = profileSnapshot.data ??
-                UserProfile(
-                  id: currentUser.id,
-                  email: currentUser.email ?? '',
-                  fullName: currentUser.userMetadata?['full_name'] as String? ?? 'Diner Guest',
-                  role: UserRole.customer,
-                );
+            final userProfile = profileSnapshot.data;
+            if (userProfile == null) {
+              return const HomeScreen();
+            }
 
             return AuthGate.getScreenForRole(userProfile);
           },

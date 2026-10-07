@@ -19,18 +19,6 @@ class UserProfile {
     this.createdAt,
   });
 
-  factory UserProfile.fromFirestore(dynamic doc, {String? defaultEmail}) {
-    if (doc is Map<String, dynamic>) {
-      return UserProfile.fromJson(doc, defaultEmail: defaultEmail);
-    }
-    return UserProfile(
-      id: '',
-      email: defaultEmail ?? '',
-      fullName: 'User',
-      role: UserRole.customer,
-    );
-  }
-
   factory UserProfile.fromJson(Map<String, dynamic> json, {String? defaultEmail}) {
     return UserProfile(
       id: json['id'] as String? ?? '',
@@ -39,11 +27,11 @@ class UserProfile {
       role: UserRole.fromString(json['role'] as String?),
       avatarUrl: json['avatar_url'] as String?,
       phoneNumber: json['phone_number'] as String?,
-      createdAt: json['created_at'] != null ? DateTime.tryParse(json['created_at'].toString()) : null,
+      createdAt: json['created_at'] != null
+          ? DateTime.tryParse(json['created_at'].toString())
+          : null,
     );
   }
-
-  Map<String, dynamic> toFirestore() => toJson();
 
   Map<String, dynamic> toJson() {
     return {
@@ -53,8 +41,13 @@ class UserProfile {
       'role': role.value,
       if (avatarUrl != null) 'avatar_url': avatarUrl,
       if (phoneNumber != null) 'phone_number': phoneNumber,
+      if (createdAt != null) 'created_at': createdAt!.toIso8601String(),
     };
   }
+
+  Map<String, dynamic> toMap() => toJson();
+  factory UserProfile.fromMap(Map<String, dynamic> map, {String? defaultEmail}) =>
+      UserProfile.fromJson(map, defaultEmail: defaultEmail);
 
   UserProfile copyWith({
     String? fullName,
@@ -63,13 +56,14 @@ class UserProfile {
     String? avatarUrl,
     String? phoneNumber,
     DateTime? createdAt,
+    bool clearAvatar = false,
   }) {
     return UserProfile(
       id: id,
       email: email ?? this.email,
       fullName: fullName ?? this.fullName,
       role: role ?? this.role,
-      avatarUrl: avatarUrl ?? this.avatarUrl,
+      avatarUrl: clearAvatar ? null : (avatarUrl ?? this.avatarUrl),
       phoneNumber: phoneNumber ?? this.phoneNumber,
       createdAt: createdAt ?? this.createdAt,
     );

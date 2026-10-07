@@ -19,23 +19,22 @@ class LiveMenuDish {
     this.isAvailable = true,
   });
 
-  factory LiveMenuDish.fromFirestore(dynamic doc) {
-    final Map<String, dynamic> data = doc is Map<String, dynamic>
-        ? doc
-        : (doc is Map ? Map<String, dynamic>.from(doc) : {});
+  factory LiveMenuDish.fromJson(Map<String, dynamic> json) {
     return LiveMenuDish(
-      id: data['id'] as String? ?? '',
-      restaurantId: data['restaurant_id'] as String? ?? 'ocean_bistro',
-      name: data['name'] as String? ?? '',
-      restaurant: data['restaurant'] as String? ?? 'Ocean Bistro',
-      category: data['category'] as String? ?? 'Mains',
-      price: (data['price'] as num?)?.toDouble() ?? 0.0,
-      description: data['description'] as String? ?? '',
-      isAvailable: data['is_available'] as bool? ?? true,
+      id: json['id'] as String? ?? '',
+      restaurantId: json['restaurant_id'] as String? ?? 'ocean_bistro',
+      name: json['name'] as String? ?? '',
+      restaurant: json['restaurant'] as String? ?? 'Ocean Bistro',
+      category: json['category'] as String? ?? 'Mains',
+      price: (json['price'] as num?)?.toDouble() ?? 0.0,
+      description: json['description'] as String? ?? '',
+      isAvailable: json['is_available'] as bool? ?? true,
     );
   }
 
-  Map<String, dynamic> toFirestore() {
+  factory LiveMenuDish.fromMap(Map<String, dynamic> map) => LiveMenuDish.fromJson(map);
+
+  Map<String, dynamic> toJson() {
     return {
       'id': id,
       'restaurant_id': restaurantId,
@@ -45,9 +44,10 @@ class LiveMenuDish {
       'price': price,
       'description': description,
       'is_available': isAvailable,
-      'updated_at': DateTime.now().toIso8601String(),
     };
   }
+
+  Map<String, dynamic> toMap() => toJson();
 
   LiveMenuDish copyWith({
     String? id,

@@ -400,7 +400,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         avatarUrlToSave = null;
       }
 
-      // 2. Update profile in Firestore, Supabase, and local session
+      // 2. Update profile in Supabase and local session
       final updatedProf = await _authService.updateProfile(
         userId: userId,
         fullName: _nameController.text.trim(),

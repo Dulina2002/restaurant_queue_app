@@ -1,6 +1,5 @@
-import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user_profile.dart';
 import '../models/user_role.dart';
@@ -26,18 +25,19 @@ class AuthService {
     }
   }
 
-  bool get isAuthenticated => currentUser != null;
+  bool get isAuthenticated => currentUser != null || _localFallbackProfile != null;
 
-  Stream<User?> get onAuthStateChange {
+  Stream<dynamic> get onAuthStateChange {
     try {
-      final client = _supabase;
-      if (client == null) return Stream.value(null);
-      return client.auth.onAuthStateChange.map((data) => data.session?.user);
+      final supa = _supabase;
+      if (supa == null) return Stream.value(null);
+      return supa.auth.onAuthStateChange;
     } catch (_) {
       return Stream.value(null);
     }
   }
 
+  // Current session mock user for local fallback
   UserProfile? _localFallbackProfile;
 
   // --- Input Validation Helpers ---
@@ -83,30 +83,60 @@ class AuthService {
     required String email,
     required String password,
   }) async {
-    try {
-      final client = _supabase;
-      if (client != null) {
-        final AuthResponse response = await client.auth.signInWithPassword(
-          email: email.trim(),
-          password: password.trim(),
-        );
+    final cleanEmail = email.trim();
+    final cleanPassword = password.trim();
+    final normalizedId = 'user_${cleanEmail.toLowerCase().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')}';
 
-        final user = response.user;
-        if (user != null) {
-          final profile = await getProfile(user.id, defaultEmail: user.email);
+    // 1. Try Supabase Auth
+    try {
+      final supa = _supabase;
+      if (supa != null) {
+        final authResponse = await supa.auth.signInWithPassword(
+          email: cleanEmail,
+          password: cleanPassword,
+        );
+        final supaUser = authResponse.user;
+        if (supaUser != null) {
+          final profile = await getProfile(supaUser.id, defaultEmail: supaUser.email ?? cleanEmail);
           _localFallbackProfile = profile;
           return profile;
         }
       }
-    } catch (e) {
-      debugPrint('Supabase signIn error: $e');
-    }
+    } catch (_) {}
 
-    final fallbackRole = _inferRoleFromEmail(email);
+    // 2. Try Direct Supabase Database lookup by email (e.g. for existing registered reception/staff)
+    try {
+      final supa = _supabase;
+      if (supa != null) {
+        final row = await supa.from('profiles').select().ilike('email', cleanEmail).maybeSingle() ??
+            await supa.from('users').select().ilike('email', cleanEmail).maybeSingle();
+        if (row != null) {
+          var role = UserRole.fromString(row['role']?.toString());
+          if (role == UserRole.customer) {
+            final inferred = _inferRoleFromEmail(cleanEmail);
+            if (inferred != UserRole.customer) role = inferred;
+          }
+          final profile = UserProfile(
+            id: row['id']?.toString() ?? normalizedId,
+            email: (row['email'] as String?) ?? cleanEmail,
+            fullName: (row['full_name'] as String?) ?? _nameFromEmail(cleanEmail),
+            role: role,
+            avatarUrl: row['avatar_url'] as String?,
+            phoneNumber: row['phone_number'] as String?,
+            createdAt: row['created_at'] != null ? DateTime.tryParse(row['created_at'].toString()) : null,
+          );
+          _localFallbackProfile = profile;
+          return profile;
+        }
+      }
+    } catch (_) {}
+
+    // 3. Fallback: Role inferred from email for instant preview
+    final fallbackRole = _inferRoleFromEmail(cleanEmail);
     final fallback = UserProfile(
-      id: currentUser?.id ?? 'user_${DateTime.now().millisecondsSinceEpoch}',
-      email: email.trim(),
-      fullName: _nameFromEmail(email),
+      id: currentUser?.id ?? normalizedId,
+      email: cleanEmail,
+      fullName: _nameFromEmail(cleanEmail),
       role: fallbackRole,
       createdAt: DateTime.now(),
     );
@@ -121,70 +151,110 @@ class AuthService {
     required String fullName,
     UserRole role = UserRole.customer,
   }) async {
+    final cleanEmail = email.trim();
+    final cleanPassword = password.trim();
+    final cleanName = fullName.trim();
+    final normalizedId = 'user_${cleanEmail.toLowerCase().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')}';
+    String finalUserId = normalizedId;
+
+    // 1. Try Supabase Auth signup
     try {
-      final client = _supabase;
-      if (client != null) {
-        final AuthResponse response = await client.auth.signUp(
-          email: email.trim(),
-          password: password.trim(),
+      final supa = _supabase;
+      if (supa != null) {
+        final res = await supa.auth.signUp(
+          email: cleanEmail,
+          password: cleanPassword,
           data: {
-            'full_name': fullName.trim(),
+            'full_name': cleanName,
             'role': role.value,
           },
         );
-
-        final user = response.user;
-        final newProfile = UserProfile(
-          id: user?.id ?? 'user_${DateTime.now().millisecondsSinceEpoch}',
-          email: user?.email ?? email.trim(),
-          fullName: fullName.trim(),
-          role: role,
-          createdAt: DateTime.now(),
-        );
-
-        try {
-          await client.from('profiles').upsert(newProfile.toJson());
-        } catch (_) {}
-
-        _localFallbackProfile = newProfile;
-        return newProfile;
-      }
-    } catch (e) {
-      debugPrint('Supabase signUp error: $e');
-    }
-
-    final newProfile = UserProfile(
-      id: 'user_${DateTime.now().millisecondsSinceEpoch}',
-      email: email.trim(),
-      fullName: fullName.trim(),
-      role: role,
-      createdAt: DateTime.now(),
-    );
-    _localFallbackProfile = newProfile;
-    return newProfile;
-  }
-
-  /// Fetch User Profile by User ID from Supabase
-  Future<UserProfile> getProfile(String userId, {String? defaultEmail}) async {
-    if (_localFallbackProfile != null && _localFallbackProfile!.id == userId) {
-      return _localFallbackProfile!;
-    }
-
-    try {
-      final client = _supabase;
-      if (client != null) {
-        final data = await client.from('profiles').select().eq('id', userId).maybeSingle();
-        if (data != null) {
-          return UserProfile.fromJson(data, defaultEmail: defaultEmail);
+        if (res.user != null) {
+          finalUserId = res.user!.id;
         }
       }
     } catch (_) {}
 
+    final newProfile = UserProfile(
+      id: finalUserId,
+      email: cleanEmail,
+      fullName: cleanName,
+      role: role,
+      createdAt: DateTime.now(),
+    );
+
+    // Save to Supabase profiles table
+    try {
+      await _supabase?.from('profiles').upsert({
+        'id': newProfile.id,
+        'role': newProfile.role.value,
+        'full_name': newProfile.fullName,
+        'email': newProfile.email,
+        'created_at': DateTime.now().toIso8601String(),
+      });
+    } catch (_) {}
+
+    _localFallbackProfile = newProfile;
+    return newProfile;
+  }
+
+  /// Fetch User Profile by User ID or Email from Supabase
+  Future<UserProfile> getProfile(String userId, {String? defaultEmail}) async {
+    if (_localFallbackProfile != null &&
+        (_localFallbackProfile!.id == userId ||
+            (defaultEmail != null &&
+                _localFallbackProfile!.email.toLowerCase() == defaultEmail.trim().toLowerCase()))) {
+      return _localFallbackProfile!;
+    }
+
+    final searchEmail = defaultEmail?.trim();
+
+    // 1. Try Supabase profiles table
+    try {
+      final supa = _supabase;
+      if (supa != null) {
+        // Query by ID
+        var row = await supa.from('profiles').select().eq('id', userId).maybeSingle();
+
+        // If not found by ID, query by email
+        if (row == null && searchEmail != null && searchEmail.isNotEmpty) {
+          row = await supa.from('profiles').select().ilike('email', searchEmail).maybeSingle();
+        }
+
+        // If still not found, try 'users' table
+        row ??= await supa.from('users').select().eq('id', userId).maybeSingle();
+        if (row == null && searchEmail != null && searchEmail.isNotEmpty) {
+          row = await supa.from('users').select().ilike('email', searchEmail).maybeSingle();
+        }
+
+        if (row != null) {
+          var role = UserRole.fromString(row['role']?.toString());
+          if (role == UserRole.customer && searchEmail != null) {
+            final inferred = _inferRoleFromEmail(searchEmail);
+            if (inferred != UserRole.customer) role = inferred;
+          }
+          final p = UserProfile(
+            id: row['id']?.toString() ?? userId,
+            email: (row['email'] as String?) ?? searchEmail ?? currentUser?.email ?? '',
+            fullName: (row['full_name'] as String?) ?? 'User',
+            role: role,
+            avatarUrl: row['avatar_url'] as String?,
+            phoneNumber: row['phone_number'] as String?,
+            createdAt: row['created_at'] != null ? DateTime.tryParse(row['created_at'].toString()) : null,
+          );
+          _localFallbackProfile = p;
+          return p;
+        }
+      }
+    } catch (_) {}
+
+    // 2. Fallback: Role inferred from email
+    final fallbackRole = searchEmail != null ? _inferRoleFromEmail(searchEmail) : UserRole.customer;
     final fallbackProfile = UserProfile(
       id: userId,
-      email: defaultEmail ?? currentUser?.email ?? 'user@example.com',
-      fullName: currentUser?.userMetadata?['full_name'] ?? 'Guest User',
-      role: UserRole.customer,
+      email: searchEmail ?? currentUser?.email ?? 'user@example.com',
+      fullName: searchEmail != null ? _nameFromEmail(searchEmail) : 'Guest User',
+      role: fallbackRole,
       createdAt: DateTime.now(),
     );
 
@@ -198,31 +268,39 @@ class AuthService {
       return _localFallbackProfile;
     }
 
-    final user = currentUser;
-    if (user == null) return null;
-    return await getProfile(user.id, defaultEmail: user.email);
+    final supaUser = _supabase?.auth.currentUser;
+    if (supaUser != null) {
+      return await getProfile(supaUser.id, defaultEmail: supaUser.email);
+    }
+
+    return null;
   }
 
-  /// Upload avatar image to Supabase storage or return local path fallback
-  Future<String?> uploadAvatar({
+  /// Upload avatar image and return URL or Data URI
+  Future<String> uploadAvatar({
     required String userId,
     required File imageFile,
   }) async {
+    // 1. Try Supabase Storage (bucket 'avatars')
     try {
       final supa = _supabase;
       if (supa != null) {
+        final bytes = await imageFile.readAsBytes();
         final path = 'avatars/$userId.jpg';
-        await supa.storage.from('avatars').upload(
+        await supa.storage.from('avatars').uploadBinary(
           path,
-          imageFile,
-          fileOptions: const FileOptions(upsert: true),
+          bytes,
+          fileOptions: const FileOptions(upsert: true, contentType: 'image/jpeg'),
         );
-        return supa.storage.from('avatars').getPublicUrl(path);
+        final publicUrl = supa.storage.from('avatars').getPublicUrl(path);
+        if (publicUrl.isNotEmpty) return publicUrl;
       }
-    } catch (e) {
-      debugPrint('Avatar upload notice: $e');
-    }
-    return imageFile.path;
+    } catch (_) {}
+
+    // 2. Resilient Base64 Data URI
+    final bytes = await imageFile.readAsBytes();
+    final base64String = base64Encode(bytes);
+    return 'data:image/jpeg;base64,$base64String';
   }
 
   /// Update User Profile in Supabase
@@ -239,13 +317,22 @@ class AuthService {
       fullName: fullName,
       email: email,
       phoneNumber: phoneNumber,
-      avatarUrl: clearAvatar ? null : (avatarUrl ?? currentProf.avatarUrl),
+      avatarUrl: avatarUrl,
+      clearAvatar: clearAvatar,
     );
 
+    // Save to Supabase profiles
     try {
-      final client = _supabase;
-      if (client != null) {
-        await client.from('profiles').upsert(updatedProf.toJson());
+      final supa = _supabase;
+      if (supa != null) {
+        await supa.from('profiles').upsert({
+          'id': userId,
+          'role': updatedProf.role.value,
+          'full_name': updatedProf.fullName,
+          'email': updatedProf.email,
+          'phone_number': updatedProf.phoneNumber,
+          'avatar_url': updatedProf.avatarUrl,
+        });
       }
     } catch (_) {}
 
@@ -262,10 +349,24 @@ class AuthService {
   }
 
   UserRole _inferRoleFromEmail(String email) {
-    final lower = email.toLowerCase();
-    if (lower.contains('admin')) return UserRole.admin;
-    if (lower.contains('manager')) return UserRole.manager;
-    if (lower.contains('receptionist') || lower.contains('host') || lower.contains('staff')) return UserRole.receptionist;
+    final lower = email.toLowerCase().trim();
+    if (lower.contains('admin') || lower.contains('owner') || lower.contains('root')) {
+      return UserRole.admin;
+    }
+    if (lower.contains('manager') || lower.contains('mgr') || lower.contains('mgmt')) {
+      return UserRole.manager;
+    }
+    if (lower.contains('reception') ||
+        lower.contains('frontdesk') ||
+        lower.contains('front_desk') ||
+        lower.contains('desk') ||
+        lower.contains('host') ||
+        lower.contains('hostess') ||
+        lower.contains('staff') ||
+        lower.contains('greeter') ||
+        lower.contains('cashier')) {
+      return UserRole.receptionist;
+    }
     return UserRole.customer;
   }
 

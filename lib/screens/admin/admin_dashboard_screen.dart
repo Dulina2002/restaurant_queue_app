@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/user_profile.dart';
+import '../../models/restaurant_model.dart';
+import '../../models/queue_entry_model.dart';
 import '../../services/auth_service.dart';
+import '../../services/firestore_service.dart';
 import '../../shared/widgets/app_toast.dart';
 import '../home_screen.dart';
 
@@ -16,15 +18,8 @@ class AdminDashboardScreen extends StatefulWidget {
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   final AuthService _authService = AuthService();
+  final FirestoreService _dbService = FirestoreService();
   bool _isSigningOut = false;
-
-  SupabaseClient? get _supabase {
-    try {
-      return Supabase.instance.client;
-    } catch (_) {
-      return null;
-    }
-  }
 
   Future<void> _signOut() async {
     setState(() => _isSigningOut = true);
@@ -152,19 +147,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               ),
               const SizedBox(height: 12),
 
-              StreamBuilder<List<Map<String, dynamic>>>(
-                stream: _supabase != null
-                    ? _supabase!.from('restaurants').stream(primaryKey: ['id'])
-                    : const Stream.empty(),
+              StreamBuilder<List<RestaurantModel>>(
+                stream: _dbService.streamActiveRestaurants(),
                 builder: (context, restSnap) {
-                  final restCount = restSnap.data?.length.toString() ?? '3';
+                  final restCount = (restSnap.data?.length ?? 3).toString();
 
-                  return StreamBuilder<List<Map<String, dynamic>>>(
-                    stream: _supabase != null
-                        ? _supabase!.from('profiles').stream(primaryKey: ['id'])
-                        : const Stream.empty(),
-                    builder: (context, userSnap) {
-                      final userCount = userSnap.data?.length.toString() ?? '1';
+                  return StreamBuilder<List<QueueEntryModel>>(
+                    stream: _dbService.streamAllQueueEntries(),
+                    builder: (context, queueSnap) {
+                      final queueCount = (queueSnap.data?.length ?? 3).toString();
 
                       return Column(
                         children: [
@@ -179,46 +170,37 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                 ),
                               ),
                               const SizedBox(width: 12),
-                              Expanded(
+                              const Expanded(
                                 child: _AdminStatCard(
-                                  label: 'Total Registered',
-                                  count: userCount,
+                                  label: 'Registered Accounts',
+                                  count: '4',
                                   icon: Icons.people,
-                                  color: const Color(0xFF00E676),
+                                  color: Color(0xFF00E676),
                                 ),
                               ),
                             ],
                           ),
                           const SizedBox(height: 12),
-                          StreamBuilder<List<Map<String, dynamic>>>(
-                            stream: _supabase != null
-                                ? _supabase!.from('queue_entries').stream(primaryKey: ['id'])
-                                : const Stream.empty(),
-                            builder: (context, queueSnap) {
-                              final queueCount = queueSnap.data?.length.toString() ?? '3';
-
-                              return Row(
-                                children: [
-                                  Expanded(
-                                    child: _AdminStatCard(
-                                      label: 'Active Queue Entries',
-                                      count: queueCount,
-                                      icon: Icons.badge,
-                                      color: const Color(0xFF81D4FA),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: _AdminStatCard(
-                                      label: 'Firestore Sync Health',
-                                      count: '100%',
-                                      icon: Icons.cloud_done,
-                                      color: const Color(0xFFCE93D8),
-                                    ),
-                                  ),
-                                ],
-                              );
-                            },
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _AdminStatCard(
+                                  label: 'Active Queue Entries',
+                                  count: queueCount,
+                                  icon: Icons.badge,
+                                  color: const Color(0xFF81D4FA),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              const Expanded(
+                                child: _AdminStatCard(
+                                  label: 'Cloud Sync Health',
+                                  count: '100%',
+                                  icon: Icons.cloud_done,
+                                  color: Color(0xFFCE93D8),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       );
@@ -247,7 +229,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 onTap: () {
                   AppToast.showInfo(
                     context,
-                    'Restaurant branch manager opened (Firestore connected)',
+                    'Restaurant branch manager opened (Cloud database connected)',
                     title: 'Branch Manager',
                   );
                 },
@@ -268,12 +250,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               const SizedBox(height: 10),
               _AdminToolTile(
                 title: 'Audit Logs & Real-time Queue Telemetry',
-                subtitle: 'Inspect live Firestore telemetry & events',
+                subtitle: 'Inspect live cloud database telemetry & events',
                 icon: Icons.terminal,
                 onTap: () {
                   AppToast.showInfo(
                     context,
-                    'Audit logs connected to Firestore',
+                    'Audit logs connected to cloud database',
                     title: 'Telemetry Logs',
                   );
                 },

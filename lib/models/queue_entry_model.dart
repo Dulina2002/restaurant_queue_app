@@ -1,3 +1,4 @@
+
 enum QueueStatus {
   waiting,
   called,
@@ -63,28 +64,31 @@ class QueueEntryModel {
     this.updatedAt,
   });
 
-  factory QueueEntryModel.fromFirestore(dynamic doc) {
-    final Map<String, dynamic> data = doc is Map<String, dynamic>
-        ? doc
-        : (doc is Map ? Map<String, dynamic>.from(doc) : {});
+  factory QueueEntryModel.fromJson(Map<String, dynamic> json) {
     return QueueEntryModel(
-      id: data['id'] as String? ?? '',
-      restaurantId: data['restaurant_id'] as String? ?? '',
-      restaurantName: data['restaurant_name'] as String? ?? 'Restaurant',
-      userId: data['user_id'] as String?,
-      guestName: data['guest_name'] as String? ?? 'Guest',
-      partySize: (data['party_size'] as num?)?.toInt() ?? 2,
-      phoneNumber: data['phone_number'] as String? ?? '',
-      status: QueueStatus.fromString(data['status'] as String?),
-      queueNumber: data['queue_number'] as String? ?? 'Q-101',
-      position: (data['position'] as num?)?.toInt() ?? 1,
-      estimatedWaitMinutes: (data['estimated_wait_minutes'] as num?)?.toInt() ?? 15,
-      createdAt: data['created_at'] != null ? DateTime.tryParse(data['created_at'].toString()) : null,
-      updatedAt: data['updated_at'] != null ? DateTime.tryParse(data['updated_at'].toString()) : null,
+      id: json['id'] as String? ?? '',
+      restaurantId: json['restaurant_id'] as String? ?? '',
+      restaurantName: json['restaurant_name'] as String? ?? 'Restaurant',
+      userId: json['user_id'] as String?,
+      guestName: json['guest_name'] as String? ?? 'Guest',
+      partySize: (json['party_size'] as num?)?.toInt() ?? 2,
+      phoneNumber: json['phone_number'] as String? ?? '',
+      status: QueueStatus.fromString(json['status'] as String?),
+      queueNumber: json['queue_number'] as String? ?? 'Q-101',
+      position: (json['position'] as num?)?.toInt() ?? 1,
+      estimatedWaitMinutes: (json['estimated_wait_minutes'] as num?)?.toInt() ?? 15,
+      createdAt: json['created_at'] != null
+          ? DateTime.tryParse(json['created_at'].toString())
+          : null,
+      updatedAt: json['updated_at'] != null
+          ? DateTime.tryParse(json['updated_at'].toString())
+          : null,
     );
   }
 
-  Map<String, dynamic> toFirestore() {
+  factory QueueEntryModel.fromMap(Map<String, dynamic> map) => QueueEntryModel.fromJson(map);
+
+  Map<String, dynamic> toJson() {
     return {
       'id': id,
       'restaurant_id': restaurantId,
@@ -97,10 +101,12 @@ class QueueEntryModel {
       'queue_number': queueNumber,
       'position': position,
       'estimated_wait_minutes': estimatedWaitMinutes,
-      'created_at': createdAt?.toIso8601String(),
-      'updated_at': updatedAt?.toIso8601String(),
+      if (createdAt != null) 'created_at': createdAt!.toIso8601String(),
+      if (updatedAt != null) 'updated_at': updatedAt!.toIso8601String(),
     };
   }
+
+  Map<String, dynamic> toMap() => toJson();
 
   QueueEntryModel copyWith({
     String? id,

@@ -29,28 +29,29 @@ class RestaurantModel {
     this.createdAt,
   });
 
-  factory RestaurantModel.fromFirestore(dynamic doc) {
-    final Map<String, dynamic> data = doc is Map<String, dynamic>
-        ? doc
-        : (doc is Map ? Map<String, dynamic>.from(doc) : {});
+  factory RestaurantModel.fromJson(Map<String, dynamic> json) {
     return RestaurantModel(
-      id: data['id'] as String? ?? '',
-      name: data['name'] as String? ?? '',
-      cuisine: data['cuisine'] as String? ?? 'General',
-      tag: data['tag'] as String? ?? '',
-      location: data['location'] as String? ?? '',
-      rating: (data['rating'] as num?)?.toDouble() ?? 4.5,
-      reviewsCount: (data['reviews_count'] as num?)?.toInt() ?? 0,
-      isActive: data['is_active'] as bool? ?? true,
-      isQueueAvailable: data['is_queue_available'] as bool? ?? true,
-      estWait: data['est_wait'] as String? ?? 'Direct Seating',
-      waitlistCount: (data['waitlist_count'] as num?)?.toInt() ?? 0,
-      imageUrl: data['image_url'] as String?,
-      createdAt: data['created_at'] != null ? DateTime.tryParse(data['created_at'].toString()) : null,
+      id: json['id'] as String? ?? '',
+      name: json['name'] as String? ?? '',
+      cuisine: json['cuisine'] as String? ?? 'General',
+      tag: json['tag'] as String? ?? '',
+      location: json['location'] as String? ?? '',
+      rating: (json['rating'] as num?)?.toDouble() ?? 4.5,
+      reviewsCount: (json['reviews_count'] as num?)?.toInt() ?? 0,
+      isActive: json['is_active'] as bool? ?? true,
+      isQueueAvailable: json['is_queue_available'] as bool? ?? true,
+      estWait: json['est_wait'] as String? ?? 'Direct Seating',
+      waitlistCount: (json['waitlist_count'] as num?)?.toInt() ?? 0,
+      imageUrl: json['image_url'] as String?,
+      createdAt: json['created_at'] != null
+          ? DateTime.tryParse(json['created_at'].toString())
+          : null,
     );
   }
 
-  Map<String, dynamic> toFirestore() {
+  factory RestaurantModel.fromMap(Map<String, dynamic> map) => RestaurantModel.fromJson(map);
+
+  Map<String, dynamic> toJson() {
     return {
       'id': id,
       'name': name,
@@ -64,7 +65,41 @@ class RestaurantModel {
       'est_wait': estWait,
       'waitlist_count': waitlistCount,
       if (imageUrl != null) 'image_url': imageUrl,
-      'created_at': createdAt?.toIso8601String(),
+      if (createdAt != null) 'created_at': createdAt!.toIso8601String(),
     };
+  }
+
+  Map<String, dynamic> toMap() => toJson();
+
+  RestaurantModel copyWith({
+    String? id,
+    String? name,
+    String? cuisine,
+    String? tag,
+    String? location,
+    double? rating,
+    int? reviewsCount,
+    bool? isActive,
+    bool? isQueueAvailable,
+    String? estWait,
+    int? waitlistCount,
+    String? imageUrl,
+    DateTime? createdAt,
+  }) {
+    return RestaurantModel(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      cuisine: cuisine ?? this.cuisine,
+      tag: tag ?? this.tag,
+      location: location ?? this.location,
+      rating: rating ?? this.rating,
+      reviewsCount: reviewsCount ?? this.reviewsCount,
+      isActive: isActive ?? this.isActive,
+      isQueueAvailable: isQueueAvailable ?? this.isQueueAvailable,
+      estWait: estWait ?? this.estWait,
+      waitlistCount: waitlistCount ?? this.waitlistCount,
+      imageUrl: imageUrl ?? this.imageUrl,
+      createdAt: createdAt ?? this.createdAt,
+    );
   }
 }
