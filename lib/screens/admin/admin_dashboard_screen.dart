@@ -56,7 +56,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   Future<void> _loadAdminData() async {
     final service = _adminService;
-    await Future.wait([_loadRestaurants(service), _loadUsers(service)]);
+    await Future.wait([
+      _loadRestaurants(service),
+      _loadUsers(service),
+      _loadBroadcasts(),
+      _loadPlatformFreeze()
+    ]);
     if (mounted) setState(() => _loading = false);
   }
 
@@ -104,7 +109,46 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   int selectedTab = 0;
   bool platformFrozen = false;
-  final List<Map<String, String>> broadcasts = [];
+  final List<Map<String, dynamic>> broadcasts = [];
+  String? _broadcastError;
+  String? _freezeError;
+  bool _freezeLoaded = false;
+  bool _broadcastPending = false;
+  bool _systemPending = false;
+
+  Future<void> _loadBroadcasts() async {
+    try {
+      final rows = await _adminService.loadBroadcasts();
+      if (!mounted) return;
+      setState(() {
+        broadcasts
+          ..clear()
+          ..addAll(rows);
+        _broadcastError = null;
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(
+            () => _broadcastError = 'Unable to load announcements: $error');
+      }
+    }
+  }
+
+  Future<void> _loadPlatformFreeze() async {
+    try {
+      final frozen = await _adminService.loadPlatformFreeze();
+      if (!mounted) return;
+      setState(() {
+        platformFrozen = frozen;
+        _freezeLoaded = true;
+        _freezeError = null;
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() => _freezeError = 'Unable to load platform freeze: $error');
+      }
+    }
+  }
 
   final List<String> tabs = ['Restaurants', 'Users', 'Broadcasts', 'System'];
 
@@ -205,7 +249,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   style: const TextStyle(color: Colors.grey, fontSize: 12)),
               const SizedBox(height: 8),
               const Text(
-                'Restaurant changes are saved to Supabase. User changes are now saved through the secure admin-users backend. Price and phone remain session-only. Broadcasts and System remain local previews.',
+                'Restaurant changes are saved to Supabase. User changes are saved through the secure admin-users backend. Broadcasts are saved to Supabase. System controls use secure Supabase backend/RPCs. Price and phone remain session-only.',
                 style: TextStyle(color: Colors.deepOrange, fontSize: 12),
               ),
               const SizedBox(height: 16),
@@ -1398,7 +1442,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     String message = '';
     String priority = 'NORMAL';
 
-    final broadcast = await showDialog<Map<String, String>>(
+    await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Send Alert'),
@@ -1435,7 +1479,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   ),
                   const SizedBox(height: 15),
                   DropdownButtonFormField<String>(
-                    value: priority,
+                    initialValue: priority,
                     decoration: const InputDecoration(
                       labelText: 'Alert type / priority',
                       border: OutlineInputBorder(),
@@ -1465,23 +1509,32 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           ),
           ElevatedButton(
             style: _greenButtonStyle(),
-            onPressed: () {
+            onPressed: () async {
+              if (_broadcastPending) return;
               if (!formKey.currentState!.validate()) return;
               formKey.currentState!.save();
-              Navigator.pop(dialogContext, {
-                'title': title,
-                'message': message,
-                'priority': priority,
-              });
+              _broadcastPending = true;
+              try {
+                final row = await _adminService.createBroadcast(
+                    title: title, message: message, priority: priority);
+                if (!mounted) return;
+                setState(() => broadcasts.insert(0, row));
+                if (dialogContext.mounted) Navigator.pop(dialogContext);
+                _showBackendMessage(
+                    'Announcement saved to Supabase. No push notifications were sent.');
+              } catch (error) {
+                if (mounted) {
+                  _showBackendMessage('Unable to save announcement: $error');
+                }
+              } finally {
+                _broadcastPending = false;
+              }
             },
             child: const Text('Send'),
           ),
         ],
       ),
     );
-    if (!mounted || broadcast == null) return;
-    setState(() => broadcasts.insert(0, broadcast));
-    _showMessage('Alert sent successfully');
   }
 
   Widget _buildBroadcasts() {
@@ -1504,7 +1557,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   ),
                   SizedBox(height: 5),
                   Text(
-                    'Publish global alerts to all customers & hosts',
+                    'Save global announcements • No push delivery',
                     style: TextStyle(color: Colors.grey),
                   ),
                 ],
@@ -1522,6 +1575,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           ],
         ),
         const SizedBox(height: 22),
+        if (_broadcastError != null) Text(_broadcastError!),
+        if (_broadcastError == null && broadcasts.isEmpty)
+          const Text('No broadcast announcements yet.'),
         ...broadcasts.map(
           (broadcast) => Padding(
             padding: const EdgeInsets.only(bottom: 16),
@@ -1529,28 +1585,26 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               title: broadcast['title']!,
               message: broadcast['message']!,
               status: broadcast['priority']!,
-              active: true,
-              dispatched: 'Dispatched: Just now • Active',
+              active: broadcast['isActive'] == true,
+              dispatched: _broadcastTime(broadcast),
             ),
           ),
         ),
-        _broadcastCard(
-          title: 'Platform Operational',
-          message:
-              'Example: All reservation and queue sync services running normally across Colombo partners.',
-          status: 'NORMAL',
-          active: true,
-        ),
-        const SizedBox(height: 16),
-        _broadcastCard(
-          title: 'Scheduled Maintenance',
-          message:
-              'Example: Monthly infrastructure updates were completed successfully.',
-          status: 'PAST',
-          active: false,
-        ),
       ],
     );
+  }
+
+  String _broadcastTime(Map<String, dynamic> broadcast) {
+    final time =
+        DateTime.tryParse(broadcast['createdAt']?.toString() ?? '')?.toLocal();
+    final label =
+        time == null ? 'Time unavailable' : time.toString().split('.').first;
+    return 'Created: $label • ${broadcast['isActive'] == true ? 'Active' : 'Archived'}';
+  }
+
+  void _showBackendMessage(String message) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   Widget _broadcastCard({
@@ -1558,7 +1612,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     required String message,
     required String status,
     required bool active,
-    String? dispatched,
+    required String dispatched,
   }) {
     return Container(
       padding: const EdgeInsets.all(20),
@@ -1595,10 +1649,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           Text(message, style: const TextStyle(color: Colors.grey)),
           const SizedBox(height: 14),
           Text(
-            dispatched ??
-                (active
-                    ? 'Dispatched: 10m ago • Active'
-                    : 'Dispatched: 2d ago • Archived'),
+            dispatched,
             style: const TextStyle(color: Colors.grey, fontSize: 12),
           ),
         ],
@@ -1611,13 +1662,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   // ============================================================
 
   Future<void> _confirmPlatformFreeze(bool value) async {
+    if (_systemPending || !_freezeLoaded) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text(
             value ? 'Enable Platform Freeze?' : 'Disable Platform Freeze?'),
         content: Text(value
-            ? 'Confirm emergency platform freeze? This updates the local dashboard state only.'
+            ? 'Confirm emergency platform freeze? Supabase will reject new reservations and queue entries. Existing records are preserved.'
             : 'Confirm disabling the emergency platform freeze?'),
         actions: [
           TextButton(
@@ -1633,19 +1685,32 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       ),
     );
     if (!mounted || confirmed != true) return;
-    setState(() => platformFrozen = value);
-    _showMessage(
-        value ? 'Platform freeze enabled' : 'Platform freeze disabled');
+    if (_systemPending) return;
+    _systemPending = true;
+    try {
+      final frozen = await _adminService.setPlatformFreeze(value);
+      if (!mounted) return;
+      setState(() => platformFrozen = frozen);
+      _showBackendMessage(
+          frozen ? 'Platform freeze enabled' : 'Platform freeze disabled');
+    } catch (error) {
+      if (mounted) {
+        _showBackendMessage('Unable to change platform freeze: $error');
+      }
+    } finally {
+      _systemPending = false;
+    }
   }
 
   Future<void> _confirmWaitlistFlush() async {
+    if (_systemPending) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         icon: const Icon(Icons.warning_amber_rounded, color: Colors.deepOrange),
         title: const Text('Global Waitlist Flush?'),
         content: const Text(
-          'Flushing waitlists would remove all waiting entries. Confirm this local simulation? No restaurant waitlists will be deleted.',
+          'Waiting and called queue entries across all restaurant waitlists will become cancelled. Records and history are preserved. Confirm global cancellation?',
         ),
         actions: [
           TextButton(
@@ -1664,7 +1729,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       ),
     );
     if (!mounted || confirmed != true) return;
-    _showMessage('Global waitlist flush simulation completed successfully');
+    if (_systemPending) return;
+    _systemPending = true;
+    try {
+      final count = await _adminService.flushWaitlists();
+      if (!mounted) return;
+      _showBackendMessage(count == 0
+          ? 'Global waitlist flush completed: no active entries required cancellation.'
+          : 'Global waitlist flush completed: $count entries cancelled.');
+    } catch (error) {
+      if (mounted) _showBackendMessage('Unable to flush waitlists: $error');
+    } finally {
+      _systemPending = false;
+    }
   }
 
   Widget _buildSystem() {
@@ -1680,6 +1757,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           ),
         ),
         const SizedBox(height: 25),
+        if (_freezeError != null) Text(_freezeError!),
         Container(
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
@@ -1711,7 +1789,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               ),
               Switch(
                 value: platformFrozen,
-                onChanged: _confirmPlatformFreeze,
+                onChanged: _freezeLoaded ? _confirmPlatformFreeze : null,
               ),
             ],
           ),
@@ -1765,8 +1843,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         const SizedBox(height: 18),
         _statusRow(
             'Supabase restaurant/profile reads: see source status above'),
-        _statusRow('Broadcast delivery: local preview only'),
-        _statusRow('Freeze and waitlist flush: local preview only'),
+        _statusRow('Broadcast records: Supabase persistence; no push delivery'),
+        _statusRow(
+            'Platform freeze: persisted/enforced by Supabase; waitlist flush: secure Admin RPC'),
       ],
     );
   }

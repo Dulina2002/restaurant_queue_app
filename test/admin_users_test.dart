@@ -17,6 +17,10 @@ Map<String, dynamic> record(
     };
 
 class FakeUsers extends AdminSupabaseService {
+  @override
+  Future<List<Map<String, dynamic>>> loadBroadcasts() async => [];
+  @override
+  Future<bool> loadPlatformFreeze() async => false;
   var pending = Completer<Map<String, dynamic>>();
   final deletion = Completer<void>();
   bool fail = false;

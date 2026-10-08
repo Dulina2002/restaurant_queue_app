@@ -35,7 +35,15 @@ class _FixedStaffCredential {
 class AuthService {
   static final AuthService _instance = AuthService._internal();
   factory AuthService() => _instance;
-  AuthService._internal();
+  AuthService._internal()
+      : _testClient = null,
+        _useTestClient = false;
+  @visibleForTesting
+  AuthService.forTesting(SupabaseClient? client)
+      : _testClient = client,
+        _useTestClient = true;
+  final SupabaseClient? _testClient;
+  final bool _useTestClient;
 
   static const String _activeUserKey = 'dinequeue_active_user_id';
   static const String _activeUserEmailKey = 'dinequeue_active_user_email';
@@ -124,6 +132,7 @@ class AuthService {
   };
 
   SupabaseClient? get _supabase {
+    if (_useTestClient) return _testClient;
     try {
       return Supabase.instance.client;
     } catch (_) {
@@ -139,7 +148,8 @@ class AuthService {
     }
   }
 
-  bool get isAuthenticated => currentUser != null || _localFallbackProfile != null;
+  bool get isAuthenticated =>
+      currentUser != null || _localFallbackProfile != null;
 
   Stream<dynamic> get onAuthStateChange {
     try {
@@ -194,7 +204,8 @@ class AuthService {
 
       if (jsonString != null && jsonString.isNotEmpty) {
         final Map<String, dynamic> data = jsonDecode(jsonString);
-        return UserProfile.fromJson(data, defaultEmail: clean.contains('@') ? clean : null);
+        return UserProfile.fromJson(data,
+            defaultEmail: clean.contains('@') ? clean : null);
       }
     } catch (e) {
       debugPrint('Error loading profile locally: $e');
@@ -316,81 +327,67 @@ class AuthService {
 
   // --- Authentication Actions ---
 
-  /// Sign In with Email and Password using Fixed Staff Credentials, Supabase Auth, or Local Registered Accounts
-  Future<UserProfile> signIn({
-    required String email,
-    required String password,
-  }) async {
+  /// Normal sign-in uses Supabase Auth for every role. Local customer preview
+  /// is available only when Supabase is unconfigured, never after a login error.
+  Future<UserProfile> signIn(
+      {required String email, required String password}) async {
     final cleanEmail = email.trim().toLowerCase();
-    final cleanPassword = password.trim();
-
-    // 1. Check fixed staff credentials (Receptionist, Manager, Admin)
-    final staff = _fixedStaff[cleanEmail];
-    if (staff != null) {
-      if (staff.password == cleanPassword) {
-        final profile = UserProfile(
-          id: 'staff_${cleanEmail.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')}',
-          email: cleanEmail,
-          fullName: staff.fullName,
-          role: staff.role,
-          phoneNumber: staff.phoneNumber,
-          createdAt: DateTime.now(),
-        );
-        _localFallbackProfile = profile;
-        await _saveProfileLocally(profile);
-        return profile;
-      } else {
-        throw Exception('Invalid password for ${staff.role.displayName} account. Please try again.');
+    _localFallbackProfile = null;
+    await _clearActiveLocalSession();
+    final supa = _supabase;
+    if (supa != null) {
+      final response = await supa.auth
+          .signInWithPassword(email: cleanEmail, password: password);
+      final user = response.user;
+      if (user == null ||
+          response.session == null ||
+          supa.auth.currentUser?.id != user.id) {
+        throw const AuthException(
+            'Sign-in did not establish an authenticated session.');
+      }
+      try {
+        return await _authenticatedProfile(supa, user);
+      } catch (_) {
+        // A session without an authoritative profile must not enter a dashboard.
+        await supa.auth.signOut(scope: SignOutScope.local);
+        rethrow;
       }
     }
-
-    // 2. Try Supabase Auth (for registered customers in Supabase)
-    try {
-      final supa = _supabase;
-      if (supa != null) {
-        final authResponse = await supa.auth.signInWithPassword(
-          email: cleanEmail,
-          password: cleanPassword,
-        );
-        final supaUser = authResponse.user;
-        if (supaUser != null) {
-          final profile = await getProfile(
-            supaUser.id,
-            defaultEmail: supaUser.email ?? cleanEmail,
-            userMetadata: supaUser.userMetadata,
-          );
-          _localFallbackProfile = profile;
-          await _saveProfileLocally(profile);
-          return profile;
-        }
-      }
-    } catch (e) {
-      final err = e.toString().toLowerCase();
-      if (err.contains('invalid login credentials') ||
-          err.contains('invalid_grant') ||
-          err.contains('wrong password') ||
-          err.contains('invalid credentials')) {
-        // Check local registered customer accounts
-        final localCust = await _verifyLocalCustomerAccount(cleanEmail, cleanPassword);
-        if (localCust != null) {
-          _localFallbackProfile = localCust;
-          await _saveProfileLocally(localCust);
-          return localCust;
-        }
-        throw Exception('Invalid email or password. Please try again.');
-      }
+    final customer = await _verifyLocalCustomerAccount(cleanEmail, password);
+    if (customer == null || customer.role != UserRole.customer) {
+      throw const AuthException(
+          'Supabase sign-in is required for staff accounts. No valid local customer account was found.');
     }
+    _localFallbackProfile = customer;
+    await _saveProfileLocally(customer);
+    return customer;
+  }
 
-    // 3. Try Local Registered Customer Account
-    final localCust = await _verifyLocalCustomerAccount(cleanEmail, cleanPassword);
-    if (localCust != null) {
-      _localFallbackProfile = localCust;
-      await _saveProfileLocally(localCust);
-      return localCust;
+  Future<UserProfile> _authenticatedProfile(
+      SupabaseClient supa, User user) async {
+    final row = await supa
+        .from('profiles')
+        .select('id,full_name,role')
+        .eq('id', user.id)
+        .maybeSingle();
+    if (row == null ||
+        row['id'] != user.id ||
+        !['customer', 'receptionist', 'manager', 'admin']
+            .contains(row['role'])) {
+      throw const AuthException(
+          'Your authenticated account has no valid profile. Contact an administrator.');
     }
-
-    // 4. If credentials do not match any staff account or customer account, fail securely
-    throw Exception('Invalid email or password. No account found for $cleanEmail. If you are a customer, please create an account.');
+    final profile = UserProfile(
+      id: user.id,
+      email: user.email ?? '',
+      fullName: row['full_name'] as String? ??
+          (user.userMetadata?['full_name'] as String?) ??
+          _nameFromEmail(user.email ?? 'User'),
+      role: UserRole.fromString(row['role'] as String),
+    );
+    // Persist display data, but it must never authenticate privileged roles offline.
+    await _saveProfileLocally(profile);
+    return profile;
   }
 
   /// Sign Up for Customers with Email, Password, and Full Name
@@ -403,12 +400,14 @@ class AuthService {
     final cleanEmail = email.trim().toLowerCase();
     final cleanPassword = password.trim();
     final cleanName = fullName.trim();
-    final normalizedId = 'user_${cleanEmail.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')}';
+    final normalizedId =
+        'user_${cleanEmail.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')}';
     String finalUserId = normalizedId;
 
     // Check if trying to register using a fixed staff email
     if (_fixedStaff.containsKey(cleanEmail)) {
-      throw Exception('This email is reserved for system staff. Please sign in instead.');
+      throw Exception(
+          'This email is reserved for system staff. Please sign in instead.');
     }
 
     // 1. Try Supabase Auth signup with metadata
@@ -466,158 +465,57 @@ class AuthService {
     // 3. Save locally in device storage & credentials registry
     _localFallbackProfile = newProfile;
     await _saveProfileLocally(newProfile);
-    await _saveCustomerCredentialsLocally(cleanEmail, cleanPassword, newProfile);
+    await _saveCustomerCredentialsLocally(
+        cleanEmail, cleanPassword, newProfile);
     return newProfile;
   }
 
-  /// Fetch User Profile by User ID or Email from Supabase / Local Storage
+  /// Real sessions always use the UUID-linked database profile, not local roles.
   Future<UserProfile> getProfile(
     String userId, {
     String? defaultEmail,
     Map<String, dynamic>? userMetadata,
   }) async {
-    final searchEmail = defaultEmail?.trim();
-
-    // Check userMetadata first for role & full_name
-    UserRole? metadataRole;
-    final metaRoleStr = userMetadata?['role']?.toString() ?? currentUser?.userMetadata?['role']?.toString();
-    if (metaRoleStr != null && metaRoleStr.isNotEmpty) {
-      metadataRole = UserRole.fromString(metaRoleStr);
-    }
-    final metadataFullName = (userMetadata?['full_name'] as String?) ??
-        (currentUser?.userMetadata?['full_name'] as String?);
-
-    // Return in-memory profile if valid and matching
-    if (_localFallbackProfile != null &&
-        (_localFallbackProfile!.id == userId ||
-            (searchEmail != null &&
-                _localFallbackProfile!.email.toLowerCase() == searchEmail.toLowerCase()))) {
-      if (metadataRole != null && _localFallbackProfile!.role != metadataRole) {
-        _localFallbackProfile = _localFallbackProfile!.copyWith(role: metadataRole);
-        await _saveProfileLocally(_localFallbackProfile!);
+    final supa = _supabase;
+    final user = supa?.auth.currentUser;
+    if (supa != null && user != null && supa.auth.currentSession != null) {
+      if (userId != user.id) {
+        throw const AuthException(
+            'Profile does not match the authenticated user.');
       }
-      return _localFallbackProfile!;
+      return _authenticatedProfile(supa, user);
     }
-
-    // 1. Try Supabase profiles table
-    try {
-      final supa = _supabase;
-      if (supa != null) {
-        // Query by ID
-        var row = await supa.from('profiles').select().eq('id', userId).maybeSingle();
-
-        // If not found by ID, query by email
-        if (row == null && searchEmail != null && searchEmail.isNotEmpty) {
-          try {
-            row = await supa.from('profiles').select().ilike('email', searchEmail).maybeSingle();
-          } catch (_) {}
-        }
-
-        // If still not found, try 'users' table
-        if (row == null) {
-          try {
-            row = await supa.from('users').select().eq('id', userId).maybeSingle();
-          } catch (_) {}
-        }
-        if (row == null && searchEmail != null && searchEmail.isNotEmpty) {
-          try {
-            row = await supa.from('users').select().ilike('email', searchEmail).maybeSingle();
-          } catch (_) {}
-        }
-
-        if (row != null) {
-          var role = UserRole.fromString(row['role']?.toString());
-          if (metadataRole != null && metadataRole != UserRole.customer) {
-            role = metadataRole;
-          } else if (role == UserRole.customer && searchEmail != null) {
-            final inferred = _inferRoleFromEmail(searchEmail);
-            if (inferred != UserRole.customer) role = inferred;
-          }
-          final p = UserProfile(
-            id: row['id']?.toString() ?? userId,
-            email: (row['email'] as String?) ?? searchEmail ?? currentUser?.email ?? '',
-            fullName: (row['full_name'] as String?) ?? metadataFullName ?? _nameFromEmail(searchEmail ?? 'User'),
-            role: role,
-            avatarUrl: row['avatar_url'] as String?,
-            phoneNumber: row['phone_number'] as String?,
-            createdAt: row['created_at'] != null ? DateTime.tryParse(row['created_at'].toString()) : null,
-          );
-          _localFallbackProfile = p;
-          await _saveProfileLocally(p);
-          return p;
-        }
-      }
-    } catch (e) {
-      debugPrint('Supabase getProfile read notice: $e');
-    }
-
-    // 2. Try Local Persistent Cache
-    if (searchEmail != null || userId.isNotEmpty) {
-      final localProf = await _loadProfileLocally(searchEmail ?? userId);
-      if (localProf != null) {
-        var finalRole = localProf.role;
-        if (metadataRole != null && metadataRole != UserRole.customer) {
-          finalRole = metadataRole;
-        } else if (finalRole == UserRole.customer && searchEmail != null) {
-          final inferred = _inferRoleFromEmail(searchEmail);
-          if (inferred != UserRole.customer) finalRole = inferred;
-        }
-        final updated = localProf.copyWith(
-          role: finalRole,
-          fullName: metadataFullName ?? localProf.fullName,
-        );
-        _localFallbackProfile = updated;
-        return updated;
-      }
-    }
-
-    // 3. Fallback: Role inferred from email / metadata
-    final fallbackRole = metadataRole ??
-        (searchEmail != null ? _inferRoleFromEmail(searchEmail) : UserRole.customer);
-    final fallbackProfile = UserProfile(
-      id: userId,
-      email: searchEmail ?? currentUser?.email ?? 'user@example.com',
-      fullName: metadataFullName ?? (searchEmail != null ? _nameFromEmail(searchEmail) : 'Guest User'),
-      role: fallbackRole,
-      createdAt: DateTime.now(),
-    );
-
-    _localFallbackProfile = fallbackProfile;
-    await _saveProfileLocally(fallbackProfile);
-    return fallbackProfile;
+    final local = await _loadProfileLocally(defaultEmail ?? userId);
+    if (local != null && local.role == UserRole.customer) return local;
+    // Explicit local preview data cannot derive privileges from email/metadata.
+    return UserProfile(
+        id: userId,
+        email: defaultEmail ?? '',
+        fullName: userMetadata?['full_name'] as String? ?? 'Guest User',
+        role: UserRole.customer);
   }
 
-  /// Get profile of currently signed in user
   Future<UserProfile?> getCurrentUserProfile() async {
-    if (_localFallbackProfile != null) {
+    final supa = _supabase;
+    final user = supa?.auth.currentUser;
+    if (supa != null && user != null && supa.auth.currentSession != null) {
+      return _authenticatedProfile(supa, user);
+    }
+    if (_localFallbackProfile?.role == UserRole.customer) {
       return _localFallbackProfile;
     }
-
-    // Try device local session first to eliminate network latency on reload
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final activeEmail = prefs.getString(_activeUserEmailKey);
-      final activeId = prefs.getString(_activeUserKey);
-      if (activeEmail != null || activeId != null) {
-        final saved = await _loadProfileLocally(activeEmail ?? activeId!);
-        if (saved != null) {
-          _localFallbackProfile = saved;
-          return saved;
-        }
+    _localFallbackProfile = null;
+    final prefs = await SharedPreferences.getInstance();
+    final identifier =
+        prefs.getString(_activeUserEmailKey) ?? prefs.getString(_activeUserKey);
+    if (identifier != null) {
+      final saved = await _loadProfileLocally(identifier);
+      if (saved?.role == UserRole.customer) {
+        _localFallbackProfile = saved;
+        return saved;
       }
-    } catch (_) {}
-
-    final supaUser = _supabase?.auth.currentUser;
-    if (supaUser != null) {
-      final prof = await getProfile(
-        supaUser.id,
-        defaultEmail: supaUser.email,
-        userMetadata: supaUser.userMetadata,
-      );
-      _localFallbackProfile = prof;
-      return prof;
+      await _clearActiveLocalSession();
     }
-
     return null;
   }
 
@@ -633,10 +531,11 @@ class AuthService {
         final bytes = await imageFile.readAsBytes();
         final path = 'avatars/$userId.jpg';
         await supa.storage.from('avatars').uploadBinary(
-          path,
-          bytes,
-          fileOptions: const FileOptions(upsert: true, contentType: 'image/jpeg'),
-        );
+              path,
+              bytes,
+              fileOptions:
+                  const FileOptions(upsert: true, contentType: 'image/jpeg'),
+            );
         final publicUrl = supa.storage.from('avatars').getPublicUrl(path);
         if (publicUrl.isNotEmpty) return publicUrl;
       }
@@ -705,46 +604,6 @@ class AuthService {
     try {
       await _supabase?.auth.signOut();
     } catch (_) {}
-  }
-
-  UserRole _inferRoleFromEmail(String email) {
-    final lower = email.toLowerCase().trim();
-    if (lower.contains('admin') ||
-        lower.contains('owner') ||
-        lower.contains('root') ||
-        lower.contains('administrator')) {
-      return UserRole.admin;
-    }
-    if (lower.contains('manager') ||
-        lower.contains('mgr') ||
-        lower.contains('mgmt') ||
-        lower.contains('manage') ||
-        lower.contains('supervisor') ||
-        lower.contains('lead')) {
-      return UserRole.manager;
-    }
-    if (lower.contains('reception') ||
-        lower.contains('reciption') ||
-        lower.contains('recept') ||
-        lower.contains('recipt') ||
-        lower.contains('frontdesk') ||
-        lower.contains('front_desk') ||
-        lower.contains('front-desk') ||
-        lower.contains('front desk') ||
-        lower.contains('desk') ||
-        lower.contains('host') ||
-        lower.contains('hostess') ||
-        lower.contains('staff') ||
-        lower.contains('greeter') ||
-        lower.contains('cashier') ||
-        lower.contains('waiter') ||
-        lower.contains('waitress') ||
-        lower.contains('steward') ||
-        lower.contains('concierge') ||
-        lower.contains('clerk')) {
-      return UserRole.receptionist;
-    }
-    return UserRole.customer;
   }
 
   String _nameFromEmail(String email) {

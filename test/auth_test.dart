@@ -70,7 +70,8 @@ void main() {
         'phone_number': '+94771234567',
       };
 
-      final profile = UserProfile.fromJson(json, defaultEmail: 'reception@example.com');
+      final profile =
+          UserProfile.fromJson(json, defaultEmail: 'reception@example.com');
       expect(profile.id, 'usr_123');
       expect(profile.fullName, 'John Doe');
       expect(profile.role, UserRole.receptionist);
@@ -82,37 +83,18 @@ void main() {
       expect(serialized['full_name'], 'John Doe');
     });
 
-    test('Fixed staff logins resolve to specific roles and dashboards', () async {
+    test('Fixed staff passwords cannot authenticate without Supabase',
+        () async {
       final auth = AuthService();
-
-      // 1. Receptionist
-      final recProfile = await auth.signIn(
-        email: 'reciptionist123@gmail.com',
-        password: 'reciption@123',
-      );
-      expect(recProfile.role, UserRole.receptionist);
-      expect(recProfile.fullName, 'Front Desk Receptionist');
-      expect(AuthGate.getScreenForRole(recProfile), isA<ReceptionistDashboardScreen>());
-
-      // 2. Manager
-      final mgrProfile = await auth.signIn(
-        email: 'manager123@gmail.com',
-        password: 'manager@123',
-      );
-      expect(mgrProfile.role, UserRole.manager);
-      expect(mgrProfile.fullName, 'Restaurant Manager');
-      expect(AuthGate.getScreenForRole(mgrProfile), isA<ManagerDashboardScreen>());
-
-      // 3. Admin
-      final admProfile = await auth.signIn(
-        email: 'admin123@gmail.com',
-        password: 'admin@123',
-      );
-      expect(admProfile.role, UserRole.admin);
-      expect(admProfile.fullName, 'System Administrator');
-      expect(AuthGate.getScreenForRole(admProfile), isA<AdminDashboardScreen>());
+      for (final pair in [
+        ['reciptionist123@gmail.com', 'reciption@123'],
+        ['manager123@gmail.com', 'manager@123'],
+        ['admin123@gmail.com', 'admin@123'],
+      ]) {
+        await expectLater(auth.signIn(email: pair[0], password: pair[1]),
+            throwsA(isA<Exception>()));
+      }
     });
-
     test('Invalid credentials throw error and do not authenticate', () async {
       final auth = AuthService();
 
@@ -153,7 +135,8 @@ void main() {
       );
     });
 
-    test('Customer can sign up and sign in to CustomerDashboardScreen', () async {
+    test('Customer can sign up and sign in to CustomerDashboardScreen',
+        () async {
       final auth = AuthService();
       final customer = await auth.signUp(
         email: 'diner_alex@example.com',
@@ -162,7 +145,8 @@ void main() {
       );
       expect(customer.role, UserRole.customer);
       expect(customer.fullName, 'Alex Morgan');
-      expect(AuthGate.getScreenForRole(customer), isA<CustomerDashboardScreen>());
+      expect(
+          AuthGate.getScreenForRole(customer), isA<CustomerDashboardScreen>());
 
       final loggedIn = await auth.signIn(
         email: 'diner_alex@example.com',
@@ -170,7 +154,8 @@ void main() {
       );
       expect(loggedIn.role, UserRole.customer);
       expect(loggedIn.email, 'diner_alex@example.com');
-      expect(AuthGate.getScreenForRole(loggedIn), isA<CustomerDashboardScreen>());
+      expect(
+          AuthGate.getScreenForRole(loggedIn), isA<CustomerDashboardScreen>());
     });
 
     test('AuthGate maps roles to their respective dashboard widgets', () {
@@ -211,9 +196,13 @@ void main() {
       expect(admWidget, isA<AdminDashboardScreen>());
     });
 
-    test('Sign out clears active profile and leaves user unauthenticated', () async {
+    test('Sign out clears active profile and leaves user unauthenticated',
+        () async {
       final auth = AuthService();
-      await auth.signIn(email: 'manager123@gmail.com', password: 'manager@123');
+      await auth.signUp(
+          email: 'logout_customer@example.com',
+          password: 'customer-password',
+          fullName: 'Local Customer');
       expect(auth.isAuthenticated, isTrue);
 
       await auth.signOut();
