@@ -1,14 +1,14 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../../../models/restaurant_model.dart';
 import '../../../../models/user_profile.dart';
-import '../../../../models/queue_entry_model.dart';
 import '../../../../services/auth_service.dart';
 import '../../../../services/restaurant_database_service.dart';
-import '../../../../screens/home_screen.dart';
+import '../../../../screens/sign_in_screen.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_toast.dart';
 import '../../../profile/presentation/screens/edit_profile_screen.dart';
 import '../../data/models/manager_dashboard_model.dart';
-import '../../data/models/physical_table_model.dart';
 import '../widgets/ai_floor_optimizer_sheet.dart';
 import '../widgets/quick_turn_tables_sheet.dart';
 import '../widgets/tables_tab_widget.dart';
@@ -26,85 +26,87 @@ class ManagerDashboardScreen extends StatefulWidget {
 class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
   final RestaurantDatabaseService _firestoreService = RestaurantDatabaseService();
   final AuthService _authService = AuthService();
-  bool _isSigningOut = false;
   int _selectedTab = 0; // 0: Overview, 1: Tables, 2: Live Menu
   int _selectedTimeFilter = 1; // 0: Today, 1: This Week
   int _bottomNavIndex = 0; // 0: Dashboard, 1: Profile
 
-  String _selectedRestaurant = 'Ocean Bistro';
-  final List<String> _availableRestaurants = [
-    'Ocean Bistro',
-    'The Mango Tree',
-    'Nihonbashi',
-  ];
+  /// Restaurants loaded live from the database for the picker.
+  List<RestaurantModel> _restaurants = const [];
+  bool _restaurantsLoaded = false;
+  Object? _restaurantsError;
+  StreamSubscription<List<RestaurantModel>>? _restaurantsSub;
 
-  late final ManagerDashboardData _dashboardData;
+  /// Id of the restaurant every tab is currently showing.
+  String? _selectedRestaurantId;
+
+  /// Set after adding a restaurant so it is auto-selected once it streams in.
+  String? _pendingSelectId;
+
+  /// Live overview data (tables + queue + reservations) of the selected restaurant.
+  Stream<ManagerLiveSnapshot>? _snapshotStream;
+
   UserProfile? _currentProfile;
+
+  RestaurantModel? get _selectedRestaurant {
+    for (final r in _restaurants) {
+      if (r.id == _selectedRestaurantId) return r;
+    }
+    return null;
+  }
 
   @override
   void initState() {
     super.initState();
     _currentProfile = widget.profile;
-    _dashboardData = ManagerDashboardData.mock();
+    _listenToRestaurants();
   }
 
-  Future<void> _signOut() async {
-    final shouldLogout = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: const Text(
-          'Log Out',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-        ),
-        content: const Text(
-          'Are you sure you want to log out of your Manager session?',
-          style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFEF4444),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              elevation: 0,
-            ),
-            child: const Text('Log Out'),
-          ),
-        ],
-      ),
-    );
+  @override
+  void dispose() {
+    _restaurantsSub?.cancel();
+    super.dispose();
+  }
 
-    if (shouldLogout == true) {
-      setState(() => _isSigningOut = true);
-      try {
-        await _authService.signOut();
+  void _listenToRestaurants() {
+    _restaurantsSub?.cancel();
+    _restaurantsError = null;
+    _restaurantsLoaded = false;
+    _restaurantsSub = _firestoreService.streamManagedRestaurants().listen(
+      (list) {
         if (!mounted) return;
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (context) => const HomeScreen()),
-          (route) => false,
-        );
-      } finally {
-        if (mounted) setState(() => _isSigningOut = false);
-      }
-    }
+        setState(() {
+          _restaurants = list;
+          _restaurantsLoaded = true;
+          _restaurantsError = null;
+          final pending = _pendingSelectId;
+          if (pending != null && list.any((r) => r.id == pending)) {
+            _pendingSelectId = null;
+            _applySelection(pending);
+          } else if (_selectedRestaurantId == null || !list.any((r) => r.id == _selectedRestaurantId)) {
+            _applySelection(list.isEmpty ? null : list.first.id);
+          }
+        });
+      },
+      onError: (Object error) {
+        if (!mounted) return;
+        setState(() {
+          _restaurantsError = error;
+          _restaurantsLoaded = true;
+        });
+      },
+    );
   }
 
-  String _getAvatarInitials(String name) {
-    final trimmed = name.trim();
-    if (trimmed.isEmpty) return 'MN';
-    final parts = trimmed.split(RegExp(r'\s+'));
-    if (parts.length > 1) {
-      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    }
-    return parts[0].substring(0, parts[0].length >= 2 ? 2 : 1).toUpperCase();
+  /// Switches every tab to [id] and re-subscribes the overview stream so the
+  /// KPIs, tables, queue and chart immediately reflect that restaurant.
+  void _applySelection(String? id) {
+    _selectedRestaurantId = id;
+    _snapshotStream = id == null ? null : _firestoreService.streamManagerSnapshot(id);
+  }
+
+  void _selectRestaurant(String id) {
+    if (id == _selectedRestaurantId) return;
+    setState(() => _applySelection(id));
   }
 
   void _showAddNewRestaurantDialog() {
@@ -152,20 +154,41 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                 backgroundColor: AppColors.primary,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              onPressed: () {
+              onPressed: () async {
                 final name = controller.text.trim();
-                if (name.isNotEmpty) {
+                if (name.isEmpty) return;
+                final duplicate = _restaurants.any((r) => r.name.toLowerCase() == name.toLowerCase());
+                if (duplicate) {
+                  AppToast.showError(
+                    context,
+                    '"$name" already exists in your restaurant list.',
+                    title: 'Duplicate Restaurant',
+                  );
+                  return;
+                }
+                Navigator.pop(dialogContext);
+                try {
+                  final created = await _firestoreService.addRestaurant(name);
+                  if (!mounted) return;
+                  // Select it as soon as the live restaurant list delivers it.
                   setState(() {
-                    if (!_availableRestaurants.contains(name)) {
-                      _availableRestaurants.add(name);
+                    if (_restaurants.any((r) => r.id == created.id)) {
+                      _applySelection(created.id);
+                    } else {
+                      _pendingSelectId = created.id;
                     }
-                    _selectedRestaurant = name;
                   });
-                  Navigator.pop(dialogContext);
                   AppToast.showSuccess(
                     context,
                     '$name registered successfully!',
                     title: 'Restaurant Added',
+                  );
+                } catch (e) {
+                  if (!mounted) return;
+                  AppToast.showError(
+                    context,
+                    'Could not add restaurant: $e',
+                    title: 'Error',
                   );
                 }
               },
@@ -177,6 +200,202 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     );
   }
 
+  void _showRoleSelectorDialog() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 38,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Switch User Role',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF064E3B),
+                  letterSpacing: -0.3,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Select any of the 4 application roles to preview its tailored UI/UX experience.',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Color(0xFF64748B),
+                  height: 1.35,
+                ),
+              ),
+              const SizedBox(height: 20),
+              _buildRoleOptionTile(
+                sheetContext: sheetContext,
+                title: 'Customer',
+                subtitle: 'Table booking & virtual queue',
+                icon: Icons.person_rounded,
+                iconColor: const Color(0xFF2563EB),
+                iconBgColor: const Color(0xFFEFF6FF),
+                isSelected: false,
+              ),
+              const SizedBox(height: 12),
+              _buildRoleOptionTile(
+                sheetContext: sheetContext,
+                title: 'Receptionist',
+                subtitle: 'Staff live tables & check-in',
+                icon: Icons.room_service_rounded,
+                iconColor: const Color(0xFF9333EA),
+                iconBgColor: const Color(0xFFF3E8FF),
+                isSelected: false,
+              ),
+              const SizedBox(height: 12),
+              _buildRoleOptionTile(
+                sheetContext: sheetContext,
+                title: 'Manager',
+                subtitle: 'Reports, capacity & menu',
+                icon: Icons.show_chart_rounded,
+                iconColor: const Color(0xFFD97706),
+                iconBgColor: const Color(0xFFFEF3C7),
+                isSelected: true,
+              ),
+              const SizedBox(height: 12),
+              _buildRoleOptionTile(
+                sheetContext: sheetContext,
+                title: 'Administrator',
+                subtitle: 'Platform & restaurant management',
+                icon: Icons.storefront_rounded,
+                iconColor: const Color(0xFF059669),
+                iconBgColor: const Color(0xFFDCFCE7),
+                isSelected: false,
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(sheetContext),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF064E3B),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  child: const Text(
+                    'Close',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildRoleOptionTile({
+    required BuildContext sheetContext,
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color iconColor,
+    required Color iconBgColor,
+    required bool isSelected,
+  }) {
+    const darkGreen = Color(0xFF064E3B);
+    return InkWell(
+      onTap: () async {
+        Navigator.pop(sheetContext);
+        try {
+          await _authService.signOut();
+          if (!mounted) return;
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (context) => const SignInScreen()),
+            (route) => false,
+          );
+        } catch (_) {}
+      },
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected ? darkGreen : const Color(0xFFE2E8F0),
+            width: isSelected ? 2.0 : 1.0,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: iconBgColor,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: iconColor, size: 24),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Icon(
+              isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+              color: isSelected ? darkGreen : const Color(0xFFCBD5E1),
+              size: 24,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -184,127 +403,70 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            // --- Full Width Top Header Bar (Matching Provided Screenshot) ---
+            GestureDetector(
+              onTap: _showRoleSelectorDialog,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: const BoxDecoration(
+                  color: Color(0xFF0D2017),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // --- Top Header Bar ---
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: AppColors.accentOrange,
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: const Text(
-                                'MANAGER',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF25430),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text(
+                            'MANAGER',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.5,
                             ),
-                            const SizedBox(width: 8),
-                            const Text(
-                              'Tap to switch role',
-                              style: TextStyle(
-                                color: AppColors.textMuted,
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
-                        Row(
-                          children: [
-                            GestureDetector(
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => const HomeScreen(),
-                                  ),
-                                );
-                              },
-                              child: const Text(
-                                'DineQueue',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.primary,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            GestureDetector(
-                              onTap: () async {
-                                final updated = await Navigator.push<UserProfile>(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => EditProfileScreen(profile: _currentProfile ?? widget.profile),
-                                  ),
-                                );
-                                if (updated != null) {
-                                  setState(() => _currentProfile = updated);
-                                }
-                              },
-                              child: Container(
-                                width: 28,
-                                height: 28,
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFFE8F5E9),
-                                  shape: BoxShape.circle,
-                                ),
-                                alignment: Alignment.center,
-                                child: Text(
-                                  _getAvatarInitials(_currentProfile?.fullName ?? widget.profile?.fullName ?? 'Manager'),
-                                  style: const TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppColors.primary,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            GestureDetector(
-                              onTap: _isSigningOut ? null : _signOut,
-                              child: Container(
-                                width: 28,
-                                height: 28,
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: AppColors.border),
-                                ),
-                                alignment: Alignment.center,
-                                child: _isSigningOut
-                                    ? const SizedBox(
-                                        width: 12,
-                                        height: 12,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 1.8,
-                                          color: AppColors.primary,
-                                        ),
-                                      )
-                                    : const Icon(
-                                        Icons.logout_rounded,
-                                        size: 15,
-                                        color: AppColors.textSecondary,
-                                      ),
-                              ),
-                            ),
-                          ],
+                        const SizedBox(width: 10),
+                        const Text(
+                          'Tap to switch role',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w400,
+                          ),
                         ),
                       ],
                     ),
+                    const Text(
+                      'DineQueue',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // --- Scrollable Dashboard Content ---
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     const SizedBox(height: 16),
 
                     // --- Dashboard Title & Venue Pill ---
@@ -350,7 +512,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
-                                  _selectedRestaurant.toUpperCase(),
+                                  (_selectedRestaurant?.name ?? (_restaurantsLoaded ? 'No restaurant' : 'Loading...')).toUpperCase(),
                                   style: const TextStyle(
                                     fontSize: 9,
                                     fontWeight: FontWeight.bold,
@@ -371,29 +533,27 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                             if (value == '__add_new__') {
                               _showAddNewRestaurantDialog();
                             } else {
-                              setState(() {
-                                _selectedRestaurant = value;
-                              });
+                              _selectRestaurant(value);
                             }
                           },
                           itemBuilder: (context) {
                             return [
-                              ..._availableRestaurants.map(
+                              ..._restaurants.map(
                                 (rest) => PopupMenuItem<String>(
-                                  value: rest,
+                                  value: rest.id,
                                   child: Row(
                                     children: [
                                       Icon(
-                                        rest == _selectedRestaurant ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                                        rest.id == _selectedRestaurantId ? Icons.radio_button_checked : Icons.radio_button_unchecked,
                                         size: 16,
-                                        color: rest == _selectedRestaurant ? AppColors.primary : Colors.grey,
+                                        color: rest.id == _selectedRestaurantId ? AppColors.primary : Colors.grey,
                                       ),
                                       const SizedBox(width: 8),
                                       Text(
-                                        rest,
+                                        rest.name,
                                         style: TextStyle(
                                           fontSize: 13,
-                                          fontWeight: rest == _selectedRestaurant ? FontWeight.bold : FontWeight.normal,
+                                          fontWeight: rest.id == _selectedRestaurantId ? FontWeight.bold : FontWeight.normal,
                                           color: AppColors.textPrimary,
                                         ),
                                       ),
@@ -439,185 +599,36 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                     const SizedBox(height: 20),
 
                     // --- Tab Content Switching ---
-                    if (_selectedTab == 1) ...[
+                    if (!_restaurantsLoaded)
+                      const _CenteredStatus(child: CircularProgressIndicator(color: AppColors.primary))
+                    else if (_restaurantsError != null && _restaurants.isEmpty)
+                      _StatusCard(
+                        icon: Icons.cloud_off_rounded,
+                        title: 'Could not load restaurants',
+                        message: '$_restaurantsError',
+                        actionLabel: 'Retry',
+                        onAction: () => setState(_listenToRestaurants),
+                      )
+                    else if (_selectedRestaurantId == null)
+                      _StatusCard(
+                        icon: Icons.storefront,
+                        title: 'No restaurants yet',
+                        message: 'Add your first restaurant to start managing tables, menu and queue.',
+                        actionLabel: 'Add Restaurant',
+                        onAction: _showAddNewRestaurantDialog,
+                      )
+                    else if (_selectedTab == 1) ...[
                       TablesTabWidget(
-                        selectedRestaurant: _selectedRestaurant,
-                        availableRestaurants: _availableRestaurants,
+                        restaurants: _restaurants,
+                        selectedRestaurantId: _selectedRestaurantId!,
                       ),
                     ] else if (_selectedTab == 2) ...[
                       LiveMenuTabWidget(
-                        selectedRestaurant: _selectedRestaurant,
-                        availableRestaurants: _availableRestaurants,
+                        restaurants: _restaurants,
+                        selectedRestaurantId: _selectedRestaurantId!,
                       ),
                     ] else ...[
-                      // --- Executive KPIs Header & Time Filter ---
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Executive KPIs',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.all(3),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: AppColors.border),
-                            ),
-                            child: Row(
-                              children: [
-                                _buildTimeFilterPill('Today', 0),
-                                _buildTimeFilterPill('This Week', 1),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-
-                      // --- 2x2 Live KPI Cards Grid ---
-                      StreamBuilder<List<PhysicalTable>>(
-                        stream: FirestoreService().streamTables(restaurantId: 'ocean_bistro'),
-                        builder: (context, tablesSnapshot) {
-                          final tables = tablesSnapshot.data ?? PhysicalTable.mockList();
-                          final totalTables = tables.length;
-                          final availableCount = tables.where((t) => t.status == TableStatus.available).length;
-                          final availableTablesRatio = '$availableCount / $totalTables';
-
-                          return StreamBuilder<List<QueueEntryModel>>(
-                            stream: FirestoreService().streamQueue('ocean_bistro'),
-                            builder: (context, queueSnapshot) {
-                              final queue = queueSnapshot.data ?? [];
-                              int totalWait = 0;
-                              for (final entry in queue) {
-                                totalWait += entry.estimatedWaitMinutes;
-                              }
-                              final avgWaitMinutes = queue.isEmpty ? 14 : (totalWait / queue.length).round();
-                              final totalBookingsBase = _selectedTimeFilter == 1 ? 195 : 42;
-                              final totalBookingsCount = (totalBookingsBase + queue.length).toString();
-                              final occupiedCount = tables.where((t) => t.status == TableStatus.occupied).length;
-                              final turnoverRate = '${(3.0 + (occupiedCount * 0.2)).toStringAsFixed(1)}x';
-
-                              return GridView.count(
-                                crossAxisCount: 2,
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                mainAxisSpacing: 12,
-                                crossAxisSpacing: 12,
-                                childAspectRatio: 1.4,
-                                children: [
-                                  _KpiCardWidget(
-                                    label: 'Total Bookings',
-                                    value: totalBookingsCount,
-                                    icon: Icons.smartphone,
-                                    bgColor: AppColors.mintTint,
-                                    iconColor: AppColors.primary,
-                                    iconBgColor: Colors.white,
-                                  ),
-                                  _KpiCardWidget(
-                                    label: 'Floor Turnover',
-                                    value: turnoverRate,
-                                    icon: Icons.bolt,
-                                    bgColor: AppColors.peachTint,
-                                    iconColor: AppColors.accentOrange,
-                                    iconBgColor: Colors.white,
-                                  ),
-                                  _KpiCardWidget(
-                                    label: 'Avg Queue Wait',
-                                    value: '$avgWaitMinutes min',
-                                    icon: Icons.access_time_filled,
-                                    bgColor: AppColors.amberTint,
-                                    iconColor: AppColors.accentAmber,
-                                    iconBgColor: Colors.white,
-                                  ),
-                                  GestureDetector(
-                                    onTap: () => setState(() => _selectedTab = 1),
-                                    child: _KpiCardWidget(
-                                      label: 'Available Tables',
-                                      value: availableTablesRatio,
-                                      icon: Icons.table_restaurant,
-                                      bgColor: AppColors.skyTint,
-                                      iconColor: AppColors.primary,
-                                      iconBgColor: Colors.white,
-                                    ),
-                                  ),
-                                ],
-                              );
-                            },
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 20),
-
-                      // --- Manager Fast Actions ---
-                      Row(
-                        children: const [
-                          Icon(Icons.bolt, size: 18, color: AppColors.accentOrange),
-                          SizedBox(width: 4),
-                          Text(
-                            'Manager Fast Actions',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              onPressed: () => QuickTurnTablesSheet.show(context),
-                              icon: const Icon(Icons.bolt, size: 16),
-                              label: const Text(
-                                'Quick Turn 2 Tables',
-                                style: TextStyle(fontSize: 12),
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.primary,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: () => AiFloorOptimizerSheet.show(context),
-                              icon: const Icon(Icons.tune, size: 16, color: AppColors.textPrimary),
-                              label: const Text(
-                                'Optimize Floor',
-                                style: TextStyle(fontSize: 12, color: AppColors.textPrimary),
-                              ),
-                              style: OutlinedButton.styleFrom(
-                                backgroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                side: const BorderSide(color: AppColors.border),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(24),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-
-                      // --- Hourly Velocity Chart ---
-                      StreamBuilder<List<HourlyVelocityData>>(
-                        stream: _firestoreService.streamHourlyVelocity(restaurantId: 'ocean_bistro'),
-                        builder: (context, snapshot) {
-                          final chartData = snapshot.data ?? _dashboardData.hourlyVelocity;
-                          return _HourlyVelocityChartWidget(data: chartData);
-                        },
-                      ),
+                      _buildOverview(),
                     ],
                     const SizedBox(height: 16),
                   ],
@@ -643,6 +654,181 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  /// Overview tab: KPIs, fast actions and hourly chart for the selected
+  /// restaurant, driven by one live snapshot stream.
+  Widget _buildOverview() {
+    final restaurantId = _selectedRestaurantId!;
+    final isWeek = _selectedTimeFilter == 1;
+
+    return StreamBuilder<ManagerLiveSnapshot>(
+      stream: _snapshotStream,
+      builder: (context, snapshot) {
+        final data = snapshot.data;
+
+        Widget kpiSection;
+        Widget chartSection;
+        if (data == null && snapshot.hasError) {
+          kpiSection = _StatusCard(
+            icon: Icons.cloud_off_rounded,
+            title: 'Live data unavailable',
+            message: '${snapshot.error}',
+            actionLabel: 'Retry',
+            onAction: () => setState(() => _applySelection(restaurantId)),
+          );
+          chartSection = const SizedBox.shrink();
+        } else if (data == null) {
+          kpiSection = const _CenteredStatus(child: CircularProgressIndicator(color: AppColors.primary));
+          chartSection = const SizedBox.shrink();
+        } else {
+          kpiSection = GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 12,
+            crossAxisSpacing: 12,
+            childAspectRatio: 1.4,
+            children: [
+              _KpiCardWidget(
+                label: 'Total Bookings',
+                value: data.totalBookings(isWeek: isWeek).toString(),
+                icon: Icons.smartphone,
+                bgColor: AppColors.mintTint,
+                iconColor: AppColors.primary,
+                iconBgColor: Colors.white,
+              ),
+              _KpiCardWidget(
+                label: 'Floor Turnover',
+                value: data.floorTurnover(isWeek: isWeek),
+                icon: Icons.bolt,
+                bgColor: AppColors.peachTint,
+                iconColor: AppColors.accentOrange,
+                iconBgColor: Colors.white,
+              ),
+              _KpiCardWidget(
+                label: 'Avg Queue Wait',
+                value: '${data.avgQueueWaitMinutes} min',
+                icon: Icons.access_time_filled,
+                bgColor: AppColors.amberTint,
+                iconColor: AppColors.accentAmber,
+                iconBgColor: Colors.white,
+              ),
+              GestureDetector(
+                onTap: () => setState(() => _selectedTab = 1),
+                child: _KpiCardWidget(
+                  label: 'Available Tables',
+                  value: data.availableTablesRatio,
+                  icon: Icons.table_restaurant,
+                  bgColor: AppColors.skyTint,
+                  iconColor: AppColors.primary,
+                  iconBgColor: Colors.white,
+                ),
+              ),
+            ],
+          );
+          chartSection = _HourlyVelocityChartWidget(data: data.hourlyVelocity(isWeek: isWeek));
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // --- Executive KPIs Header & Time Filter ---
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Executive KPIs',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Row(
+                    children: [
+                      _buildTimeFilterPill('Today', 0),
+                      _buildTimeFilterPill('This Week', 1),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // --- 2x2 Live KPI Cards Grid ---
+            kpiSection,
+            const SizedBox(height: 20),
+
+            // --- Manager Fast Actions ---
+            Row(
+              children: const [
+                Icon(Icons.bolt, size: 18, color: AppColors.accentOrange),
+                SizedBox(width: 4),
+                Text(
+                  'Manager Fast Actions',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => QuickTurnTablesSheet.show(context, restaurantId: restaurantId),
+                    icon: const Icon(Icons.bolt, size: 16),
+                    label: const Text(
+                      'Quick Turn Tables',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => AiFloorOptimizerSheet.show(context, restaurantId: restaurantId),
+                    icon: const Icon(Icons.tune, size: 16, color: AppColors.textPrimary),
+                    label: const Text(
+                      'Optimize Floor',
+                      style: TextStyle(fontSize: 12, color: AppColors.textPrimary),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      side: const BorderSide(color: AppColors.border),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            // --- Hourly Velocity Chart ---
+            chartSection,
+          ],
+        );
+      },
     );
   }
 
@@ -819,12 +1005,8 @@ class _HourlyVelocityChartWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final peakItem = data.firstWhere(
-      (item) => item.isPeak,
-      orElse: () => data.isNotEmpty
-          ? data.reduce((a, b) => a.value >= b.value ? a : b)
-          : const HourlyVelocityData(hour: '8 PM', value: 0.95, isPeak: true),
-    );
+    final peakItems = data.where((item) => item.isPeak);
+    final peakLabel = peakItems.isEmpty ? 'No activity yet' : peakItems.first.hour;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -850,7 +1032,7 @@ class _HourlyVelocityChartWidget extends StatelessWidget {
                 ),
               ),
               Text(
-                'Peak: ${peakItem.hour}',
+                peakItems.isEmpty ? peakLabel : 'Peak: $peakLabel',
                 style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
@@ -898,6 +1080,78 @@ class _HourlyVelocityChartWidget extends StatelessWidget {
                 );
               }).toList(),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CenteredStatus extends StatelessWidget {
+  final Widget child;
+
+  const _CenteredStatus({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 40),
+      child: Center(child: child),
+    );
+  }
+}
+
+class _StatusCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String message;
+  final String actionLabel;
+  final VoidCallback onAction;
+
+  const _StatusCard({
+    required this.icon,
+    required this.title,
+    required this.message,
+    required this.actionLabel,
+    required this.onAction,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, size: 32, color: AppColors.textMuted),
+          const SizedBox(height: 10),
+          Text(
+            title,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            maxLines: 4,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 12),
+          ElevatedButton(
+            onPressed: onAction,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            ),
+            child: Text(actionLabel),
           ),
         ],
       ),
