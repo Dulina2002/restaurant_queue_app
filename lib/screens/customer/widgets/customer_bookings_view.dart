@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../models/reservation_model.dart';
 import '../../../models/user_profile.dart';
-import '../../../services/firestore_service.dart';
+import '../../../services/restaurant_database_service.dart';
 import '../../../shared/theme/app_colors.dart';
 import '../../../shared/widgets/app_toast.dart';
 import 'create_booking_modal.dart';
@@ -26,7 +26,7 @@ class CustomerBookingsView extends StatefulWidget {
 }
 
 class _CustomerBookingsViewState extends State<CustomerBookingsView> {
-  final FirestoreService _firestoreService = FirestoreService();
+  final RestaurantDatabaseService _firestoreService = RestaurantDatabaseService();
   int _selectedTab = 0; // 0: Upcoming, 1: History
 
   void _confirmCancelBooking(ReservationModel reservation) {

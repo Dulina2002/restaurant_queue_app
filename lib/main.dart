@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'services/firestore_service.dart';
+import 'services/restaurant_database_service.dart';
 import 'screens/auth_gate.dart';
 
 Future<void> main() async {
@@ -31,7 +31,7 @@ Future<void> main() async {
 
   // Seed sample dataset asynchronously in background
   try {
-    FirestoreService().seedInitialDataIfEmpty();
+    RestaurantDatabaseService().seedInitialDataIfEmpty();
   } catch (_) {}
 }
 

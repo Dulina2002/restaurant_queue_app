@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/user_profile.dart';
 import '../../services/auth_service.dart';
 import '../../services/admin_supabase_service.dart';
+import '../../services/restaurant_database_service.dart';
 import '../../shared/widgets/app_toast.dart';
 import '../home_screen.dart';
 
@@ -981,7 +982,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     ),
                     const SizedBox(height: 15),
                     DropdownButtonFormField<String>(
-                      initialValue: selectedRole,
+                      value: selectedRole,
                       decoration: const InputDecoration(
                         labelText: 'User Role',
                         border: OutlineInputBorder(),
@@ -1101,7 +1102,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     ),
                     const SizedBox(height: 20),
                     DropdownButtonFormField<String>(
-                      initialValue: selectedRole,
+                      value: selectedRole,
                       decoration: const InputDecoration(
                         labelText: 'Select Role',
                         border: OutlineInputBorder(),
@@ -1320,7 +1321,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   ),
                   const SizedBox(height: 15),
                   DropdownButtonFormField<String>(
-                    initialValue: priority,
+                    value: priority,
                     decoration: const InputDecoration(
                       labelText: 'Alert type / priority',
                       border: OutlineInputBorder(),
