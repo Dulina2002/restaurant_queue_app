@@ -1,3 +1,5 @@
+import '../services/restaurant_image_storage.dart';
+
 class RestaurantModel {
   final String id;
   final String name;
@@ -29,11 +31,40 @@ class RestaurantModel {
     this.createdAt,
   });
 
+  /// Returns true if the restaurant has an active queue wait time (> 0 mins).
+  /// If wait time is 0 (or '0m', 'Direct Seating'), direct booking is active.
+  bool get hasWaitTime {
+    final raw = estWait.trim().toLowerCase();
+    if (raw.contains('direct')) return false;
+    final numbers = raw.replaceAll(RegExp(r'[^0-9]'), '');
+    if (numbers.isNotEmpty) {
+      final mins = int.tryParse(numbers) ?? 0;
+      return mins > 0;
+    }
+    return isQueueAvailable;
+  }
+
   factory RestaurantModel.fromJson(Map<String, dynamic> json) {
+    final id = json['id']?.toString() ?? '';
+    final name = json['name'] as String? ?? '';
+    final cuisine = json['cuisine'] as String? ?? 'General';
+    final customSaved = RestaurantImageStorage().getImage(
+      id: id,
+      name: name,
+      enableCulinaryFallback: false,
+    );
+    var img = (customSaved != null && customSaved.trim().isNotEmpty)
+        ? customSaved.trim()
+        : json['image_url'] as String?;
+
+    if (img == null || img.trim().isEmpty) {
+      img = RestaurantImageStorage().getImage(id: id, name: name, cuisine: cuisine);
+    }
+
     return RestaurantModel(
-      id: json['id'] as String? ?? '',
-      name: json['name'] as String? ?? '',
-      cuisine: json['cuisine'] as String? ?? 'General',
+      id: id,
+      name: name,
+      cuisine: cuisine,
       tag: json['tag'] as String? ?? '',
       location: json['location'] as String? ?? '',
       rating: (json['rating'] as num?)?.toDouble() ?? 4.5,
@@ -42,7 +73,7 @@ class RestaurantModel {
       isQueueAvailable: json['is_queue_available'] as bool? ?? true,
       estWait: json['est_wait'] as String? ?? 'Direct Seating',
       waitlistCount: (json['waitlist_count'] as num?)?.toInt() ?? 0,
-      imageUrl: json['image_url'] as String?,
+      imageUrl: img,
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'].toString())
           : null,

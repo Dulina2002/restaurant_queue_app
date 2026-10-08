@@ -6,13 +6,14 @@ import '../../models/reservation_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/supabase_service.dart';
 import '../../services/receptionist_context.dart';
-import '../home_screen.dart';
+import '../sign_in_screen.dart';
 import 'receptionist_dashboard_screen.dart';
 import 'floor_overview_screen.dart';
 import 'live_queue_screen.dart';
 import 'receptionist_profile_screen.dart';
 import '../../shared/widgets/role_header_widget.dart';
 import '../../shared/widgets/role_bottom_nav_widget.dart';
+import '../../features/receptionist/presentation/widgets/reassign_table_dialog.dart';
 import '../../shared/widgets/app_toast.dart';
 
 class ReservationSummaryScreen extends StatefulWidget {
@@ -160,7 +161,7 @@ class _ReservationSummaryScreenState extends State<ReservationSummaryScreen> {
       if (!mounted) return;
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
+        MaterialPageRoute(builder: (context) => const SignInScreen()),
         (route) => false,
       );
     } catch (e) {
@@ -638,6 +639,27 @@ class _ReservationSummaryScreenState extends State<ReservationSummaryScreen> {
                   child: const Text(
                     'Cancel',
                     style: TextStyle(fontSize: 12, color: Color(0xFFDC2626), fontWeight: FontWeight.bold),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    await ReassignTableDialog.show(
+                      context,
+                      reservation: res,
+                      restaurantId: _currentRestaurantId,
+                      restaurantName: _currentRestaurantName,
+                    );
+                  },
+                  icon: const Icon(Icons.table_restaurant_outlined, size: 14, color: Color(0xFF475569)),
+                  label: const Text(
+                    'Reassign',
+                    style: TextStyle(fontSize: 12, color: Color(0xFF475569), fontWeight: FontWeight.bold),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    side: const BorderSide(color: Color(0xFFE2E8F0)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                 ),
                 const SizedBox(width: 8),

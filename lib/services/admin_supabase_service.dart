@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user_role.dart';
 import 'supabase_service.dart';
+import 'restaurant_image_storage.dart';
 
 class AdminSupabaseService {
   SupabaseClient get _requiredClient {
@@ -85,18 +86,37 @@ class AdminSupabaseService {
       SupabaseService().isSupabaseConfigured ? Supabase.instance.client : null;
 
   Map<String, String> _mapRestaurant(Map<String, dynamic> row) {
+    final estWait = row['est_wait']?.toString() ?? '0m';
+    final numbers = estWait.replaceAll(RegExp(r'[^0-9]'), '');
+    final waitMinutes = int.tryParse(numbers) ?? 0;
+    final id = row['id']?.toString() ?? '';
+    final name = row['name']?.toString() ?? 'Restaurant';
+    final cuisine = row['cuisine']?.toString() ?? 'General';
+    final customSaved = RestaurantImageStorage().getImage(
+      id: id,
+      name: name,
+      enableCulinaryFallback: false,
+    );
+    var img = (customSaved != null && customSaved.trim().isNotEmpty)
+        ? customSaved.trim()
+        : row['image_url']?.toString();
+    if (img == null || img.trim().isEmpty) {
+      img = RestaurantImageStorage().getImage(id: id, name: name, cuisine: cuisine);
+    }
+
     return <String, String>{
-      'id': row['id'].toString(),
-      'name': row['name']?.toString() ?? 'Restaurant',
-      'cuisine': row['cuisine']?.toString() ?? 'General',
+      'id': id,
+      'name': name,
+      'cuisine': cuisine,
       'address': row['location']?.toString() ?? '',
       // These columns do not currently exist in the deployed restaurants table.
       'price': 'Not provided',
       'phone': 'Not provided',
-      'waitTime': row['est_wait']?.toString() ?? 'Not provided',
+      'waitTime': '${waitMinutes}m',
+      'imageUrl': img ?? '',
       'status': row['is_active'] == false
           ? 'Inactive'
-          : row['is_queue_available'] == false
+          : waitMinutes > 0
               ? 'Few Tables Left'
               : 'Tables Available',
     };
@@ -114,16 +134,46 @@ class AdminSupabaseService {
     return '${safeSlug}_${DateTime.now().millisecondsSinceEpoch}';
   }
 
+  static bool? _hasImageUrlColumn;
+
+  bool _isMissingImageUrlError(Object error) {
+    final str = error.toString().toLowerCase();
+    return str.contains('image_url') || str.contains('42703');
+  }
+
   Future<List<Map<String, String>>?> loadRestaurants() async {
     final client = _client;
     if (client == null) return null;
 
-    final rows = await client
-        .from('restaurants')
-        .select(
-          'id,name,cuisine,location,is_active,is_queue_available,est_wait',
-        )
-        .timeout(const Duration(seconds: 15));
+    List<dynamic> rows;
+    if (_hasImageUrlColumn == false) {
+      rows = await client
+          .from('restaurants')
+          .select(
+            'id,name,cuisine,location,is_active,is_queue_available,est_wait',
+          )
+          .timeout(const Duration(seconds: 15));
+    } else {
+      try {
+        rows = await client
+            .from('restaurants')
+            .select(
+              'id,name,cuisine,location,is_active,is_queue_available,est_wait,image_url',
+            )
+            .timeout(const Duration(seconds: 15));
+        _hasImageUrlColumn = true;
+      } catch (e) {
+        if (_isMissingImageUrlError(e)) {
+          _hasImageUrlColumn = false;
+        }
+        rows = await client
+            .from('restaurants')
+            .select(
+              'id,name,cuisine,location,is_active,is_queue_available,est_wait',
+            )
+            .timeout(const Duration(seconds: 15));
+      }
+    }
 
     return rows
         .map(
@@ -137,36 +187,81 @@ class AdminSupabaseService {
     required String cuisine,
     required String location,
     required String estimatedWait,
+    String? imageUrl,
   }) async {
     final client = _client;
     if (client == null) return null;
 
     final id = _generateRestaurantId(name);
+    final numbers = estimatedWait.replaceAll(RegExp(r'[^0-9]'), '');
+    final waitMinutes = int.tryParse(numbers) ?? 0;
+    final isQueue = waitMinutes > 0;
+    final cleanWait = '${waitMinutes}m';
 
-    final row = await client
-        .from('restaurants')
-        .insert({
-          'id': id,
-          'name': name,
-          'cuisine': cuisine,
-          // tag is required by the current deployed schema.
-          'tag': cuisine,
-          'location': location.trim().isEmpty
-              ? 'Address not provided'
-              : location.trim(),
-          'is_active': true,
-          'is_queue_available': true,
-          'est_wait': estimatedWait.trim().isEmpty
-              ? 'Direct Seating'
-              : estimatedWait.trim(),
-        })
-        .select(
-          'id,name,cuisine,location,is_active,is_queue_available,est_wait',
-        )
-        .single()
-        .timeout(const Duration(seconds: 15));
+    if (imageUrl != null && imageUrl.isNotEmpty) {
+      RestaurantImageStorage().saveImage(id: id, name: name, imageUrl: imageUrl);
+    }
 
-    return _mapRestaurant(Map<String, dynamic>.from(row));
+    final insertPayload = <String, dynamic>{
+      'id': id,
+      'name': name,
+      'cuisine': cuisine,
+      // tag is required by the current deployed schema.
+      'tag': cuisine,
+      'location': location.trim().isEmpty
+          ? 'Address not provided'
+          : location.trim(),
+      'is_active': true,
+      'is_queue_available': isQueue,
+      'est_wait': cleanWait,
+    };
+
+    dynamic row;
+    if (_hasImageUrlColumn == false) {
+      row = await client
+          .from('restaurants')
+          .insert(insertPayload)
+          .select(
+            'id,name,cuisine,location,is_active,is_queue_available,est_wait',
+          )
+          .single()
+          .timeout(const Duration(seconds: 15));
+    } else {
+      final payloadWithImg = Map<String, dynamic>.from(insertPayload);
+      if (imageUrl != null && imageUrl.isNotEmpty) {
+        payloadWithImg['image_url'] = imageUrl;
+      }
+
+      try {
+        row = await client
+            .from('restaurants')
+            .insert(payloadWithImg)
+            .select(
+              'id,name,cuisine,location,is_active,is_queue_available,est_wait,image_url',
+            )
+            .single()
+            .timeout(const Duration(seconds: 15));
+        _hasImageUrlColumn = true;
+      } catch (e) {
+        if (_isMissingImageUrlError(e)) {
+          _hasImageUrlColumn = false;
+        }
+        row = await client
+            .from('restaurants')
+            .insert(insertPayload)
+            .select(
+              'id,name,cuisine,location,is_active,is_queue_available,est_wait',
+            )
+            .single()
+            .timeout(const Duration(seconds: 15));
+      }
+    }
+
+    final mapped = _mapRestaurant(Map<String, dynamic>.from(row));
+    if (imageUrl != null && imageUrl.isNotEmpty && (mapped['imageUrl'] == null || mapped['imageUrl']!.isEmpty)) {
+      mapped['imageUrl'] = imageUrl;
+    }
+    return mapped;
   }
 
   Future<Map<String, String>?> updateRestaurant({
@@ -175,31 +270,80 @@ class AdminSupabaseService {
     required String cuisine,
     required String location,
     required String estimatedWait,
+    String? imageUrl,
   }) async {
     final client = _client;
     if (client == null) return null;
 
-    final row = await client
-        .from('restaurants')
-        .update({
-          'name': name,
-          'cuisine': cuisine,
-          'tag': cuisine,
-          'location': location.trim().isEmpty
-              ? 'Address not provided'
-              : location.trim(),
-          'est_wait': estimatedWait.trim().isEmpty
-              ? 'Direct Seating'
-              : estimatedWait.trim(),
-        })
-        .eq('id', id)
-        .select(
-          'id,name,cuisine,location,is_active,is_queue_available,est_wait',
-        )
-        .single()
-        .timeout(const Duration(seconds: 15));
+    final numbers = estimatedWait.replaceAll(RegExp(r'[^0-9]'), '');
+    final waitMinutes = int.tryParse(numbers) ?? 0;
+    final isQueue = waitMinutes > 0;
+    final cleanWait = '${waitMinutes}m';
 
-    return _mapRestaurant(Map<String, dynamic>.from(row));
+    if (imageUrl != null && imageUrl.isNotEmpty) {
+      RestaurantImageStorage().saveImage(id: id, name: name, imageUrl: imageUrl);
+    }
+
+    final basePayload = <String, dynamic>{
+      'name': name,
+      'cuisine': cuisine,
+      'tag': cuisine,
+      'location': location.trim().isEmpty
+          ? 'Address not provided'
+          : location.trim(),
+      'est_wait': cleanWait,
+      'is_queue_available': isQueue,
+    };
+
+    dynamic row;
+    if (_hasImageUrlColumn == false) {
+      row = await client
+          .from('restaurants')
+          .update(basePayload)
+          .eq('id', id)
+          .select(
+            'id,name,cuisine,location,is_active,is_queue_available,est_wait',
+          )
+          .single()
+          .timeout(const Duration(seconds: 15));
+    } else {
+      final payloadWithImg = Map<String, dynamic>.from(basePayload);
+      if (imageUrl != null && imageUrl.isNotEmpty) {
+        payloadWithImg['image_url'] = imageUrl;
+      }
+
+      try {
+        row = await client
+            .from('restaurants')
+            .update(payloadWithImg)
+            .eq('id', id)
+            .select(
+              'id,name,cuisine,location,is_active,is_queue_available,est_wait,image_url',
+            )
+            .single()
+            .timeout(const Duration(seconds: 15));
+        _hasImageUrlColumn = true;
+      } catch (e) {
+        if (_isMissingImageUrlError(e)) {
+          _hasImageUrlColumn = false;
+        }
+        row = await client
+            .from('restaurants')
+            .update(basePayload)
+            .eq('id', id)
+            .select(
+              'id,name,cuisine,location,is_active,is_queue_available,est_wait',
+            )
+            .single()
+            .timeout(const Duration(seconds: 15));
+      }
+    }
+
+    final mapped = _mapRestaurant(Map<String, dynamic>.from(row));
+    if (imageUrl != null && imageUrl.isNotEmpty && (mapped['imageUrl'] == null || mapped['imageUrl']!.isEmpty)) {
+      mapped['imageUrl'] = imageUrl;
+    }
+    return mapped;
   }
 
   Future<Map<String, String>?> toggleRestaurantAvailability({
@@ -209,12 +353,14 @@ class AdminSupabaseService {
     final client = _client;
     if (client == null) return null;
 
+    final updatePayload = {
+      'is_queue_available': !makeAvailable,
+      'est_wait': makeAvailable ? '0m' : '15m',
+    };
+
     final row = await client
         .from('restaurants')
-        .update({
-          'is_queue_available': makeAvailable,
-          'est_wait': makeAvailable ? '0m' : '15m',
-        })
+        .update(updatePayload)
         .eq('id', id)
         .select(
           'id,name,cuisine,location,is_active,is_queue_available,est_wait',

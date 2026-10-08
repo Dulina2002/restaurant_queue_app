@@ -9,6 +9,7 @@ import '../features/manager/data/models/physical_table_model.dart';
 import '../features/manager/data/models/live_menu_dish_model.dart';
 import '../features/receptionist/data/models/floor_table_model.dart';
 import 'reservation_storage_service.dart';
+import 'restaurant_image_storage.dart';
 
 class SupabaseService {
   static final SupabaseService _instance = SupabaseService._internal();
@@ -39,6 +40,7 @@ class SupabaseService {
       isQueueAvailable: true,
       estWait: '12 min wait',
       waitlistCount: 3,
+      imageUrl: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1200&q=80',
     ),
     const RestaurantModel(
       id: 'mango_tree',
@@ -52,6 +54,7 @@ class SupabaseService {
       isQueueAvailable: false,
       estWait: 'Direct Seating',
       waitlistCount: 0,
+      imageUrl: 'https://images.unsplash.com/photo-1552566626-52f8b828add9?auto=format&fit=crop&w=1200&q=80',
     ),
     const RestaurantModel(
       id: 'nihonbashi',
@@ -65,6 +68,7 @@ class SupabaseService {
       isQueueAvailable: true,
       estWait: '20 min wait',
       waitlistCount: 5,
+      imageUrl: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1200&q=80',
     ),
   ];
 
@@ -761,6 +765,9 @@ class SupabaseService {
       _reservationsStreamController.add(List.from(_fallbackReservations));
     }
     await ReservationStorageService().updateStatus(reservationId, normalized);
+    if (assignedTable != null) {
+      await ReservationStorageService().updateAssignedTableAndNotes(reservationId, assignedTable);
+    }
 
     final client = _client;
     if (client != null) {
@@ -772,6 +779,40 @@ class SupabaseService {
         }).match({'id': reservationId});
       } catch (e) {
         debugPrint('Supabase updateReservationStatus error: $e');
+      }
+      _notifyChanged('reservations');
+    }
+  }
+
+  Future<void> reassignReservationTable({
+    required String reservationId,
+    required String newTable,
+    String? updatedNotes,
+  }) async {
+    final idx = _fallbackReservations.indexWhere((r) => r.id == reservationId);
+    if (idx != -1) {
+      _fallbackReservations[idx] = _fallbackReservations[idx].copyWith(
+        assignedTable: newTable,
+        specialNotes: updatedNotes ?? _fallbackReservations[idx].specialNotes,
+      );
+      _reservationsStreamController.add(List.from(_fallbackReservations));
+    }
+    await ReservationStorageService().updateAssignedTableAndNotes(
+      reservationId,
+      newTable,
+      updatedNotes,
+    );
+
+    final client = _client;
+    if (client != null) {
+      try {
+        await client.from('reservations').update({
+          'assigned_table': newTable,
+          if (updatedNotes != null) 'special_notes': updatedNotes,
+          'updated_at': DateTime.now().toIso8601String(),
+        }).match({'id': reservationId});
+      } catch (e) {
+        debugPrint('Supabase reassignReservationTable error: $e');
       }
       _notifyChanged('reservations');
     }
@@ -998,10 +1039,25 @@ class SupabaseService {
   // ---------- Restaurants (manager) ----------
 
   RestaurantModel _restaurantFromRow(Map<String, dynamic> json) {
+    final id = json['id']?.toString() ?? '';
+    final name = json['name'] as String? ?? 'Restaurant';
+    final cuisine = json['cuisine'] as String? ?? 'General';
+    final customSaved = RestaurantImageStorage().getImage(
+      id: id,
+      name: name,
+      enableCulinaryFallback: false,
+    );
+    final rawImg = json['image_url'] as String?;
+    final resolvedImageUrl = (customSaved != null && customSaved.trim().isNotEmpty)
+        ? customSaved.trim()
+        : ((rawImg != null && rawImg.trim().isNotEmpty)
+            ? rawImg.trim()
+            : RestaurantImageStorage().getImage(id: id, name: name, cuisine: cuisine));
+
     return RestaurantModel(
-      id: json['id'].toString(),
-      name: json['name'] as String? ?? 'Restaurant',
-      cuisine: json['cuisine'] as String? ?? 'General',
+      id: id,
+      name: name,
+      cuisine: cuisine,
       tag: json['tag'] as String? ?? '',
       location: json['location'] as String? ?? '',
       rating: (json['rating'] is num)
@@ -1012,7 +1068,62 @@ class SupabaseService {
       isQueueAvailable: json['is_queue_available'] as bool? ?? true,
       estWait: json['est_wait'] as String? ?? 'Direct Seating',
       waitlistCount: (json['waitlist_count'] is num) ? (json['waitlist_count'] as num).toInt() : 0,
+      imageUrl: resolvedImageUrl,
     );
+  }
+
+  /// Synchronize restaurant changes into the active memory cache and stream
+  void syncRestaurant({
+    required String id,
+    required String name,
+    required String cuisine,
+    required String location,
+    required String estWait,
+    String? imageUrl,
+    bool? isActive,
+  }) {
+    if (imageUrl != null && imageUrl.trim().isNotEmpty) {
+      RestaurantImageStorage().saveImage(
+        id: id,
+        name: name,
+        imageUrl: imageUrl.trim(),
+      );
+    }
+    final numbers = estWait.replaceAll(RegExp(r'[^0-9]'), '');
+    final waitMinutes = int.tryParse(numbers) ?? 0;
+    final existingIdx = _fallbackRestaurants.indexWhere((r) => r.id == id);
+    final customSaved = RestaurantImageStorage().getImage(
+      id: id,
+      name: name,
+      enableCulinaryFallback: false,
+    );
+    final effectiveImg = (imageUrl != null && imageUrl.trim().isNotEmpty)
+        ? imageUrl.trim()
+        : (customSaved ??
+            (existingIdx >= 0
+                ? _fallbackRestaurants[existingIdx].imageUrl
+                : RestaurantImageStorage().getImage(id: id, name: name, cuisine: cuisine)));
+
+    final model = RestaurantModel(
+      id: id,
+      name: name,
+      cuisine: cuisine,
+      tag: cuisine,
+      location: location,
+      rating: existingIdx >= 0 ? _fallbackRestaurants[existingIdx].rating : 4.8,
+      reviewsCount: existingIdx >= 0 ? _fallbackRestaurants[existingIdx].reviewsCount : 12,
+      isActive: isActive ?? (existingIdx >= 0 ? _fallbackRestaurants[existingIdx].isActive : true),
+      isQueueAvailable: waitMinutes > 0,
+      estWait: '${waitMinutes}m',
+      waitlistCount: existingIdx >= 0 ? _fallbackRestaurants[existingIdx].waitlistCount : 0,
+      imageUrl: effectiveImg,
+    );
+    if (existingIdx >= 0) {
+      _fallbackRestaurants[existingIdx] = model;
+    } else {
+      _fallbackRestaurants.add(model);
+    }
+    _notifyChanged('restaurants');
   }
 
   Future<RestaurantModel?> getRestaurant(String id) async {
@@ -1021,14 +1132,28 @@ class SupabaseService {
       try {
         final row = await client.from('restaurants').select().eq('id', id).maybeSingle();
         if (row != null) {
-          return _restaurantFromRow(Map<String, dynamic>.from(row));
+          final mapped = _restaurantFromRow(Map<String, dynamic>.from(row));
+          if (mapped.imageUrl == null || mapped.imageUrl!.isEmpty) {
+            final cached = RestaurantImageStorage().getImage(id: mapped.id, name: mapped.name, cuisine: mapped.cuisine);
+            if (cached != null) {
+              return mapped.copyWith(imageUrl: cached);
+            }
+          }
+          return mapped;
         }
       } catch (e) {
         debugPrint('Supabase getRestaurant error: $e');
       }
     }
     try {
-      return _fallbackRestaurants.firstWhere((r) => r.id == id);
+      final fallback = _fallbackRestaurants.firstWhere((r) => r.id == id);
+      if (fallback.imageUrl == null || fallback.imageUrl!.isEmpty) {
+        final cached = RestaurantImageStorage().getImage(id: fallback.id, name: fallback.name, cuisine: fallback.cuisine);
+        if (cached != null) {
+          return fallback.copyWith(imageUrl: cached);
+        }
+      }
+      return fallback;
     } catch (_) {
       return null;
     }
@@ -1045,7 +1170,23 @@ class SupabaseService {
       return;
     }
     yield* _liveRows('restaurants', initialFallback: fallbackJson).map((rows) {
-      final list = rows.map(_restaurantFromRow).toList();
+      final list = rows.map((row) {
+        final r = _restaurantFromRow(row);
+        final custom = RestaurantImageStorage().getImage(
+          id: r.id,
+          name: r.name,
+          enableCulinaryFallback: false,
+        );
+        final existingIdx = _fallbackRestaurants.indexWhere((f) => f.id == r.id);
+        final existingImg = existingIdx >= 0 ? _fallbackRestaurants[existingIdx].imageUrl : null;
+        final effectiveImg = (custom != null && custom.isNotEmpty)
+            ? custom
+            : ((r.imageUrl != null && r.imageUrl!.isNotEmpty)
+                ? r.imageUrl
+                : (existingImg ?? RestaurantImageStorage().getImage(id: r.id, name: r.name, cuisine: r.cuisine)));
+        return r.copyWith(imageUrl: effectiveImg);
+      }).toList();
+
       final seenIds = list.map((r) => r.id).toSet();
       for (final r in list) {
         final idx = _fallbackRestaurants.indexWhere((f) => f.id == r.id);

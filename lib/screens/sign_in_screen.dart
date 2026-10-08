@@ -1,12 +1,22 @@
 import 'package:flutter/material.dart';
 import '../models/user_profile.dart';
+import '../models/user_role.dart';
 import '../services/auth_service.dart';
 import '../shared/widgets/top_toast.dart';
 import 'auth_gate.dart';
 import 'sign_up_screen.dart';
 
 class SignInScreen extends StatefulWidget {
-  const SignInScreen({super.key});
+  final UserRole? selectedRole;
+  final String? initialEmail;
+  final String? initialPassword;
+
+  const SignInScreen({
+    super.key,
+    this.selectedRole,
+    this.initialEmail,
+    this.initialPassword,
+  });
 
   @override
   State<SignInScreen> createState() => _SignInScreenState();
@@ -21,6 +31,17 @@ class _SignInScreenState extends State<SignInScreen> {
   bool _isLoading = false;
   bool _obscurePassword = true;
   String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialEmail != null && widget.initialEmail!.isNotEmpty) {
+      _emailController.text = widget.initialEmail!;
+    }
+    if (widget.initialPassword != null && widget.initialPassword!.isNotEmpty) {
+      _passwordController.text = widget.initialPassword!;
+    }
+  }
 
   @override
   void dispose() {
@@ -135,13 +156,49 @@ class _SignInScreenState extends State<SignInScreen> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Sign in to access your dining queue or staff portal',
+                    widget.selectedRole != null
+                        ? 'Sign in as ${widget.selectedRole!.displayName} to continue'
+                        : 'Sign in to access your dining queue or staff portal',
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.6),
                       fontSize: 13,
                     ),
                     textAlign: TextAlign.center,
                   ),
+                  if (widget.selectedRole != null) ...[
+                    const SizedBox(height: 12),
+                    Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF162C1E),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: const Color(0xFFF27B50).withValues(alpha: 0.5),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.verified_user_rounded,
+                              size: 15,
+                              color: Color(0xFFF27B50),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Selected Role: ${widget.selectedRole!.displayName}',
+                              style: const TextStyle(
+                                color: Color(0xFFF27B50),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 24),
 
                   // Error Alert Box (if any)

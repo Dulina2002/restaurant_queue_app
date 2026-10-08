@@ -8,6 +8,7 @@ import '../../shared/widgets/role_bottom_nav_widget.dart';
 import '../../shared/widgets/app_toast.dart';
 import '../../features/profile/presentation/screens/edit_profile_screen.dart';
 import '../home_screen.dart';
+import '../sign_in_screen.dart';
 import 'receptionist_dashboard_screen.dart';
 import 'floor_overview_screen.dart';
 import 'reservation_summary_screen.dart';
@@ -46,7 +47,7 @@ class _ReceptionistProfileScreenState extends State<ReceptionistProfileScreen> {
       if (!mounted) return;
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
+        MaterialPageRoute(builder: (context) => const SignInScreen()),
         (route) => false,
       );
     } catch (e) {

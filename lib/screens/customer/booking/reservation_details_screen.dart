@@ -5,6 +5,7 @@ import '../../../models/user_profile.dart';
 import '../../../services/restaurant_database_service.dart';
 import '../../../shared/theme/app_colors.dart';
 import '../../../shared/widgets/app_toast.dart';
+import '../../../shared/widgets/restaurant_image.dart';
 import 'modify_reservation_screen.dart';
 
 class ReservationDetailsScreen extends StatefulWidget {
@@ -128,46 +129,53 @@ class _ReservationDetailsScreenState extends State<ReservationDetailsScreen> {
                 child: Column(
                   children: [
                     // Restaurant Header Card with Image
-                    Container(
-                      height: 140,
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(20),
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF14382A), Color(0xFF092017)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                      ),
-                      child: Stack(
-                        children: [
-                          Center(
-                            child: Icon(
-                              Icons.restaurant_rounded,
-                              size: 70,
-                              color: Colors.white.withValues(alpha: 0.12),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: SizedBox(
+                        height: 140,
+                        width: double.infinity,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            RestaurantImage(
+                              imageUrl: widget.restaurant?.imageUrl,
+                              restaurantName: widget.restaurant?.name,
+                              cuisine: widget.restaurant?.cuisine,
+                              fit: BoxFit.cover,
                             ),
-                          ),
-                          Positioned(
-                            left: 16,
-                            bottom: 16,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            Container(
                               decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.5),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                widget.restaurant?.tag ?? 'Italian • Seafood',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Colors.black.withValues(alpha: 0.2),
+                                    Colors.black.withValues(alpha: 0.65),
+                                  ],
                                 ),
                               ),
                             ),
-                          ),
-                        ],
+                            Positioned(
+                              left: 16,
+                              bottom: 16,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.5),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  widget.restaurant?.tag ?? 'Italian • Seafood',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(height: 18),

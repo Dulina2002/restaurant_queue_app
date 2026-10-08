@@ -50,4 +50,20 @@ class ReservationStorageService {
       await saveReservations(current);
     }
   }
+
+  Future<void> updateAssignedTableAndNotes(
+    String reservationId,
+    String newTable, [
+    String? newNotes,
+  ]) async {
+    final current = await getStoredReservations();
+    final idx = current.indexWhere((r) => r.id == reservationId);
+    if (idx != -1) {
+      current[idx] = current[idx].copyWith(
+        assignedTable: newTable,
+        specialNotes: newNotes ?? current[idx].specialNotes,
+      );
+      await saveReservations(current);
+    }
+  }
 }

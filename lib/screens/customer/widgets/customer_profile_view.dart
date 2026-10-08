@@ -9,6 +9,7 @@ import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/user_avatar.dart';
 import '../../../features/profile/presentation/screens/edit_profile_screen.dart';
 import '../../home_screen.dart';
+import '../../sign_in_screen.dart';
 import 'customer_notifications_sheet.dart';
 
 class CustomerProfileView extends StatefulWidget {
@@ -377,7 +378,7 @@ class _CustomerProfileViewState extends State<CustomerProfileView> {
               if (!mounted) return;
               Navigator.pushAndRemoveUntil(
                 context,
-                MaterialPageRoute(builder: (context) => const HomeScreen()),
+                MaterialPageRoute(builder: (context) => const SignInScreen()),
                 (route) => false,
               );
             },

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../models/restaurant_model.dart';
 import '../../../models/user_profile.dart';
 import '../../../shared/theme/app_colors.dart';
+import '../../../shared/widgets/restaurant_image.dart';
 import '../../../services/restaurant_database_service.dart';
 import '../../../features/manager/data/models/physical_table_model.dart';
 import 'reserve_table_stepper_screen.dart';
@@ -31,21 +32,29 @@ class RestaurantDetailsScreen extends StatelessWidget {
                     // --- Hero Banner with Back Button & Cuisine Tag ---
                     Stack(
                       children: [
+                        SizedBox(
+                          height: 240,
+                          width: double.infinity,
+                          child: RestaurantImage(
+                            imageUrl: restaurant.imageUrl,
+                            restaurantId: restaurant.id,
+                            restaurantName: restaurant.name,
+                            cuisine: restaurant.cuisine,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
                         Container(
                           height: 240,
                           width: double.infinity,
-                          decoration: const BoxDecoration(
+                          decoration: BoxDecoration(
                             gradient: LinearGradient(
-                              colors: [Color(0xFF14382A), Color(0xFF092017)],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                          ),
-                          child: Center(
-                            child: Icon(
-                              Icons.restaurant_rounded,
-                              size: 110,
-                              color: Colors.white.withValues(alpha: 0.12),
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.black.withValues(alpha: 0.35),
+                                Colors.transparent,
+                                Colors.black.withValues(alpha: 0.7),
+                              ],
                             ),
                           ),
                         ),
