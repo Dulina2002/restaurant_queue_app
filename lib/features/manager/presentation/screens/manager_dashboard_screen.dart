@@ -170,13 +170,12 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                 try {
                   final created = await _firestoreService.addRestaurant(name);
                   if (!mounted) return;
-                  // Select it as soon as the live restaurant list delivers it.
+                  // Select it immediately and apply to manager view.
                   setState(() {
-                    if (_restaurants.any((r) => r.id == created.id)) {
-                      _applySelection(created.id);
-                    } else {
-                      _pendingSelectId = created.id;
+                    if (!_restaurants.any((r) => r.id == created.id)) {
+                      _restaurants = [..._restaurants, created];
                     }
+                    _applySelection(created.id);
                   });
                   AppToast.showSuccess(
                     context,

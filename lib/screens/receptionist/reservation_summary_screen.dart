@@ -49,7 +49,10 @@ class _ReservationSummaryScreenState extends State<ReservationSummaryScreen> {
 
   void _onRestaurantChanged() {
     if (mounted) {
-      _reservations = SupabaseService().getRestaurantReservationsSync(_currentRestaurantId);
+      setState(() {
+        _reservations = SupabaseService().getRestaurantReservationsSync(_currentRestaurantId);
+        _isLoading = true;
+      });
       _subscribeToReservations();
     }
   }

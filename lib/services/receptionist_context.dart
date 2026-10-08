@@ -40,8 +40,8 @@ class ReceptionistContext {
       final existing = restaurants.where((r) => r.id == activeRestaurantNotifier.value!.id);
       if (existing.isNotEmpty) {
         activeRestaurantNotifier.value = existing.first;
-        return;
       }
+      return;
     }
 
     if (preferredRestaurantId != null && preferredRestaurantId.isNotEmpty) {

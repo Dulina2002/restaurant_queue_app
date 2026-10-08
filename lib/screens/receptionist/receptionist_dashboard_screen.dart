@@ -31,11 +31,13 @@ class _ReceptionistDashboardScreenState extends State<ReceptionistDashboardScree
 
   final AuthService _authService = AuthService();
   bool _isSigningOut = false;
+  late final Stream<List<RestaurantModel>> _restaurantsStream;
 
   @override
   void initState() {
     super.initState();
     _currentProfile = widget.profile;
+    _restaurantsStream = SupabaseService().streamActiveRestaurants();
   }
 
   Future<void> _signOut() async {
@@ -115,7 +117,7 @@ class _ReceptionistDashboardScreenState extends State<ReceptionistDashboardScree
     final activeProfile = _currentProfile ?? widget.profile;
 
     return StreamBuilder<List<RestaurantModel>>(
-      stream: SupabaseService().streamActiveRestaurants(),
+      stream: _restaurantsStream,
       builder: (context, snapshot) {
         final restaurants = snapshot.data ?? [];
         if (restaurants.isNotEmpty) {
@@ -125,18 +127,24 @@ class _ReceptionistDashboardScreenState extends State<ReceptionistDashboardScree
           );
         }
 
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        return ValueListenableBuilder<RestaurantModel?>(
+          valueListenable: ReceptionistContext().activeRestaurantNotifier,
+          builder: (context, activeRestaurant, _) {
+            final activeRestaurantId = ReceptionistContext().activeRestaurantId;
+            final activeRestaurantName = ReceptionistContext().activeRestaurantName;
+
+            return SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: _buildRestaurantSelector(restaurants, activeProfile),
-                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: _buildRestaurantSelector(restaurants, activeProfile, activeRestaurant),
+                      ),
                   const SizedBox(width: 12),
                   Container(
                     margin: const EdgeInsets.only(top: 4),
@@ -228,7 +236,8 @@ class _ReceptionistDashboardScreenState extends State<ReceptionistDashboardScree
               const SizedBox(height: 32),
               // Dynamic Upcoming Arrivals for active restaurant
               StreamBuilder<List<ReservationModel>>(
-                stream: SupabaseService().streamAllRestaurantReservations(ReceptionistContext().activeRestaurantId),
+                key: ValueKey('arrivals_$activeRestaurantId'),
+                stream: SupabaseService().streamAllRestaurantReservations(activeRestaurantId),
                 builder: (context, rsvSnapshot) {
                   final allReservations = rsvSnapshot.data ?? [];
                   final activeArrivals = allReservations
@@ -242,8 +251,8 @@ class _ReceptionistDashboardScreenState extends State<ReceptionistDashboardScree
                     return a.time.compareTo(b.time);
                   });
                   final displayArrivals = activeArrivals.take(2).toList();
-                  final targetRestaurantId = ReceptionistContext().activeRestaurantId;
-                  final targetRestaurantName = ReceptionistContext().activeRestaurantName;
+                  final targetRestaurantId = activeRestaurantId;
+                  final targetRestaurantName = activeRestaurantName;
 
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -353,12 +362,18 @@ class _ReceptionistDashboardScreenState extends State<ReceptionistDashboardScree
             ],
           ),
         );
+          },
+        );
       },
     );
   }
 
-  Widget _buildRestaurantSelector(List<RestaurantModel> restaurants, UserProfile profile) {
-    final currentName = ReceptionistContext().activeRestaurantName;
+  Widget _buildRestaurantSelector(
+    List<RestaurantModel> restaurants,
+    UserProfile profile,
+    RestaurantModel? activeRestaurant,
+  ) {
+    final currentName = activeRestaurant?.name ?? ReceptionistContext().activeRestaurantName;
     if (restaurants.isEmpty) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -385,7 +400,14 @@ class _ReceptionistDashboardScreenState extends State<ReceptionistDashboardScree
       );
     }
 
-    final active = ReceptionistContext().activeRestaurant ?? restaurants.first;
+    final active = activeRestaurant ??
+        ReceptionistContext().activeRestaurant ??
+        restaurants.first;
+
+    final dropdownList = List<RestaurantModel>.from(restaurants);
+    if (!dropdownList.any((r) => r.id == active.id)) {
+      dropdownList.add(active);
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -401,9 +423,7 @@ class _ReceptionistDashboardScreenState extends State<ReceptionistDashboardScree
           elevation: 8,
           onSelected: (RestaurantModel selected) {
             if (selected.id != active.id) {
-              setState(() {
-                ReceptionistContext().setActiveRestaurant(selected);
-              });
+              ReceptionistContext().setActiveRestaurant(selected);
               AppToast.show(
                 context,
                 message: 'Managing ${selected.name}',
@@ -434,7 +454,7 @@ class _ReceptionistDashboardScreenState extends State<ReceptionistDashboardScree
                   ],
                 ),
               ),
-              ...restaurants.map((RestaurantModel r) {
+              ...dropdownList.map((RestaurantModel r) {
                 final isSelected = r.id == active.id;
                 return PopupMenuItem<RestaurantModel>(
                   value: r,
