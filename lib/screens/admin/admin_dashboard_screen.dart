@@ -90,14 +90,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           users
             ..clear()
             ..addAll(rows);
-          _userSource = 'Supabase profiles snapshot';
+          _userSource = 'Supabase Auth users via admin-users';
         } else {
           _userSource = 'Example users: Supabase not configured';
         }
       });
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
-      setState(() => _userSource = 'Example users: Supabase read failed');
+      setState(
+          () => _userSource = 'Example users: Admin users read failed: $error');
     }
   }
 
@@ -204,7 +205,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   style: const TextStyle(color: Colors.grey, fontSize: 12)),
               const SizedBox(height: 8),
               const Text(
-                'Restaurant changes are saved to Supabase. Price and phone remain session-only. Other Admin actions remain local previews.',
+                'Restaurant changes are saved to Supabase. User changes are now saved through the secure admin-users backend. Price and phone remain session-only. Broadcasts and System remain local previews.',
                 style: TextStyle(color: Colors.deepOrange, fontSize: 12),
               ),
               const SizedBox(height: 16),
@@ -1083,7 +1084,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ),
                 ElevatedButton.icon(
                   style: _greenButtonStyle(),
-                  onPressed: () {
+                  onPressed: () async {
                     final name = nameController.text.trim();
                     final email = emailController.text.trim();
 
@@ -1108,21 +1109,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       return;
                     }
 
-                    setState(() {
-                      users.add({
-                        'name': name,
-                        'email': email,
-                        'role': selectedRole,
-                        'suspended': false,
-                      });
-                    });
-
-                    Navigator.pop(dialogContext);
-
-                    _showMessage('$name added successfully');
+                    final saved = await _runUserMutation(() async {
+                      final row = await _adminService.inviteUser(
+                          email: email, fullName: name, role: selectedRole);
+                      if (!mounted) return;
+                      setState(() => users.add(row));
+                    }, 'Invitation sent to $email');
+                    if (saved && dialogContext.mounted) {
+                      Navigator.pop(dialogContext);
+                    }
                   },
                   icon: const Icon(Icons.person_add),
-                  label: const Text('Create User'),
+                  label: const Text('Invite User'),
                 ),
               ],
             );
@@ -1137,7 +1135,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   // ============================================================
 
   void _showChangeRoleDialog(int index) {
-    String selectedRole = users[index]['role'];
+    final user = users[index];
+    String selectedRole =
+        userRoles.contains(user['role']) ? user['role'] as String : 'Customer';
 
     showDialog<void>(
       context: context,
@@ -1203,16 +1203,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ),
                 ElevatedButton(
                   style: _greenButtonStyle(),
-                  onPressed: () {
+                  onPressed: () async {
                     final String name = users[index]['name'];
-
-                    setState(() {
-                      users[index]['role'] = selectedRole;
-                    });
-
-                    Navigator.pop(dialogContext);
-
-                    _showMessage('$name role changed to $selectedRole');
+                    final saved = await _runUserMutation(() async {
+                      final row = await _adminService.changeUserRole(
+                          id: _userId(user), role: selectedRole);
+                      if (!mounted) return;
+                      _replaceUser(row);
+                    }, '$name role changed to $selectedRole');
+                    if (saved && dialogContext.mounted) {
+                      Navigator.pop(dialogContext);
+                    }
                   },
                   child: const Text('Update Role'),
                 ),
@@ -1229,6 +1230,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   // ============================================================
 
   void _toggleUserSuspension(int index) {
+    final user = users[index];
     final bool currentlySuspended = users[index]['suspended'];
 
     final String name = users[index]['name'];
@@ -1269,16 +1271,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     : Colors.deepOrange,
                 foregroundColor: Colors.white,
               ),
-              onPressed: () {
-                setState(() {
-                  users[index]['suspended'] = !currentlySuspended;
-                });
-
-                Navigator.pop(dialogContext);
-
-                _showMessage(
-                  currentlySuspended ? '$name activated' : '$name suspended',
-                );
+              onPressed: () async {
+                final saved = await _runUserMutation(() async {
+                  final row = await _adminService.setUserSuspended(
+                      id: _userId(user), suspended: !currentlySuspended);
+                  if (!mounted) return;
+                  _replaceUser(row);
+                }, currentlySuspended ? '$name activated' : '$name suspended');
+                if (saved && dialogContext.mounted) {
+                  Navigator.pop(dialogContext);
+                }
               },
               child: Text(currentlySuspended ? 'Activate' : 'Suspend'),
             ),
@@ -1293,6 +1295,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   // ============================================================
 
   void _showDeleteUserDialog(int index) {
+    final user = users[index];
     final String name = users[index]['name'];
 
     showDialog<void>(
@@ -1326,14 +1329,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 backgroundColor: Colors.deepOrange,
                 foregroundColor: Colors.white,
               ),
-              onPressed: () {
-                setState(() {
-                  users.removeAt(index);
-                });
-
-                Navigator.pop(dialogContext);
-
-                _showMessage('$name deleted');
+              onPressed: () async {
+                final saved = await _runUserMutation(() async {
+                  final id = _userId(user);
+                  await _adminService.deleteUser(id);
+                  if (!mounted) return;
+                  setState(() => users.removeWhere((item) => item['id'] == id));
+                }, '$name deleted');
+                if (saved && dialogContext.mounted) {
+                  Navigator.pop(dialogContext);
+                }
               },
               icon: const Icon(Icons.delete_outline),
               label: const Text('Delete'),
@@ -1347,6 +1352,45 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   // ============================================================
   // BROADCASTS
   // ============================================================
+
+  bool _userMutationPending = false;
+
+  String _userId(Map<String, dynamic> user) {
+    final id = user['id']?.toString();
+    if (id == null || id.isEmpty) {
+      throw StateError(
+          'Example users cannot be changed. Load real backend users first.');
+    }
+    return id;
+  }
+
+  void _replaceUser(Map<String, dynamic> row) {
+    final index = users.indexWhere((user) => user['id'] == row['id']);
+    if (index >= 0) {
+      setState(() => users[index] = row);
+    }
+  }
+
+  Future<bool> _runUserMutation(
+      Future<void> Function() operation, String message) async {
+    if (_userMutationPending) return false;
+    _userMutationPending = true;
+    try {
+      await operation();
+      if (!mounted) return false;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
+      return true;
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('User change failed: $error')));
+      }
+      return false;
+    } finally {
+      _userMutationPending = false;
+    }
+  }
 
   Future<void> _showSendAlertDialog() async {
     final formKey = GlobalKey<FormState>();
