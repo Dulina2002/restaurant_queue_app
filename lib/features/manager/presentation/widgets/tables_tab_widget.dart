@@ -1,18 +1,73 @@
 import 'package:flutter/material.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_toast.dart';
-import '../../../../services/firestore_service.dart';
+import '../../../../services/restaurant_database_service.dart';
 import '../../data/models/physical_table_model.dart';
 
 class TablesTabWidget extends StatefulWidget {
-  const TablesTabWidget({super.key});
+  final String? selectedRestaurant;
+  final List<String>? availableRestaurants;
+
+  const TablesTabWidget({
+    super.key,
+    this.selectedRestaurant,
+    this.availableRestaurants,
+  });
 
   @override
   State<TablesTabWidget> createState() => _TablesTabWidgetState();
 }
 
 class _TablesTabWidgetState extends State<TablesTabWidget> {
-  final FirestoreService _firestoreService = FirestoreService();
+  final RestaurantDatabaseService _firestoreService = RestaurantDatabaseService();
+  late String _selectedRestaurantFilter;
+  String _selectedZoneFilter = 'All Zones';
+  bool _isGridView = false;
+  TableStatus? _selectedStatusFilter;
+
+  final List<String> _zoneOptions = [
+    'All Zones',
+    'Main Dining',
+    'Terrace',
+    'VIP Room',
+    'Bar Seating',
+  ];
+
+  List<String> get _filterOptions {
+    final list = <String>['All'];
+    if (widget.selectedRestaurant != null && widget.selectedRestaurant != 'All') {
+      list.add(widget.selectedRestaurant!);
+    }
+    return list;
+  }
+
+  List<String> get _allAvailableRestaurants {
+    return widget.availableRestaurants ?? ['Ocean Bistro', 'The Mango Tree', 'Nihonbashi'];
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedRestaurantFilter = widget.selectedRestaurant ?? 'All';
+  }
+
+  @override
+  void didUpdateWidget(TablesTabWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.selectedRestaurant != null && widget.selectedRestaurant != oldWidget.selectedRestaurant) {
+      setState(() {
+        _selectedRestaurantFilter = widget.selectedRestaurant!;
+      });
+    }
+  }
+
+  String _mapRestaurantNameToId(String name) {
+    final lower = name.toLowerCase();
+    if (lower.contains('ocean')) return 'ocean_bistro';
+    if (lower.contains('mango')) return 'mango_tree';
+    if (lower.contains('nihon')) return 'nihonbashi';
+    return lower.replaceAll(RegExp(r'[^a-z0-9]+'), '_');
+  }
 
   Future<void> _addNewTable(PhysicalTable newTable) async {
     try {
@@ -74,15 +129,29 @@ class _TablesTabWidgetState extends State<TablesTabWidget> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<PhysicalTable>>(
-      stream: _firestoreService.streamTables(restaurantId: 'ocean_bistro'),
+      stream: _firestoreService.streamTables(restaurantId: _selectedRestaurantFilter),
       builder: (context, snapshot) {
-        final tables = snapshot.data ?? PhysicalTable.mockList();
+        final rawTables = snapshot.data ?? PhysicalTable.mockList();
+
+        final availCount = rawTables.where((t) => t.status == TableStatus.available).length;
+        final occCount = rawTables.where((t) => t.status == TableStatus.occupied).length;
+        final resCount = rawTables.where((t) => t.status == TableStatus.reserved).length;
+
+        final tables = rawTables.where((t) {
+          if (_selectedZoneFilter != 'All Zones' && t.zone.toLowerCase() != _selectedZoneFilter.toLowerCase()) {
+            return false;
+          }
+          if (_selectedStatusFilter != null && t.status != _selectedStatusFilter) {
+            return false;
+          }
+          return true;
+        }).toList();
         final isLoading = snapshot.connectionState == ConnectionState.waiting;
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // --- Header Section: Title & + New Table Button ---
+            // --- Header Section: Title, View Switcher & + New Table Button ---
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -121,31 +190,159 @@ class _TablesTabWidgetState extends State<TablesTabWidget> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                ElevatedButton.icon(
-                  onPressed: () => _showAddOrEditTableDialog(currentTablesCount: tables.length),
-                  icon: const Icon(Icons.add, size: 16, color: Colors.white),
-                  label: const Text(
-                    'New Table',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
+                Row(
+                  children: [
+                    // Layout Toggle Button (List vs Grid)
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: IconButton(
+                        tooltip: _isGridView ? 'Switch to List View' : 'Switch to Grid View',
+                        icon: Icon(
+                          _isGridView ? Icons.view_list_rounded : Icons.grid_view_rounded,
+                          size: 18,
+                          color: AppColors.primary,
+                        ),
+                        onPressed: () => setState(() => _isGridView = !_isGridView),
+                      ),
                     ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      onPressed: () => _showAddOrEditTableDialog(currentTablesCount: tables.length),
+                      icon: const Icon(Icons.add, size: 16, color: Colors.white),
+                      label: const Text(
+                        'New Table',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
               ],
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 14),
 
-            // --- Table Cards List ---
+            // --- Floor Summary KPI Counter Chips ---
+            Row(
+              children: [
+                _buildKpiChip(
+                  label: 'Available',
+                  count: availCount,
+                  color: const Color(0xFF10B981),
+                  isSelected: _selectedStatusFilter == TableStatus.available,
+                  onTap: () {
+                    setState(() {
+                      _selectedStatusFilter = _selectedStatusFilter == TableStatus.available ? null : TableStatus.available;
+                    });
+                  },
+                ),
+                const SizedBox(width: 8),
+                _buildKpiChip(
+                  label: 'Occupied',
+                  count: occCount,
+                  color: const Color(0xFFEF4444),
+                  isSelected: _selectedStatusFilter == TableStatus.occupied,
+                  onTap: () {
+                    setState(() {
+                      _selectedStatusFilter = _selectedStatusFilter == TableStatus.occupied ? null : TableStatus.occupied;
+                    });
+                  },
+                ),
+                const SizedBox(width: 8),
+                _buildKpiChip(
+                  label: 'Reserved',
+                  count: resCount,
+                  color: const Color(0xFFF59E0B),
+                  isSelected: _selectedStatusFilter == TableStatus.reserved,
+                  onTap: () {
+                    setState(() {
+                      _selectedStatusFilter = _selectedStatusFilter == TableStatus.reserved ? null : TableStatus.reserved;
+                    });
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+
+            // --- Restaurant & Zone Filter Pills ---
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  ..._filterOptions.map((rest) {
+                    final isSelected = _selectedRestaurantFilter == rest;
+                    return GestureDetector(
+                      onTap: () => setState(() => _selectedRestaurantFilter = rest),
+                      child: Container(
+                        margin: const EdgeInsets.only(right: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: isSelected ? AppColors.primary : Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          border: isSelected ? null : Border.all(color: AppColors.border),
+                        ),
+                        child: Text(
+                          rest,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                            color: isSelected ? Colors.white : AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                  Container(
+                    height: 20,
+                    width: 1,
+                    color: AppColors.border,
+                    margin: const EdgeInsets.symmetric(horizontal: 6),
+                  ),
+                  ..._zoneOptions.map((zone) {
+                    final isSelected = _selectedZoneFilter == zone;
+                    return GestureDetector(
+                      onTap: () => setState(() => _selectedZoneFilter = zone),
+                      child: Container(
+                        margin: const EdgeInsets.only(right: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: isSelected ? const Color(0xFFE8F5E9) : Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: isSelected ? AppColors.primary : Colors.transparent,
+                          ),
+                        ),
+                        child: Text(
+                          zone,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                            color: isSelected ? AppColors.primary : AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // --- Table Cards (Grid or List View) ---
             if (isLoading)
               const Center(
                 child: Padding(
@@ -163,10 +360,26 @@ class _TablesTabWidgetState extends State<TablesTabWidget> {
                 ),
                 child: const Center(
                   child: Text(
-                    'No tables configured yet. Tap + New Table to create one.',
+                    'No tables configured yet for this selection.',
                     style: TextStyle(color: AppColors.textMuted, fontSize: 13),
                   ),
                 ),
+              )
+            else if (_isGridView)
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  mainAxisExtent: 155,
+                ),
+                itemCount: tables.length,
+                itemBuilder: (context, index) {
+                  final table = tables[index];
+                  return _buildGridTableCard(table);
+                },
               )
             else
               ListView.separated(
@@ -182,6 +395,140 @@ class _TablesTabWidgetState extends State<TablesTabWidget> {
           ],
         );
       },
+    );
+  }
+
+  Widget _buildKpiChip({
+    required String label,
+    required int count,
+    required Color color,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? color.withValues(alpha: 0.15) : Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? color : AppColors.border,
+            width: isSelected ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 7,
+              height: 7,
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 5),
+            Text(
+              '$label: $count',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                color: isSelected ? color : AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGridTableCard(PhysicalTable table) {
+    final statusColor = table.status == TableStatus.occupied
+        ? const Color(0xFFEF4444)
+        : table.status == TableStatus.reserved
+            ? const Color(0xFFF59E0B)
+            : const Color(0xFF10B981);
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: statusColor.withValues(alpha: 0.35), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: statusColor.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.table_restaurant,
+                  color: statusColor,
+                  size: 18,
+                ),
+              ),
+              _buildStatusBadge(table.status),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            table.name,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          Text(
+            '${table.seats} Seats • ${table.zone}',
+            style: const TextStyle(
+              fontSize: 10,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          Text(
+            table.guestName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: table.status == TableStatus.available ? AppColors.textMuted : AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              GestureDetector(
+                onTap: () => _showAddOrEditTableDialog(table: table),
+                child: const Icon(Icons.edit_outlined, size: 16, color: AppColors.textMuted),
+              ),
+              const SizedBox(width: 12),
+              GestureDetector(
+                onTap: () => _deleteTable(table.id),
+                child: const Icon(Icons.delete_outline, size: 16, color: Colors.redAccent),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -248,7 +595,7 @@ class _TablesTabWidgetState extends State<TablesTabWidget> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${table.seats} Seats • ${table.guestName}',
+                  '${table.seats} Seats • ${table.zone} • ${table.guestName}',
                   style: const TextStyle(
                     fontSize: 12,
                     color: AppColors.textSecondary,
@@ -335,6 +682,15 @@ class _TablesTabWidgetState extends State<TablesTabWidget> {
     final seatsController = TextEditingController(text: isEditing ? table.seats.toString() : '4');
     final guestController = TextEditingController(text: isEditing ? table.guestName : 'No Guest');
     TableStatus selectedStatus = isEditing ? table.status : TableStatus.available;
+    String selectedZone = isEditing ? table.zone : 'Main Dining';
+
+    String selectedRestaurant = isEditing
+        ? (table.restaurantId == 'mango_tree'
+            ? 'The Mango Tree'
+            : table.restaurantId == 'nihonbashi'
+                ? 'Nihonbashi'
+                : 'Ocean Bistro')
+        : (_selectedRestaurantFilter == 'All' ? 'Ocean Bistro' : _selectedRestaurantFilter);
 
     showModalBottomSheet(
       context: context,
@@ -379,6 +735,79 @@ class _TablesTabWidgetState extends State<TablesTabWidget> {
                       ),
                     ),
                     const SizedBox(height: 16),
+
+                    // Restaurant Selector Pills
+                    const Text(
+                      'Restaurant',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: _allAvailableRestaurants.map((rest) {
+                        final isSel = selectedRestaurant == rest;
+                        return GestureDetector(
+                          onTap: () => setSheetState(() => selectedRestaurant = rest),
+                          child: Container(
+                            margin: const EdgeInsets.only(right: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: isSel ? AppColors.primary : Colors.grey.shade100,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Text(
+                              rest,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                                color: isSel ? Colors.white : AppColors.textSecondary,
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Floor Zone Selector Pills
+                    const Text(
+                      'Floor Zone',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: ['Main Dining', 'Terrace', 'VIP Room', 'Bar Seating'].map((z) {
+                        final isSel = selectedZone == z;
+                        return GestureDetector(
+                          onTap: () => setSheetState(() => selectedZone = z),
+                          child: Container(
+                            margin: const EdgeInsets.only(right: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: isSel ? AppColors.primary : Colors.grey.shade100,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Text(
+                              z,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                                color: isSel ? Colors.white : AppColors.textSecondary,
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 16),
+
                     TextField(
                       controller: nameController,
                       decoration: InputDecoration(
@@ -492,7 +921,9 @@ class _TablesTabWidgetState extends State<TablesTabWidget> {
                           if (name.isNotEmpty) {
                             if (isEditing) {
                               _editTable(table.copyWith(
+                                restaurantId: _mapRestaurantNameToId(selectedRestaurant),
                                 name: name,
+                                zone: selectedZone,
                                 seats: seats,
                                 guestName: guest,
                                 status: selectedStatus,
@@ -500,8 +931,9 @@ class _TablesTabWidgetState extends State<TablesTabWidget> {
                             } else {
                               _addNewTable(PhysicalTable(
                                 id: DateTime.now().millisecondsSinceEpoch.toString(),
-                                restaurantId: 'ocean_bistro',
+                                restaurantId: _mapRestaurantNameToId(selectedRestaurant),
                                 name: name,
+                                zone: selectedZone,
                                 seats: seats,
                                 guestName: guest,
                                 status: selectedStatus,

@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import '../../../../models/user_profile.dart';
 import '../../../../models/queue_entry_model.dart';
 import '../../../../services/auth_service.dart';
-import '../../../../services/firestore_service.dart';
+import '../../../../services/restaurant_database_service.dart';
 import '../../../../screens/home_screen.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/widgets/app_toast.dart';
 import '../../../profile/presentation/screens/edit_profile_screen.dart';
 import '../../data/models/manager_dashboard_model.dart';
 import '../../data/models/physical_table_model.dart';
@@ -23,12 +24,19 @@ class ManagerDashboardScreen extends StatefulWidget {
 }
 
 class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
-  final FirestoreService _firestoreService = FirestoreService();
+  final RestaurantDatabaseService _firestoreService = RestaurantDatabaseService();
   final AuthService _authService = AuthService();
   bool _isSigningOut = false;
   int _selectedTab = 0; // 0: Overview, 1: Tables, 2: Live Menu
   int _selectedTimeFilter = 1; // 0: Today, 1: This Week
   int _bottomNavIndex = 0; // 0: Dashboard, 1: Profile
+
+  String _selectedRestaurant = 'Ocean Bistro';
+  final List<String> _availableRestaurants = [
+    'Ocean Bistro',
+    'The Mango Tree',
+    'Nihonbashi',
+  ];
 
   late final ManagerDashboardData _dashboardData;
   UserProfile? _currentProfile;
@@ -97,6 +105,76 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
       return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
     }
     return parts[0].substring(0, parts[0].length >= 2 ? 2 : 1).toUpperCase();
+  }
+
+  void _showAddNewRestaurantDialog() {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(
+            children: [
+              Icon(Icons.storefront, color: AppColors.primary),
+              SizedBox(width: 8),
+              Text('Add New Restaurant', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Enter the name of the new restaurant entity you wish to manage.',
+                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                decoration: InputDecoration(
+                  labelText: 'Restaurant Name',
+                  hintText: 'e.g. Bavette Steakhouse',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: () {
+                final name = controller.text.trim();
+                if (name.isNotEmpty) {
+                  setState(() {
+                    if (!_availableRestaurants.contains(name)) {
+                      _availableRestaurants.add(name);
+                    }
+                    _selectedRestaurant = name;
+                  });
+                  Navigator.pop(dialogContext);
+                  AppToast.showSuccess(
+                    context,
+                    '$name registered successfully!',
+                    title: 'Restaurant Added',
+                  );
+                }
+              },
+              child: const Text('Add Restaurant', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -257,21 +335,92 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                             ],
                           ),
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFE6F4EA),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Text(
-                            'OCEAN BISTRO',
-                            style: TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.primary,
-                              letterSpacing: 0.5,
+                        PopupMenuButton<String>(
+                          tooltip: 'Select or Add Restaurant',
+                          offset: const Offset(0, 30),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE6F4EA),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  _selectedRestaurant.toUpperCase(),
+                                  style: const TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.primary,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                const Icon(
+                                  Icons.keyboard_arrow_down,
+                                  size: 14,
+                                  color: AppColors.primary,
+                                ),
+                              ],
                             ),
                           ),
+                          onSelected: (value) {
+                            if (value == '__add_new__') {
+                              _showAddNewRestaurantDialog();
+                            } else {
+                              setState(() {
+                                _selectedRestaurant = value;
+                              });
+                            }
+                          },
+                          itemBuilder: (context) {
+                            return [
+                              ..._availableRestaurants.map(
+                                (rest) => PopupMenuItem<String>(
+                                  value: rest,
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        rest == _selectedRestaurant ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                                        size: 16,
+                                        color: rest == _selectedRestaurant ? AppColors.primary : Colors.grey,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        rest,
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: rest == _selectedRestaurant ? FontWeight.bold : FontWeight.normal,
+                                          color: AppColors.textPrimary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const PopupMenuDivider(),
+                              const PopupMenuItem<String>(
+                                value: '__add_new__',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.add_circle_outline, size: 16, color: AppColors.primary),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      '+ Add New Restaurant',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.primary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ];
+                          },
                         ),
                       ],
                     ),
@@ -291,9 +440,15 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
 
                     // --- Tab Content Switching ---
                     if (_selectedTab == 1) ...[
-                      const TablesTabWidget(),
+                      TablesTabWidget(
+                        selectedRestaurant: _selectedRestaurant,
+                        availableRestaurants: _availableRestaurants,
+                      ),
                     ] else if (_selectedTab == 2) ...[
-                      const LiveMenuTabWidget(),
+                      LiveMenuTabWidget(
+                        selectedRestaurant: _selectedRestaurant,
+                        availableRestaurants: _availableRestaurants,
+                      ),
                     ] else ...[
                       // --- Executive KPIs Header & Time Filter ---
                       Row(

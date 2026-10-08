@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../models/restaurant_model.dart';
 import '../../../models/reservation_model.dart';
 import '../../../models/user_profile.dart';
-import '../../../services/firestore_service.dart';
+import '../../../services/restaurant_database_service.dart';
 import '../../../shared/theme/app_colors.dart';
 import '../../../shared/widgets/app_toast.dart';
 
@@ -41,7 +41,7 @@ class CreateBookingModal extends StatefulWidget {
 }
 
 class _CreateBookingModalState extends State<CreateBookingModal> {
-  final FirestoreService _firestoreService = FirestoreService();
+  final RestaurantDatabaseService _firestoreService = RestaurantDatabaseService();
   RestaurantModel? _selectedRestaurant;
   DateTime _selectedDate = DateTime.now();
   String _selectedTimeSlot = '7:30 PM';

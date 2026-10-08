@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../models/restaurant_model.dart';
 import '../../../models/reservation_model.dart';
 import '../../../models/user_profile.dart';
-import '../../../services/firestore_service.dart';
+import '../../../services/restaurant_database_service.dart';
 import '../../../services/supabase_service.dart';
 import '../../../features/manager/data/models/physical_table_model.dart';
 import '../../../shared/theme/app_colors.dart';
@@ -26,7 +26,7 @@ class ReserveTableStepperScreen extends StatefulWidget {
 }
 
 class _ReserveTableStepperScreenState extends State<ReserveTableStepperScreen> {
-  final FirestoreService _firestoreService = FirestoreService();
+  final RestaurantDatabaseService _firestoreService = RestaurantDatabaseService();
   int _currentStep = 0; // 0: Date, 1: Time, 2: Guests, 3: Confirm
 
   // Step 1: Date
@@ -1056,7 +1056,7 @@ class _ReserveTableStepperScreenState extends State<ReserveTableStepperScreen> {
         const SizedBox(height: 10),
 
         StreamBuilder<List<LiveMenuDish>>(
-          stream: FirestoreService().streamLiveMenu(restaurantId: widget.restaurant.id),
+          stream: RestaurantDatabaseService().streamLiveMenu(restaurantId: widget.restaurant.id),
           builder: (context, snapshot) {
             final dishes = (snapshot.data ?? [])
                 .where((d) => d.isAvailable)

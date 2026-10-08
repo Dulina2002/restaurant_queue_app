@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../models/reservation_model.dart';
 import '../../../models/restaurant_model.dart';
 import '../../../models/user_profile.dart';
-import '../../../services/firestore_service.dart';
+import '../../../services/restaurant_database_service.dart';
 import '../../../shared/theme/app_colors.dart';
 import '../../../shared/widgets/app_toast.dart';
 import 'modify_reservation_screen.dart';
@@ -24,7 +24,7 @@ class ReservationDetailsScreen extends StatefulWidget {
 }
 
 class _ReservationDetailsScreenState extends State<ReservationDetailsScreen> {
-  final FirestoreService _firestoreService = FirestoreService();
+  final RestaurantDatabaseService _firestoreService = RestaurantDatabaseService();
   late ReservationModel _currentReservation;
   bool _isCancelling = false;
 

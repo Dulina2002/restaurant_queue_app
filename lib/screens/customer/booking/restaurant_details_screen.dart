@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../models/restaurant_model.dart';
 import '../../../models/user_profile.dart';
 import '../../../shared/theme/app_colors.dart';
-import '../../../services/firestore_service.dart';
+import '../../../services/restaurant_database_service.dart';
 import '../../../features/manager/data/models/physical_table_model.dart';
 import 'reserve_table_stepper_screen.dart';
 
@@ -246,7 +246,7 @@ class RestaurantDetailsScreen extends StatelessWidget {
                           const SizedBox(height: 14),
 
                           StreamBuilder<List<PhysicalTable>>(
-                            stream: FirestoreService().streamTables(restaurantId: restaurant.id),
+                            stream: RestaurantDatabaseService().streamTables(restaurantId: restaurant.id),
                             builder: (context, snapshot) {
                               final tables = snapshot.data ?? [];
                               final tablesFor2 = tables.where((t) => t.seats == 2).toList();

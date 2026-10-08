@@ -7,10 +7,10 @@ import '../features/manager/data/models/live_menu_dish_model.dart';
 import '../features/manager/data/models/manager_dashboard_model.dart';
 import 'supabase_service.dart';
 
-class FirestoreService {
-  static final FirestoreService _instance = FirestoreService._internal();
-  factory FirestoreService() => _instance;
-  FirestoreService._internal();
+class RestaurantDatabaseService {
+  static final RestaurantDatabaseService _instance = RestaurantDatabaseService._internal();
+  factory RestaurantDatabaseService() => _instance;
+  RestaurantDatabaseService._internal();
 
   final SupabaseService _supabaseService = SupabaseService();
 
@@ -133,13 +133,16 @@ class FirestoreService {
   // --- 2. LIVE QUEUE ---
   // ==========================================
 
-  Stream<List<QueueEntryModel>> streamQueue(String restaurantId) {
-    Future.microtask(() => _queueStreamController.add(
-      _fallbackQueue.where((q) => q.status != QueueStatus.seated && q.status != QueueStatus.cancelled).toList(),
-    ));
-    return _queueStreamController.stream.map(
-      (list) => list.where((q) => (q.restaurantId == restaurantId || restaurantId == 'ocean_bistro') && q.status != QueueStatus.seated && q.status != QueueStatus.cancelled).toList(),
-    );
+  Stream<List<QueueEntryModel>> streamQueue(String restaurantId) async* {
+    List<QueueEntryModel> filter(List<QueueEntryModel> list) {
+      return list.where((q) => (q.restaurantId == restaurantId || restaurantId == 'ocean_bistro') && q.status != QueueStatus.seated && q.status != QueueStatus.cancelled).toList();
+    }
+
+    yield filter(_fallbackQueue);
+
+    await for (final list in _queueStreamController.stream) {
+      yield filter(list);
+    }
   }
 
   Stream<List<QueueEntryModel>> streamActiveQueue({String restaurantId = 'ocean_bistro'}) {
@@ -150,11 +153,16 @@ class FirestoreService {
     return _supabaseService.streamCustomerActiveQueue(userId);
   }
 
-  Stream<List<QueueEntryModel>> streamAllQueueEntries({String restaurantId = 'ocean_bistro'}) {
-    Future.microtask(() => _queueStreamController.add(List.from(_fallbackQueue)));
-    return _queueStreamController.stream.map(
-      (list) => list.where((q) => q.restaurantId == restaurantId || restaurantId == 'ocean_bistro').toList(),
-    );
+  Stream<List<QueueEntryModel>> streamAllQueueEntries({String restaurantId = 'ocean_bistro'}) async* {
+    List<QueueEntryModel> filter(List<QueueEntryModel> list) {
+      return list.where((q) => q.restaurantId == restaurantId || restaurantId == 'ocean_bistro').toList();
+    }
+
+    yield filter(_fallbackQueue);
+
+    await for (final list in _queueStreamController.stream) {
+      yield filter(list);
+    }
   }
 
   Future<QueueEntryModel> joinQueue({
@@ -224,8 +232,27 @@ class FirestoreService {
   // --- 3. TABLES MANAGEMENT ---
   // ==========================================
 
-  Stream<List<PhysicalTable>> streamTables({String restaurantId = 'ocean_bistro'}) {
-    return _supabaseService.streamTables(restaurantId: restaurantId);
+  Stream<List<PhysicalTable>> streamTables({String restaurantId = 'All'}) async* {
+    List<PhysicalTable> filter(List<PhysicalTable> list) {
+      if (restaurantId == 'All' || restaurantId.isEmpty) {
+        return list;
+      }
+      final lower = restaurantId.toLowerCase();
+      String targetId = lower.contains('ocean')
+          ? 'ocean_bistro'
+          : lower.contains('mango')
+              ? 'mango_tree'
+              : lower.contains('nihon')
+                  ? 'nihonbashi'
+                  : restaurantId;
+      return list.where((t) => t.restaurantId == restaurantId || t.restaurantId == targetId).toList();
+    }
+
+    yield filter(_fallbackTables);
+
+    await for (final list in _tablesStreamController.stream) {
+      yield filter(list);
+    }
   }
 
   Future<List<PhysicalTable>> getTables({String restaurantId = 'ocean_bistro'}) async {
@@ -233,9 +260,15 @@ class FirestoreService {
   }
 
   Future<PhysicalTable> addTable(PhysicalTable table) async {
-    final newTable = table.copyWith(id: 'tbl_${DateTime.now().millisecondsSinceEpoch}');
-    _fallbackTables.add(newTable);
+    final newTable = table.copyWith(id: table.id.isEmpty ? 'tbl_${DateTime.now().millisecondsSinceEpoch}' : table.id);
+    final idx = _fallbackTables.indexWhere((t) => t.id == newTable.id);
+    if (idx != -1) {
+      _fallbackTables[idx] = newTable;
+    } else {
+      _fallbackTables.add(newTable);
+    }
     _tablesStreamController.add(List.from(_fallbackTables));
+    await _supabaseService.addTable(newTable);
     return newTable;
   }
 
@@ -245,34 +278,104 @@ class FirestoreService {
       _fallbackTables[idx] = table;
       _tablesStreamController.add(List.from(_fallbackTables));
     }
+    await _supabaseService.updateTable(table);
     return table;
   }
 
   Future<void> deleteTable(String id) async {
     _fallbackTables.removeWhere((t) => t.id == id);
     _tablesStreamController.add(List.from(_fallbackTables));
+    await _supabaseService.deleteTable(id);
   }
 
   Future<void> updateTableStatus(String tableId, TableStatus status) async {
     final idx = _fallbackTables.indexWhere((t) => t.id == tableId);
     if (idx != -1) {
-      _fallbackTables[idx] = _fallbackTables[idx].copyWith(status: status);
+      _fallbackTables[idx] = _fallbackTables[idx].copyWith(
+        status: status,
+        guestName: status == TableStatus.available ? 'No Guest' : _fallbackTables[idx].guestName,
+      );
       _tablesStreamController.add(List.from(_fallbackTables));
     }
+  }
+
+  /// Seat a specific guest at a physical table
+  Future<void> seatGuestAtTable({
+    required String tableId,
+    required String guestName,
+    String? queueId,
+  }) async {
+    final idx = _fallbackTables.indexWhere((t) => t.id == tableId);
+    if (idx != -1) {
+      _fallbackTables[idx] = _fallbackTables[idx].copyWith(
+        status: TableStatus.occupied,
+        guestName: guestName,
+      );
+      _tablesStreamController.add(List.from(_fallbackTables));
+    }
+
+    if (queueId != null && queueId.isNotEmpty) {
+      await updateQueueStatus(queueId, QueueStatus.seated);
+    }
+  }
+
+  /// Seat the next waiting queue party at the specified table
+  Future<QueueEntryModel?> seatNextQueueParty({required String tableId}) async {
+    final waitingParties = _fallbackQueue.where((q) => q.status == QueueStatus.waiting || q.status == QueueStatus.called).toList();
+    if (waitingParties.isEmpty) return null;
+
+    final partyToSeat = waitingParties.first;
+    await seatGuestAtTable(
+      tableId: tableId,
+      guestName: partyToSeat.guestName,
+      queueId: partyToSeat.id,
+    );
+    return partyToSeat;
+  }
+
+  /// Bulk turn specified tables to available
+  Future<void> bulkQuickTurnTables(List<String> tableIds) async {
+    for (final id in tableIds) {
+      final idx = _fallbackTables.indexWhere((t) => t.id == id);
+      if (idx != -1) {
+        _fallbackTables[idx] = _fallbackTables[idx].copyWith(
+          status: TableStatus.available,
+          guestName: 'No Guest',
+        );
+      }
+    }
+    _tablesStreamController.add(List.from(_fallbackTables));
   }
 
   // ==========================================
   // --- 4. LIVE MENU DISHES ---
   // ==========================================
 
-  Stream<List<LiveMenuDish>> streamLiveMenu({String restaurantId = 'ocean_bistro'}) {
-    return _supabaseService.streamMenuDishes(restaurantId: restaurantId);
+  Stream<List<LiveMenuDish>> streamLiveMenu({String restaurantId = 'All'}) async* {
+    List<LiveMenuDish> filter(List<LiveMenuDish> list) {
+      if (restaurantId == 'All' || restaurantId.isEmpty) {
+        return list;
+      }
+      return list.where((d) => d.restaurantId == restaurantId || d.restaurant == restaurantId).toList();
+    }
+
+    yield filter(_fallbackDishes);
+
+    await for (final list in _dishesStreamController.stream) {
+      yield filter(list);
+    }
   }
 
   Future<LiveMenuDish> addMenuItem(LiveMenuDish dish) async {
-    final newDish = dish.copyWith(id: 'dish_${DateTime.now().millisecondsSinceEpoch}');
-    _fallbackDishes.add(newDish);
+    final newDish = dish.copyWith(id: dish.id.isEmpty ? 'dish_${DateTime.now().millisecondsSinceEpoch}' : dish.id);
+    final idx = _fallbackDishes.indexWhere((d) => d.id == newDish.id);
+    if (idx != -1) {
+      _fallbackDishes[idx] = newDish;
+    } else {
+      _fallbackDishes.add(newDish);
+    }
     _dishesStreamController.add(List.from(_fallbackDishes));
+    await _supabaseService.addMenuItem(newDish);
     return newDish;
   }
 
@@ -284,6 +387,7 @@ class FirestoreService {
       _fallbackDishes[idx] = dish;
       _dishesStreamController.add(List.from(_fallbackDishes));
     }
+    await _supabaseService.updateMenuItem(dish);
     return dish;
   }
 
@@ -292,6 +396,7 @@ class FirestoreService {
   Future<void> deleteMenuItem(String id) async {
     _fallbackDishes.removeWhere((d) => d.id == id);
     _dishesStreamController.add(List.from(_fallbackDishes));
+    await _supabaseService.deleteMenuItem(id);
   }
 
   Future<void> deleteDish(String id) => deleteMenuItem(id);
@@ -302,6 +407,7 @@ class FirestoreService {
       _fallbackDishes[idx] = _fallbackDishes[idx].copyWith(isAvailable: !currentStatus);
       _dishesStreamController.add(List.from(_fallbackDishes));
     }
+    await _supabaseService.toggleDishAvailability(id, currentStatus);
   }
 
   // ==========================================
@@ -389,3 +495,6 @@ class FirestoreService {
     // Initial data is handled by Supabase / in-memory fallbacks
   }
 }
+
+// Backward compatibility alias for any un-updated references
+typedef FirestoreService = RestaurantDatabaseService;

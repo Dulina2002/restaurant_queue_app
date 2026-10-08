@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_toast.dart';
-import '../../../../services/firestore_service.dart';
+import '../../../../services/restaurant_database_service.dart';
 import '../../data/models/physical_table_model.dart';
 
 class AiFloorOptimizerSheet extends StatefulWidget {
@@ -21,7 +21,7 @@ class AiFloorOptimizerSheet extends StatefulWidget {
 }
 
 class _AiFloorOptimizerSheetState extends State<AiFloorOptimizerSheet> {
-  final FirestoreService _firestoreService = FirestoreService();
+  final RestaurantDatabaseService _firestoreService = RestaurantDatabaseService();
 
   @override
   Widget build(BuildContext context) {
