@@ -3,6 +3,84 @@ import '../models/user_role.dart';
 import 'supabase_service.dart';
 
 class AdminSupabaseService {
+  SupabaseClient get _requiredClient {
+    final client = _client;
+    if (client == null) throw StateError('Supabase is not configured.');
+    return client;
+  }
+
+  Map<String, dynamic> _mapBroadcast(Map<String, dynamic> row) => {
+        'id': row['id'],
+        'title': row['title'] ?? '',
+        'message': row['message'] ?? '',
+        'priority': row['priority'] ?? 'NORMAL',
+        'isActive': row['is_active'] == true,
+        'createdAt': row['created_at'],
+        'createdBy': row['created_by'],
+      };
+
+  Future<List<Map<String, dynamic>>> loadBroadcasts() async {
+    final rows = await _requiredClient
+        .from('broadcasts')
+        .select('id,title,message,priority,is_active,created_at,created_by')
+        .order('created_at', ascending: false);
+    return rows.map((row) => _mapBroadcast(row)).toList();
+  }
+
+  Future<Map<String, dynamic>> createBroadcast(
+      {required String title,
+      required String message,
+      required String priority}) async {
+    if (!['NORMAL', 'WARNING', 'URGENT'].contains(priority)) {
+      throw ArgumentError('Invalid announcement priority.');
+    }
+    if (title.trim().isEmpty || message.trim().isEmpty) {
+      throw ArgumentError('Announcement title and message are required.');
+    }
+    final row = await _requiredClient
+        .from('broadcasts')
+        .insert({
+          'title': title.trim(),
+          'message': message.trim(),
+          'priority': priority,
+        })
+        .select('id,title,message,priority,is_active,created_at,created_by')
+        .single();
+    return _mapBroadcast(row);
+  }
+
+  Future<bool> loadPlatformFreeze() async {
+    final row = await _requiredClient
+        .from('platform_settings')
+        .select('platform_frozen')
+        .eq('id', 'global')
+        .maybeSingle();
+    if (row == null || row['platform_frozen'] is! bool) {
+      throw StateError(
+          'The global platform settings row is missing or invalid.');
+    }
+    return row['platform_frozen'] as bool;
+  }
+
+  Future<bool> setPlatformFreeze(bool frozen) async {
+    final result = await _requiredClient
+        .rpc('set_platform_freeze', params: {'p_frozen': frozen});
+    final dynamic row =
+        result is List && result.length == 1 ? result.single : result;
+    if (row is! Map || row['platform_frozen'] is! bool) {
+      throw StateError('Invalid platform freeze confirmation from Supabase.');
+    }
+    return row['platform_frozen'] as bool;
+  }
+
+  Future<int> flushWaitlists() async {
+    final result = await _requiredClient.rpc('flush_waitlists');
+    if (result is! int || result < 0) {
+      throw StateError('Invalid waitlist cancellation count from Supabase.');
+    }
+    return result;
+  }
+
   SupabaseClient? get _client =>
       SupabaseService().isSupabaseConfigured ? Supabase.instance.client : null;
 

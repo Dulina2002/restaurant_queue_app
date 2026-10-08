@@ -11,6 +11,27 @@ class _EmptyAdminService extends AdminSupabaseService {
 
   @override
   Future<List<Map<String, dynamic>>?> loadUsers() async => [];
+  @override
+  Future<List<Map<String, dynamic>>> loadBroadcasts() async => [];
+  @override
+  Future<bool> loadPlatformFreeze() async => false;
+  @override
+  Future<bool> setPlatformFreeze(bool frozen) async => frozen;
+  @override
+  Future<int> flushWaitlists() async => 0;
+  @override
+  Future<Map<String, dynamic>> createBroadcast(
+          {required String title,
+          required String message,
+          required String priority}) async =>
+      {
+        'id': 'saved',
+        'title': title,
+        'message': message,
+        'priority': priority,
+        'isActive': true,
+        'createdAt': '2026-10-08T00:00:00Z',
+      };
 }
 
 class _FailedAdminService extends _EmptyAdminService {
@@ -57,7 +78,7 @@ void main() {
     expect(find.text('Ocean Bistro'), findsOneWidget);
   });
 
-  testWidgets('Alert validates, sends locally, and retains examples',
+  testWidgets('Alert validates and saves through backend without examples',
       (tester) async {
     await _open(tester, service: _EmptyAdminService());
     await tester.tap(find.text('Broadcasts'));
@@ -81,9 +102,10 @@ void main() {
     expect(find.text('Service notice'), findsOneWidget);
     expect(find.text('Test message'), findsOneWidget);
     expect(find.text('URGENT'), findsOneWidget);
-    expect(find.text('Platform Operational'), findsOneWidget);
-    expect(find.text('Scheduled Maintenance'), findsOneWidget);
-    expect(find.textContaining('Alert sent successfully'), findsOneWidget);
+    expect(find.text('Platform Operational'), findsNothing);
+    expect(find.text('Scheduled Maintenance'), findsNothing);
+    expect(
+        find.textContaining('Announcement saved to Supabase.'), findsOneWidget);
   });
 
   testWidgets('Freeze cancel preserves state and confirm toggles it',
@@ -109,7 +131,7 @@ void main() {
     expect(tester.widget<Switch>(find.byType(Switch)).value, isFalse);
   });
 
-  testWidgets('Flush cancellation has no success, confirm reports simulation',
+  testWidgets('Flush cancellation has no success, confirm reports zero count',
       (tester) async {
     await _open(tester, service: _EmptyAdminService());
     await tester.tap(find.text('System'));
@@ -123,7 +145,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Confirm'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('flush simulation completed successfully'),
+    expect(find.textContaining('no active entries required cancellation'),
         findsOneWidget);
   });
 }
