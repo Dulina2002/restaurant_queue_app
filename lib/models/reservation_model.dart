@@ -10,6 +10,7 @@ class ReservationModel {
   final int partySize;
   final String status;
   final String? specialNotes;
+  final String? assignedTable;
   final DateTime? createdAt;
 
   const ReservationModel({
@@ -24,6 +25,7 @@ class ReservationModel {
     required this.partySize,
     this.status = 'confirmed',
     this.specialNotes,
+    this.assignedTable,
     this.createdAt,
   });
 
@@ -40,6 +42,7 @@ class ReservationModel {
       partySize: (json['party_size'] as num?)?.toInt() ?? 2,
       status: json['status'] as String? ?? 'confirmed',
       specialNotes: json['special_notes'] as String?,
+      assignedTable: json['assigned_table'] as String?,
       createdAt: json['created_at'] != null ? DateTime.tryParse(json['created_at'].toString()) : null,
     );
   }
@@ -61,6 +64,7 @@ class ReservationModel {
       'party_size': partySize,
       'status': status,
       if (specialNotes != null) 'special_notes': specialNotes,
+      if (assignedTable != null) 'assigned_table': assignedTable,
       'created_at': createdAt?.toIso8601String(),
     };
   }
@@ -77,6 +81,7 @@ class ReservationModel {
     int? partySize,
     String? status,
     String? specialNotes,
+    String? assignedTable,
     DateTime? createdAt,
   }) {
     return ReservationModel(
@@ -91,6 +96,7 @@ class ReservationModel {
       partySize: partySize ?? this.partySize,
       status: status ?? this.status,
       specialNotes: specialNotes ?? this.specialNotes,
+      assignedTable: assignedTable ?? this.assignedTable,
       createdAt: createdAt ?? this.createdAt,
     );
   }

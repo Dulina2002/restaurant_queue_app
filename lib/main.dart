@@ -44,6 +44,13 @@ class RestaurantQueueApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Restaurant Queue App',
       theme: ThemeData(
+        fontFamily: 'Segoe UI',
+        fontFamilyFallback: const [
+          'Segoe UI',
+          'Roboto',
+          'Arial',
+          'sans-serif',
+        ],
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFFF27B50),
           brightness: Brightness.light,

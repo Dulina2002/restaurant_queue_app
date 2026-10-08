@@ -7,6 +7,8 @@ class UserProfile {
   final UserRole role;
   final String? avatarUrl;
   final String? phoneNumber;
+  final String? restaurantId;
+  final String? restaurantName;
   final DateTime? createdAt;
 
   const UserProfile({
@@ -16,6 +18,8 @@ class UserProfile {
     required this.role,
     this.avatarUrl,
     this.phoneNumber,
+    this.restaurantId,
+    this.restaurantName,
     this.createdAt,
   });
 
@@ -27,6 +31,8 @@ class UserProfile {
       role: UserRole.fromString(json['role'] as String?),
       avatarUrl: json['avatar_url'] as String?,
       phoneNumber: json['phone_number'] as String?,
+      restaurantId: json['restaurant_id'] as String?,
+      restaurantName: json['restaurant_name'] as String?,
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'].toString())
           : null,
@@ -41,6 +47,8 @@ class UserProfile {
       'role': role.value,
       if (avatarUrl != null) 'avatar_url': avatarUrl,
       if (phoneNumber != null) 'phone_number': phoneNumber,
+      if (restaurantId != null) 'restaurant_id': restaurantId,
+      if (restaurantName != null) 'restaurant_name': restaurantName,
       if (createdAt != null) 'created_at': createdAt!.toIso8601String(),
     };
   }
@@ -55,6 +63,8 @@ class UserProfile {
     UserRole? role,
     String? avatarUrl,
     String? phoneNumber,
+    String? restaurantId,
+    String? restaurantName,
     DateTime? createdAt,
     bool clearAvatar = false,
   }) {
@@ -65,6 +75,8 @@ class UserProfile {
       role: role ?? this.role,
       avatarUrl: clearAvatar ? null : (avatarUrl ?? this.avatarUrl),
       phoneNumber: phoneNumber ?? this.phoneNumber,
+      restaurantId: restaurantId ?? this.restaurantId,
+      restaurantName: restaurantName ?? this.restaurantName,
       createdAt: createdAt ?? this.createdAt,
     );
   }

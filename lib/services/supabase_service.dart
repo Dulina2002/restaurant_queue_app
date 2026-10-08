@@ -7,6 +7,7 @@ import '../models/reservation_model.dart';
 import '../models/review_model.dart';
 import '../features/manager/data/models/physical_table_model.dart';
 import '../features/manager/data/models/live_menu_dish_model.dart';
+import '../features/receptionist/data/models/floor_table_model.dart';
 import 'reservation_storage_service.dart';
 
 class SupabaseService {
@@ -98,7 +99,148 @@ class SupabaseService {
     ),
   ];
 
-  final List<ReservationModel> _fallbackReservations = [];
+  final List<ReservationModel> _fallbackReservations = [
+    // Ocean Bistro
+    ReservationModel(
+      id: 'rsv_ob_1',
+      restaurantId: 'ocean_bistro',
+      restaurantName: 'Ocean Bistro',
+      userId: 'user_ayesha',
+      guestName: 'Ayesha Perera',
+      reservationCode: '#RSV1001',
+      date: 'Today',
+      time: '7:30 PM',
+      partySize: 4,
+      status: 'confirmed',
+      assignedTable: 'Table 04',
+      specialNotes: 'Req: Window seat facing the ocean, celebrating an anniversary.',
+      createdAt: DateTime.now().subtract(const Duration(hours: 3)),
+    ),
+    ReservationModel(
+      id: 'rsv_ob_2',
+      restaurantId: 'ocean_bistro',
+      restaurantName: 'Ocean Bistro',
+      userId: 'user_kamal',
+      guestName: 'Kamal Silva',
+      reservationCode: '#RSV1002',
+      date: 'Today',
+      time: '8:00 PM',
+      partySize: 2,
+      status: 'completed',
+      assignedTable: 'Table 02',
+      specialNotes: 'Req: Quiet corner table.',
+      createdAt: DateTime.now().subtract(const Duration(hours: 4)),
+    ),
+    ReservationModel(
+      id: 'rsv_ob_3',
+      restaurantId: 'ocean_bistro',
+      restaurantName: 'Ocean Bistro',
+      userId: 'user_nadee',
+      guestName: 'Nadeeshani Fernando',
+      reservationCode: '#RSV1003',
+      date: 'Today',
+      time: '7:00 PM',
+      partySize: 6,
+      status: 'cancelled',
+      assignedTable: 'Table 06',
+      specialNotes: 'Req: Tatami seating if possible.',
+      createdAt: DateTime.now().subtract(const Duration(hours: 5)),
+    ),
+    ReservationModel(
+      id: 'rsv_ob_4',
+      restaurantId: 'ocean_bistro',
+      restaurantName: 'Ocean Bistro',
+      userId: 'user_john',
+      guestName: 'John Doe',
+      reservationCode: '#RSV1004',
+      date: 'Today',
+      time: '8:30 PM',
+      partySize: 3,
+      status: 'confirmed',
+      assignedTable: 'Table 08',
+      specialNotes: 'Req: High chair needed.',
+      createdAt: DateTime.now().subtract(const Duration(hours: 2)),
+    ),
+
+    // The Mango Tree
+    ReservationModel(
+      id: 'rsv_mt_1',
+      restaurantId: 'mango_tree',
+      restaurantName: 'The Mango Tree',
+      userId: 'user_samantha',
+      guestName: 'Samantha Fernando',
+      reservationCode: '#RSV2001',
+      date: 'Today',
+      time: '7:15 PM',
+      partySize: 2,
+      status: 'confirmed',
+      assignedTable: 'Table 01',
+      specialNotes: 'Req: Window booth requested.',
+      createdAt: DateTime.now().subtract(const Duration(hours: 2)),
+    ),
+    ReservationModel(
+      id: 'rsv_mt_2',
+      restaurantId: 'mango_tree',
+      restaurantName: 'The Mango Tree',
+      userId: 'user_rohan',
+      guestName: 'Rohan Wickramasinghe',
+      reservationCode: '#RSV2002',
+      date: 'Today',
+      time: '8:00 PM',
+      partySize: 4,
+      status: 'completed',
+      assignedTable: 'Table 03',
+      specialNotes: 'Req: Birthday celebration table.',
+      createdAt: DateTime.now().subtract(const Duration(hours: 4)),
+    ),
+    ReservationModel(
+      id: 'rsv_mt_3',
+      restaurantId: 'mango_tree',
+      restaurantName: 'The Mango Tree',
+      userId: 'user_nilmini',
+      guestName: 'Nilmini De Silva',
+      reservationCode: '#RSV2003',
+      date: 'Today',
+      time: '8:45 PM',
+      partySize: 3,
+      status: 'confirmed',
+      assignedTable: 'Table 05',
+      specialNotes: 'Req: Mild spices for kids.',
+      createdAt: DateTime.now().subtract(const Duration(hours: 1)),
+    ),
+
+    // Nihonbashi
+    ReservationModel(
+      id: 'rsv_nb_1',
+      restaurantId: 'nihonbashi',
+      restaurantName: 'Nihonbashi',
+      userId: 'user_kanchana',
+      guestName: 'Kanchana Jayasuriya',
+      reservationCode: '#RSV3001',
+      date: 'Today',
+      time: '7:45 PM',
+      partySize: 2,
+      status: 'confirmed',
+      assignedTable: 'Table 02',
+      specialNotes: 'Req: Counter seating for sushi chef.',
+      createdAt: DateTime.now().subtract(const Duration(hours: 3)),
+    ),
+    ReservationModel(
+      id: 'rsv_nb_2',
+      restaurantId: 'nihonbashi',
+      restaurantName: 'Nihonbashi',
+      userId: 'user_dinesh',
+      guestName: 'Dinesh Gunawardena',
+      reservationCode: '#RSV3002',
+      date: 'Today',
+      time: '8:30 PM',
+      partySize: 5,
+      status: 'confirmed',
+      assignedTable: 'Table 05',
+      specialNotes: 'Req: Business dinner with clients.',
+      createdAt: DateTime.now().subtract(const Duration(hours: 2)),
+    ),
+  ];
 
   final StreamController<List<QueueEntryModel>> _queueStreamController = StreamController<List<QueueEntryModel>>.broadcast();
   final StreamController<List<ReservationModel>> _reservationsStreamController = StreamController<List<ReservationModel>>.broadcast();
@@ -558,9 +700,197 @@ class SupabaseService {
     return reservation;
   }
 
+  /// Live stream of ALL reservations for a restaurant (including Confirmed, Completed, Cancelled)
+  Stream<List<ReservationModel>> streamAllRestaurantReservations(String restaurantId) {
+    final targetId = restaurantId.isNotEmpty ? restaurantId : 'ocean_bistro';
+    final fallback = _fallbackReservations.where((r) => r.restaurantId == targetId).toList();
+    fallback.sort((a, b) => (b.createdAt ?? DateTime.now()).compareTo(a.createdAt ?? DateTime.now()));
+    final fallbackJson = fallback.map((r) => r.toJson()).toList();
+
+    final client = _client;
+    if (client == null) {
+      Future.microtask(() => _reservationsStreamController.add(List.from(_fallbackReservations)));
+      return _reservationsStreamController.stream.map((list) {
+        final filtered = list.where((r) => r.restaurantId == targetId).toList();
+        filtered.sort((a, b) => (b.createdAt ?? DateTime.now()).compareTo(a.createdAt ?? DateTime.now()));
+        return filtered;
+      });
+    }
+
+    return _liveRows(
+      'reservations',
+      restaurantId: targetId,
+      initialFallback: fallbackJson,
+    ).map((rows) {
+      final list = rows
+          .where((row) => row['restaurant_id']?.toString() == targetId)
+          .map((row) => ReservationModel.fromJson(row))
+          .toList();
+
+      if (list.isNotEmpty) {
+        for (final item in list) {
+          final idx = _fallbackReservations.indexWhere((r) => r.id == item.id);
+          if (idx != -1) {
+            _fallbackReservations[idx] = item;
+          } else {
+            _fallbackReservations.add(item);
+          }
+        }
+        list.sort((a, b) => (b.createdAt ?? DateTime.now()).compareTo(a.createdAt ?? DateTime.now()));
+        return list;
+      }
+
+      final fallbackRes = _fallbackReservations.where((r) => r.restaurantId == targetId).toList();
+      fallbackRes.sort((a, b) => (b.createdAt ?? DateTime.now()).compareTo(a.createdAt ?? DateTime.now()));
+      return fallbackRes;
+    });
+  }
+
+  Future<void> updateReservationStatus(
+    String reservationId,
+    String status, {
+    String? assignedTable,
+  }) async {
+    final normalized = status.toLowerCase();
+    final idx = _fallbackReservations.indexWhere((r) => r.id == reservationId);
+    if (idx != -1) {
+      _fallbackReservations[idx] = _fallbackReservations[idx].copyWith(
+        status: normalized,
+        assignedTable: assignedTable ?? _fallbackReservations[idx].assignedTable,
+      );
+      _reservationsStreamController.add(List.from(_fallbackReservations));
+    }
+    await ReservationStorageService().updateStatus(reservationId, normalized);
+
+    final client = _client;
+    if (client != null) {
+      try {
+        await client.from('reservations').update({
+          'status': normalized,
+          if (assignedTable != null) 'assigned_table': assignedTable,
+          'updated_at': DateTime.now().toIso8601String(),
+        }).match({'id': reservationId});
+      } catch (e) {
+        debugPrint('Supabase updateReservationStatus error: $e');
+      }
+      _notifyChanged('reservations');
+    }
+  }
+
+  List<ReservationModel> getRestaurantReservationsSync(String restaurantId) {
+    final targetId = restaurantId.isNotEmpty ? restaurantId : 'ocean_bistro';
+    final list = _fallbackReservations.where((r) => r.restaurantId == targetId).toList();
+    list.sort((a, b) => (b.createdAt ?? DateTime.now()).compareTo(a.createdAt ?? DateTime.now()));
+    return list;
+  }
+
   // ==========================================
   // --- 4. LIVE DATABASE STREAMS (TABLES, MENU, RESTAURANTS, QUEUE) ---
   // ==========================================
+
+  // Multi-restaurant Floor Tables cache & stream controller
+  final Map<String, List<FloorTable>> _fallbackFloorTables = {};
+  final StreamController<Map<String, List<FloorTable>>> _floorTablesStreamController =
+      StreamController<Map<String, List<FloorTable>>>.broadcast();
+
+  List<FloorTable> _getOrCreateFallbackFloorTables(String restaurantId) {
+    final targetId = restaurantId.isNotEmpty ? restaurantId : 'ocean_bistro';
+    if (!_fallbackFloorTables.containsKey(targetId)) {
+      _fallbackFloorTables[targetId] = List.from(FloorTable.mockListForRestaurant(targetId));
+    }
+    return _fallbackFloorTables[targetId]!;
+  }
+
+  /// Stream live floor tables for a restaurant (Receptionist Floor Overview)
+  Stream<List<FloorTable>> streamFloorTables({required String restaurantId}) {
+    final targetId = restaurantId.isNotEmpty ? restaurantId : 'ocean_bistro';
+    final fallbackList = List<FloorTable>.from(_getOrCreateFallbackFloorTables(targetId));
+    final fallbackJson = fallbackList.map((t) => t.toJson()).toList();
+
+    final client = _client;
+    if (client == null) {
+      Future.microtask(() {
+        _floorTablesStreamController.add(Map.from(_fallbackFloorTables));
+      });
+      return _floorTablesStreamController.stream.map((map) {
+        return List<FloorTable>.from(
+          map[targetId] ?? _getOrCreateFallbackFloorTables(targetId),
+        );
+      });
+    }
+
+    return _liveRows(
+      'tables',
+      // Do NOT pass restaurantId here — Supabase stream() only supports filtering
+      // by primary-key columns. Passing restaurant_id (a non-PK column) to
+      // .stream().eq() causes realtime to return only one row. The client-side
+      // .where() below handles the restaurant scoping correctly.
+      initialFallback: fallbackJson,
+    ).map((rows) {
+      final list = rows
+          .where((row) => row['restaurant_id']?.toString() == targetId)
+          .map((row) => FloorTable.fromJson(row))
+          .toList();
+
+      if (list.isEmpty) {
+        return List<FloorTable>.from(_getOrCreateFallbackFloorTables(targetId));
+      }
+      _fallbackFloorTables[targetId] = List.from(list);
+      return list;
+    });
+  }
+
+  /// Update a table's status and guest name across Supabase & in-memory cache
+  Future<void> updateFloorTableStatus({
+    required String restaurantId,
+    required String tableId,
+    required FloorTableStatus status,
+    String guestName = '',
+  }) async {
+    final targetId = restaurantId.isNotEmpty ? restaurantId : 'ocean_bistro';
+    final currentList = _getOrCreateFallbackFloorTables(targetId);
+    final idx = currentList.indexWhere((t) => t.id == tableId);
+
+    if (idx != -1) {
+      currentList[idx] = currentList[idx].copyWith(
+        status: status,
+        guestName: status == FloorTableStatus.available ? '' : guestName,
+      );
+      _fallbackFloorTables[targetId] = List.from(currentList);
+      _floorTablesStreamController.add(Map.from(_fallbackFloorTables));
+    }
+
+    final client = _client;
+    if (client != null) {
+      try {
+        await client.from('tables').update({
+          'status': status.name,
+          'guest_name': status == FloorTableStatus.available ? '' : guestName,
+          'updated_at': DateTime.now().toIso8601String(),
+        }).match({'id': tableId, 'restaurant_id': targetId});
+      } catch (e) {
+        debugPrint('Supabase updateFloorTableStatus error: $e');
+      }
+      _notifyChanged('tables');
+    }
+  }
+
+  /// Retrieve current cached floor tables synchronously
+  List<FloorTable> getFloorTablesSync({required String restaurantId}) {
+    final targetId = restaurantId.isNotEmpty ? restaurantId : 'ocean_bistro';
+    return List<FloorTable>.from(_getOrCreateFallbackFloorTables(targetId));
+  }
+
+  /// Retrieve current cached active queue synchronously
+  List<QueueEntryModel> getRestaurantQueueSync(String restaurantId) {
+    final all = _isAll(restaurantId);
+    return _fallbackQueue
+        .where((q) =>
+            (all || q.restaurantId == restaurantId) &&
+            q.status != QueueStatus.seated &&
+            q.status != QueueStatus.cancelled)
+        .toList();
+  }
 
   /// Emits a table name whenever this device mutates that table so every
   /// active stream can refetch immediately (without waiting for realtime).
@@ -605,7 +935,7 @@ class SupabaseService {
       } catch (e) {
         debugPrint('Supabase fetch ($table) error: $e');
         if (!controller.isClosed) {
-          if (initialFallback != null && initialFallback.isNotEmpty) {
+          if (initialFallback != null) {
             controller.add(initialFallback);
           } else {
             controller.addError(e);
@@ -618,7 +948,7 @@ class SupabaseService {
 
     controller = StreamController<List<Map<String, dynamic>>>.broadcast(
       onListen: () {
-        if (initialFallback != null && initialFallback.isNotEmpty) {
+        if (initialFallback != null) {
           controller.add(initialFallback);
         }
         refetch();
@@ -841,7 +1171,11 @@ class SupabaseService {
   Stream<List<QueueEntryModel>> streamRestaurantQueue({String restaurantId = 'All'}) =>
       streamQueueEntries(restaurantId);
 
-  Future<void> updateQueueStatus(String queueId, QueueStatus status) async {
+  Future<void> updateQueueStatus(
+    String queueId,
+    QueueStatus status, {
+    String? restaurantId,
+  }) async {
     final idx = _fallbackQueue.indexWhere((q) => q.id == queueId);
     if (idx != -1) {
       _fallbackQueue[idx] = _fallbackQueue[idx].copyWith(status: status);
