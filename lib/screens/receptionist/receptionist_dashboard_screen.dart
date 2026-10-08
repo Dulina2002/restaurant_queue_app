@@ -358,21 +358,22 @@ class _ReceptionistDashboardScreenState extends State<ReceptionistDashboardScree
   }
 
   Widget _buildRestaurantSelector(List<RestaurantModel> restaurants, UserProfile profile) {
+    final currentName = ReceptionistContext().activeRestaurantName;
     if (restaurants.isEmpty) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: const [
+        children: [
           Text(
-            'Loading restaurants...',
-            style: TextStyle(
+            currentName,
+            style: const TextStyle(
               color: Color(0xFF1E293B),
               fontSize: 26,
               fontWeight: FontWeight.w900,
               height: 1.25,
             ),
           ),
-          SizedBox(height: 6),
-          Text(
+          const SizedBox(height: 6),
+          const Text(
             'Receptionist Desk • Connecting to database',
             style: TextStyle(
               color: Color(0xFF64748B),

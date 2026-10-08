@@ -67,8 +67,6 @@ class SupabaseService {
     ),
   ];
 
-  List<RestaurantModel> get fallbackRestaurants => List.unmodifiable(_fallbackRestaurants);
-
   final List<QueueEntryModel> _fallbackQueue = [
     QueueEntryModel(
       id: 'q1',
