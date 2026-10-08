@@ -2,10 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'services/restaurant_database_service.dart';
+import 'services/restaurant_image_storage.dart';
 import 'screens/auth_gate.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  try {
+    await RestaurantImageStorage().init();
+  } catch (_) {}
 
   try {
     await dotenv.load(fileName: ".env");

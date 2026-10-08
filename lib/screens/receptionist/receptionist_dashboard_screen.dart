@@ -4,12 +4,13 @@ import '../../models/restaurant_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/supabase_service.dart';
 import '../../services/receptionist_context.dart';
-import '../home_screen.dart';
+import '../sign_in_screen.dart';
 import 'reservation_summary_screen.dart';
 import 'floor_overview_screen.dart';
 import 'live_queue_screen.dart';
 import 'receptionist_profile_screen.dart';
 import '../../features/receptionist/presentation/widgets/add_walk_in_dialog.dart';
+import '../../features/receptionist/presentation/widgets/reassign_table_dialog.dart';
 import '../../shared/widgets/role_header_widget.dart';
 import '../../shared/widgets/role_bottom_nav_widget.dart';
 import '../../shared/widgets/top_toast.dart' hide ToastType;
@@ -47,7 +48,7 @@ class _ReceptionistDashboardScreenState extends State<ReceptionistDashboardScree
       if (!mounted) return;
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
+        MaterialPageRoute(builder: (context) => const SignInScreen()),
         (route) => false,
       );
     } catch (e) {
@@ -352,6 +353,14 @@ class _ReceptionistDashboardScreenState extends State<ReceptionistDashboardScree
                                   );
                                 }
                               },
+                              onReassignPressed: () async {
+                                await ReassignTableDialog.show(
+                                  context,
+                                  reservation: rsv,
+                                  restaurantId: targetRestaurantId,
+                                  restaurantName: targetRestaurantName,
+                                );
+                              },
                             ),
                           );
                         }),
@@ -606,6 +615,7 @@ class _ReceptionistDashboardScreenState extends State<ReceptionistDashboardScree
     required bool isConfirmed,
     required bool showActions,
     VoidCallback? onCheckInPressed,
+    VoidCallback? onReassignPressed,
   }) {
     final statusColor = isConfirmed ? const Color(0xFF10B981) : const Color(0xFF059669);
     final statusBgColor = isConfirmed ? const Color(0xFFECFDF5) : const Color(0xFFD1FAE5);
@@ -668,7 +678,7 @@ class _ReceptionistDashboardScreenState extends State<ReceptionistDashboardScree
                 const SizedBox(width: 12),
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () {},
+                    onPressed: onReassignPressed,
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       side: const BorderSide(color: Color(0xFFE2E8F0)),

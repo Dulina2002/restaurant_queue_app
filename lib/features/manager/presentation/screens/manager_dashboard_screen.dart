@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../../models/restaurant_model.dart';
 import '../../../../models/user_profile.dart';
+import '../../../../models/user_role.dart';
 import '../../../../services/auth_service.dart';
 import '../../../../services/restaurant_database_service.dart';
 import '../../../../screens/sign_in_screen.dart';
@@ -326,16 +327,25 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     const darkGreen = Color(0xFF064E3B);
     return InkWell(
       onTap: () async {
+        final nav = Navigator.of(context, rootNavigator: true);
         Navigator.pop(sheetContext);
+        UserRole? role;
+        if (title == 'Customer') {
+          role = UserRole.customer;
+        } else if (title == 'Receptionist') {
+          role = UserRole.receptionist;
+        } else if (title == 'Manager') {
+          role = UserRole.manager;
+        } else if (title == 'Administrator') {
+          role = UserRole.admin;
+        }
         try {
           await _authService.signOut();
-          if (!mounted) return;
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (context) => const SignInScreen()),
-            (route) => false,
-          );
         } catch (_) {}
+        nav.pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => SignInScreen(selectedRole: role)),
+          (route) => false,
+        );
       },
       borderRadius: BorderRadius.circular(16),
       child: Container(

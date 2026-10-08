@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/user_profile.dart';
 import '../../services/auth_service.dart';
-import '../home_screen.dart';
+import '../sign_in_screen.dart';
 import '../../shared/widgets/role_header_widget.dart';
 import '../../shared/widgets/role_bottom_nav_widget.dart';
 import '../../shared/widgets/app_toast.dart';
@@ -31,7 +31,7 @@ class _FloorOverviewScreenState extends State<FloorOverviewScreen> {
       if (!mounted) return;
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
+        MaterialPageRoute(builder: (context) => const SignInScreen()),
         (route) => false,
       );
     } catch (e) {

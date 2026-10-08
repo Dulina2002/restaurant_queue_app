@@ -21,6 +21,7 @@ import 'widgets/top_notification_banner.dart';
 import '../../shared/widgets/app_toast.dart';
 import 'booking/restaurant_details_screen.dart';
 import 'booking/reservation_details_screen.dart';
+import '../../shared/widgets/restaurant_image.dart';
 
 class CustomerDashboardScreen extends StatefulWidget {
   final UserProfile? profile;
@@ -55,9 +56,11 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
   final List<String> _exploreCuisines = [
     'All',
     'Italian',
+    'Pizza',
     'Indian',
     'Japanese',
     'Café',
+    'Seafood',
   ];
 
   // Saved Filters
@@ -598,55 +601,61 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Hero banner
-            Container(
-              height: 145,
-              width: double.infinity,
-              decoration: const BoxDecoration(
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                gradient: LinearGradient(
-                  colors: [Color(0xFF1B4D3E), Color(0xFF0B2B1F)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-              child: Stack(
-                children: [
-                  Positioned(
-                    right: -10,
-                    bottom: -10,
-                    child: Icon(
-                      Icons.restaurant_rounded,
-                      size: 115,
-                      color: Colors.white.withValues(alpha: 0.08),
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              child: SizedBox(
+                height: 145,
+                width: double.infinity,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    RestaurantImage(
+                      imageUrl: restaurant.imageUrl,
+                      restaurantId: restaurant.id,
+                      restaurantName: restaurant.name,
+                      cuisine: restaurant.cuisine,
+                      fit: BoxFit.cover,
                     ),
-                  ),
-                  Positioned(
-                    left: 14,
-                    bottom: 14,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    Container(
                       decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.5),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.restaurant_menu_rounded, size: 13, color: Colors.white),
-                          const SizedBox(width: 5),
-                          Text(
-                            restaurant.tag,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.black.withValues(alpha: 0.15),
+                            Colors.black.withValues(alpha: 0.65),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                    Positioned(
+                      left: 14,
+                      bottom: 14,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.5),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.restaurant_menu_rounded, size: 13, color: Colors.white),
+                            const SizedBox(width: 5),
+                            Text(
+                              restaurant.tag,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
 
@@ -705,24 +714,24 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
                       Row(
                         children: [
                           Icon(
-                            restaurant.isQueueAvailable ? Icons.check_circle_rounded : Icons.calendar_today_rounded,
+                            restaurant.hasWaitTime ? Icons.hourglass_top_rounded : Icons.check_circle_rounded,
                             size: 15,
-                            color: restaurant.isQueueAvailable ? const Color(0xFF10B981) : AppColors.accentOrange,
+                            color: restaurant.hasWaitTime ? AppColors.accentOrange : const Color(0xFF10B981),
                           ),
                           const SizedBox(width: 5),
                           Text(
-                            restaurant.estWait,
+                            restaurant.hasWaitTime ? restaurant.estWait : '0m • Tables Available',
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
-                              color: restaurant.isQueueAvailable ? const Color(0xFF10B981) : AppColors.accentOrange,
+                              color: restaurant.hasWaitTime ? AppColors.accentOrange : const Color(0xFF10B981),
                             ),
                           ),
                         ],
                       ),
                       ElevatedButton(
                         onPressed: () {
-                          if (restaurant.isQueueAvailable) {
+                          if (restaurant.hasWaitTime) {
                             _handleJoinQueue(restaurant);
                           } else {
                             Navigator.push(
@@ -746,7 +755,7 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
                           ),
                         ),
                         child: Text(
-                          restaurant.isQueueAvailable ? 'Join Queue' : 'Book Table',
+                          restaurant.hasWaitTime ? 'Join Queue' : 'Direct Booking',
                           style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                         ),
                       ),
@@ -1429,55 +1438,61 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              height: 140,
-              width: double.infinity,
-              decoration: const BoxDecoration(
-                borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-                gradient: LinearGradient(
-                  colors: [Color(0xFF1B4D3E), Color(0xFF0B2B1F)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-              child: Stack(
-                children: [
-                  Positioned(
-                    right: -10,
-                    bottom: -10,
-                    child: Icon(
-                      Icons.restaurant_rounded,
-                      size: 110,
-                      color: Colors.white.withValues(alpha: 0.07),
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+              child: SizedBox(
+                height: 140,
+                width: double.infinity,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    RestaurantImage(
+                      imageUrl: restaurant.imageUrl,
+                      restaurantId: restaurant.id,
+                      restaurantName: restaurant.name,
+                      cuisine: restaurant.cuisine,
+                      fit: BoxFit.cover,
                     ),
-                  ),
-                  Positioned(
-                    left: 14,
-                    bottom: 14,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    Container(
                       decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.45),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.restaurant_menu_rounded, size: 13, color: Colors.white),
-                          const SizedBox(width: 5),
-                          Text(
-                            restaurant.tag,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.black.withValues(alpha: 0.15),
+                            Colors.black.withValues(alpha: 0.65),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                    Positioned(
+                      left: 14,
+                      bottom: 14,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.45),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.restaurant_menu_rounded, size: 13, color: Colors.white),
+                            const SizedBox(width: 5),
+                            Text(
+                              restaurant.tag,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
             Padding(
@@ -1537,24 +1552,26 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
                             width: 8,
                             height: 8,
                             decoration: BoxDecoration(
-                              color: restaurant.isQueueAvailable ? const Color(0xFF10B981) : AppColors.accentOrange,
+                              color: restaurant.hasWaitTime ? AppColors.accentOrange : const Color(0xFF10B981),
                               shape: BoxShape.circle,
                             ),
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            restaurant.isQueueAvailable ? '${restaurant.waitlistCount} in queue • ${restaurant.estWait}' : restaurant.estWait,
+                            restaurant.hasWaitTime
+                                ? '${restaurant.waitlistCount} in queue • ${restaurant.estWait}'
+                                : '0m wait • Tables Available',
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
-                              color: restaurant.isQueueAvailable ? const Color(0xFF10B981) : AppColors.accentOrange,
+                              color: restaurant.hasWaitTime ? AppColors.accentOrange : const Color(0xFF10B981),
                             ),
                           ),
                         ],
                       ),
                       ElevatedButton(
                         onPressed: () {
-                          if (restaurant.isQueueAvailable) {
+                          if (restaurant.hasWaitTime) {
                             _handleJoinQueue(restaurant);
                           } else {
                             Navigator.push(
@@ -1578,7 +1595,7 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
                           ),
                         ),
                         child: Text(
-                          restaurant.isQueueAvailable ? 'Join Queue' : 'Book Table',
+                          restaurant.hasWaitTime ? 'Join Queue' : 'Direct Booking',
                           style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                         ),
                       ),
