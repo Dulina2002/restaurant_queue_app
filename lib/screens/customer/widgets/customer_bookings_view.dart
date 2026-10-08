@@ -27,7 +27,7 @@ class CustomerBookingsView extends StatefulWidget {
 
 class _CustomerBookingsViewState extends State<CustomerBookingsView> {
   final RestaurantDatabaseService _firestoreService = RestaurantDatabaseService();
-  int _selectedTab = 0; // 0: Upcoming, 1: History
+  int _selectedTab = 0; // 0: Upcoming, 1: Past, 2: Cancelled
 
   void _confirmCancelBooking(ReservationModel reservation) {
     showDialog(
@@ -118,9 +118,12 @@ class _CustomerBookingsViewState extends State<CustomerBookingsView> {
       builder: (context, snapshot) {
         final allReservations = snapshot.data ?? [];
         final upcoming = allReservations.where((r) => r.status.toLowerCase() != 'cancelled' && r.status.toLowerCase() != 'completed').toList();
-        final history = allReservations.where((r) => r.status.toLowerCase() == 'cancelled' || r.status.toLowerCase() == 'completed').toList();
+        final past = allReservations.where((r) => r.status.toLowerCase() == 'completed').toList();
+        final cancelled = allReservations.where((r) => r.status.toLowerCase() == 'cancelled').toList();
 
-        final currentList = _selectedTab == 0 ? upcoming : history;
+        final currentList = _selectedTab == 0
+            ? upcoming
+            : (_selectedTab == 1 ? past : cancelled);
 
         return SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -166,27 +169,29 @@ class _CustomerBookingsViewState extends State<CustomerBookingsView> {
               ),
               const SizedBox(height: 20),
 
-              // Segmented Tabs: Upcoming vs History
+              // Underline Tabs: Upcoming, Past, Cancelled
               Container(
-                height: 44,
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.border),
+                decoration: const BoxDecoration(
+                  border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
                 ),
                 child: Row(
                   children: [
                     Expanded(
-                      child: _buildTabButton(
-                        label: 'Upcoming (${upcoming.length})',
+                      child: _buildUnderlineTabButton(
+                        label: 'Upcoming',
                         index: 0,
                       ),
                     ),
                     Expanded(
-                      child: _buildTabButton(
-                        label: 'History (${history.length})',
+                      child: _buildUnderlineTabButton(
+                        label: 'Past',
                         index: 1,
+                      ),
+                    ),
+                    Expanded(
+                      child: _buildUnderlineTabButton(
+                        label: 'Cancelled',
+                        index: 2,
                       ),
                     ),
                   ],
@@ -211,33 +216,31 @@ class _CustomerBookingsViewState extends State<CustomerBookingsView> {
     );
   }
 
-  Widget _buildTabButton({required String label, required int index}) {
+  Widget _buildUnderlineTabButton({required String label, required int index}) {
     final isSelected = _selectedTab == index;
     return GestureDetector(
       onTap: () => setState(() => _selectedTab = index),
-      child: Container(
-        decoration: BoxDecoration(
-          color: isSelected ? Colors.white : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
-                    blurRadius: 4,
-                    offset: const Offset(0, 1),
-                  ),
-                ]
-              : null,
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-            color: isSelected ? AppColors.textPrimary : AppColors.textMuted,
+      behavior: HitTestBehavior.opaque,
+      child: Stack(
+        alignment: Alignment.bottomCenter,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                color: isSelected ? AppColors.textPrimary : AppColors.textMuted,
+              ),
+            ),
           ),
-        ),
+          if (isSelected)
+            Container(
+              height: 2,
+              color: AppColors.textPrimary,
+            ),
+        ],
       ),
     );
   }

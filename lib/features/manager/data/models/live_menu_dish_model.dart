@@ -93,6 +93,7 @@ class LiveMenuDish {
       ),
       const LiveMenuDish(
         id: '3',
+        restaurantId: 'mango_tree',
         name: 'Mango Sticky Rice',
         restaurant: 'The Mango Tree',
         category: 'Desserts',
@@ -102,6 +103,7 @@ class LiveMenuDish {
       ),
       const LiveMenuDish(
         id: '4',
+        restaurantId: 'nihonbashi',
         name: 'Wagyu Beef Teppanyaki',
         restaurant: 'Nihonbashi',
         category: 'Mains',

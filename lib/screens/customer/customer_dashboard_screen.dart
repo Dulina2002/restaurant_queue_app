@@ -248,6 +248,48 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
     return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
   }
 
+  Widget _buildCustomerTopHeader() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      decoration: const BoxDecoration(
+        color: Color(0xFF143823),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // Role Badge
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF27B50),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: const Text(
+              'CUSTOMER',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+          const Text(
+            'DineQueue',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.3,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final activeProfile = _currentProfile ?? widget.profile;
@@ -257,42 +299,52 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
     final initials = _getInitials(userName);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: const Color(0xFF143823),
       body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: _buildCurrentTab(activeProfile, userName, initials),
-            ),
+        bottom: false,
+        child: Container(
+          color: AppColors.background,
+          child: Column(
+            children: [
+              _buildCustomerTopHeader(),
+              Expanded(
+                child: _buildCurrentTab(activeProfile, userName, initials),
+              ),
 
-            // --- Bottom Navigation Bar ---
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: const Border(
-                  top: BorderSide(color: AppColors.border, width: 1),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
-                    blurRadius: 10,
-                    offset: const Offset(0, -2),
+              // --- Bottom Navigation Bar ---
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: const Border(
+                    top: BorderSide(color: AppColors.border, width: 1),
                   ),
-                ],
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.04),
+                      blurRadius: 10,
+                      offset: const Offset(0, -2),
+                    ),
+                  ],
+                ),
+                child: SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _buildNavItem(icon: Icons.home_filled, label: 'Home', index: 0),
+                        _buildNavItem(icon: Icons.explore, label: 'Explore', index: 1),
+                        _buildNavItem(icon: Icons.calendar_month_outlined, label: 'Bookings', index: 2),
+                        _buildNavItem(icon: Icons.people_alt_outlined, label: 'Queue', index: 3),
+                        _buildNavItem(icon: Icons.person_outline, label: 'Profile', index: 4),
+                      ],
+                    ),
+                  ),
+                ),
               ),
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _buildNavItem(icon: Icons.home_filled, label: 'Home', index: 0),
-                  _buildNavItem(icon: Icons.explore, label: 'Explore', index: 1),
-                  _buildNavItem(icon: Icons.calendar_month_outlined, label: 'Bookings', index: 2),
-                  _buildNavItem(icon: Icons.people_alt_outlined, label: 'Queue', index: 3),
-                  _buildNavItem(icon: Icons.person_outline, label: 'Profile', index: 4),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

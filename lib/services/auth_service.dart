@@ -56,6 +56,20 @@ class AuthService {
 
   // --- Fixed Predefined Staff Roles & Credentials ---
   static final Map<String, _FixedStaffCredential> _fixedStaff = {
+    // Customer
+    'customer123@gmail.com': const _FixedStaffCredential(
+      password: 'customer@123',
+      role: UserRole.customer,
+      fullName: 'John Guest',
+      phoneNumber: '+94 77 123 4567',
+    ),
+    'customer@dinequeue.com': const _FixedStaffCredential(
+      password: 'customer@123',
+      role: UserRole.customer,
+      fullName: 'John Guest',
+      phoneNumber: '+94 77 123 4567',
+    ),
+
     // Receptionist
     'reciptionist123@gmail.com': const _FixedStaffCredential(
       password: 'reciption@123',
