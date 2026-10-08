@@ -98,8 +98,8 @@ class _LiveQueueWidgetState extends State<LiveQueueWidget> {
     );
     if (selectedTable != null) {
       await SupabaseService().updateQueueStatus(
-        queueId: entry.id,
-        status: db.QueueStatus.seated,
+        entry.id,
+        db.QueueStatus.seated,
         restaurantId: restaurantId,
       );
 
@@ -128,8 +128,8 @@ class _LiveQueueWidgetState extends State<LiveQueueWidget> {
   void _notify(QueueEntry entry) async {
     final restaurantId = _currentRestaurantId;
     await SupabaseService().updateQueueStatus(
-      queueId: entry.id,
-      status: db.QueueStatus.called,
+      entry.id,
+      db.QueueStatus.called,
       restaurantId: restaurantId,
     );
 
