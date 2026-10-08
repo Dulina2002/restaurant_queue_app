@@ -41,19 +41,24 @@ class _ReservationSummaryScreenState extends State<ReservationSummaryScreen> {
   @override
   void initState() {
     super.initState();
+    _reservations = SupabaseService().getRestaurantReservationsSync(_currentRestaurantId);
+    _isLoading = false;
     ReceptionistContext().activeRestaurantNotifier.addListener(_onRestaurantChanged);
     _subscribeToReservations();
   }
 
   void _onRestaurantChanged() {
     if (mounted) {
+      _reservations = SupabaseService().getRestaurantReservationsSync(_currentRestaurantId);
       _subscribeToReservations();
     }
   }
 
   void _subscribeToReservations() {
     _reservationsSub?.cancel();
-    setState(() => _isLoading = true);
+    if (_reservations.isEmpty) {
+      setState(() => _isLoading = true);
+    }
 
     final restaurantId = _currentRestaurantId;
     _reservationsSub = SupabaseService()

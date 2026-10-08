@@ -703,8 +703,11 @@ class SupabaseService {
   /// Live stream of ALL reservations for a restaurant (including Confirmed, Completed, Cancelled)
   Stream<List<ReservationModel>> streamAllRestaurantReservations(String restaurantId) {
     final targetId = restaurantId.isNotEmpty ? restaurantId : 'ocean_bistro';
-    final client = _client;
+    final fallback = _fallbackReservations.where((r) => r.restaurantId == targetId).toList();
+    fallback.sort((a, b) => (b.createdAt ?? DateTime.now()).compareTo(a.createdAt ?? DateTime.now()));
+    final fallbackJson = fallback.map((r) => r.toJson()).toList();
 
+    final client = _client;
     if (client == null) {
       Future.microtask(() => _reservationsStreamController.add(List.from(_fallbackReservations)));
       return _reservationsStreamController.stream.map((list) {
@@ -714,44 +717,33 @@ class SupabaseService {
       });
     }
 
-    try {
-      return client
-          .from('reservations')
-          .stream(primaryKey: ['id'])
-          .map((data) {
-            final list = data
-                .where((row) => row['restaurant_id']?.toString() == targetId)
-                .map((row) => ReservationModel.fromJson(row))
-                .toList();
+    return _liveRows(
+      'reservations',
+      restaurantId: targetId,
+      initialFallback: fallbackJson,
+    ).map((rows) {
+      final list = rows
+          .where((row) => row['restaurant_id']?.toString() == targetId)
+          .map((row) => ReservationModel.fromJson(row))
+          .toList();
 
-            if (list.isNotEmpty) {
-              for (final item in list) {
-                final idx = _fallbackReservations.indexWhere((r) => r.id == item.id);
-                if (idx != -1) {
-                  _fallbackReservations[idx] = item;
-                } else {
-                  _fallbackReservations.add(item);
-                }
-              }
-              list.sort((a, b) => (b.createdAt ?? DateTime.now()).compareTo(a.createdAt ?? DateTime.now()));
-              return list;
-            }
+      if (list.isNotEmpty) {
+        for (final item in list) {
+          final idx = _fallbackReservations.indexWhere((r) => r.id == item.id);
+          if (idx != -1) {
+            _fallbackReservations[idx] = item;
+          } else {
+            _fallbackReservations.add(item);
+          }
+        }
+        list.sort((a, b) => (b.createdAt ?? DateTime.now()).compareTo(a.createdAt ?? DateTime.now()));
+        return list;
+      }
 
-            final fallback = _fallbackReservations.where((r) => r.restaurantId == targetId).toList();
-            fallback.sort((a, b) => (b.createdAt ?? DateTime.now()).compareTo(a.createdAt ?? DateTime.now()));
-            return fallback;
-          })
-          .handleError((e) {
-            debugPrint('Supabase streamAllRestaurantReservations error: $e');
-            final fallback = _fallbackReservations.where((r) => r.restaurantId == targetId).toList();
-            fallback.sort((a, b) => (b.createdAt ?? DateTime.now()).compareTo(a.createdAt ?? DateTime.now()));
-            return fallback;
-          });
-    } catch (_) {
-      final fallback = _fallbackReservations.where((r) => r.restaurantId == targetId).toList();
-      fallback.sort((a, b) => (b.createdAt ?? DateTime.now()).compareTo(a.createdAt ?? DateTime.now()));
-      return Stream.value(fallback);
-    }
+      final fallbackRes = _fallbackReservations.where((r) => r.restaurantId == targetId).toList();
+      fallbackRes.sort((a, b) => (b.createdAt ?? DateTime.now()).compareTo(a.createdAt ?? DateTime.now()));
+      return fallbackRes;
+    });
   }
 
   Future<void> updateReservationStatus(
@@ -781,6 +773,7 @@ class SupabaseService {
       } catch (e) {
         debugPrint('Supabase updateReservationStatus error: $e');
       }
+      _notifyChanged('reservations');
     }
   }
 
@@ -811,8 +804,10 @@ class SupabaseService {
   /// Stream live floor tables for a restaurant (Receptionist Floor Overview)
   Stream<List<FloorTable>> streamFloorTables({required String restaurantId}) {
     final targetId = restaurantId.isNotEmpty ? restaurantId : 'ocean_bistro';
-    final client = _client;
+    final fallbackList = List<FloorTable>.from(_getOrCreateFallbackFloorTables(targetId));
+    final fallbackJson = fallbackList.map((t) => t.toJson()).toList();
 
+    final client = _client;
     if (client == null) {
       Future.microtask(() {
         _floorTablesStreamController.add(Map.from(_fallbackFloorTables));
@@ -824,29 +819,25 @@ class SupabaseService {
       });
     }
 
-    try {
-      return client
-          .from('tables')
-          .stream(primaryKey: ['id'])
-          .map((data) {
-            final list = data
-                .where((row) => row['restaurant_id']?.toString() == targetId)
-                .map((row) => FloorTable.fromJson(row))
-                .toList();
+    return _liveRows(
+      'tables',
+      // Do NOT pass restaurantId here — Supabase stream() only supports filtering
+      // by primary-key columns. Passing restaurant_id (a non-PK column) to
+      // .stream().eq() causes realtime to return only one row. The client-side
+      // .where() below handles the restaurant scoping correctly.
+      initialFallback: fallbackJson,
+    ).map((rows) {
+      final list = rows
+          .where((row) => row['restaurant_id']?.toString() == targetId)
+          .map((row) => FloorTable.fromJson(row))
+          .toList();
 
-            if (list.isEmpty) {
-              return List<FloorTable>.from(_getOrCreateFallbackFloorTables(targetId));
-            }
-            _fallbackFloorTables[targetId] = List.from(list);
-            return list;
-          })
-          .handleError((e) {
-            debugPrint('Supabase streamFloorTables error: $e');
-            return List<FloorTable>.from(_getOrCreateFallbackFloorTables(targetId));
-          });
-    } catch (_) {
-      return Stream.value(List<FloorTable>.from(_getOrCreateFallbackFloorTables(targetId)));
-    }
+      if (list.isEmpty) {
+        return List<FloorTable>.from(_getOrCreateFallbackFloorTables(targetId));
+      }
+      _fallbackFloorTables[targetId] = List.from(list);
+      return list;
+    });
   }
 
   /// Update a table's status and guest name across Supabase & in-memory cache
@@ -888,6 +879,17 @@ class SupabaseService {
   List<FloorTable> getFloorTablesSync({required String restaurantId}) {
     final targetId = restaurantId.isNotEmpty ? restaurantId : 'ocean_bistro';
     return List<FloorTable>.from(_getOrCreateFallbackFloorTables(targetId));
+  }
+
+  /// Retrieve current cached active queue synchronously
+  List<QueueEntryModel> getRestaurantQueueSync(String restaurantId) {
+    final all = _isAll(restaurantId);
+    return _fallbackQueue
+        .where((q) =>
+            (all || q.restaurantId == restaurantId) &&
+            q.status != QueueStatus.seated &&
+            q.status != QueueStatus.cancelled)
+        .toList();
   }
 
   /// Emits a table name whenever this device mutates that table so every
@@ -933,7 +935,7 @@ class SupabaseService {
       } catch (e) {
         debugPrint('Supabase fetch ($table) error: $e');
         if (!controller.isClosed) {
-          if (initialFallback != null && initialFallback.isNotEmpty) {
+          if (initialFallback != null) {
             controller.add(initialFallback);
           } else {
             controller.addError(e);
@@ -946,7 +948,7 @@ class SupabaseService {
 
     controller = StreamController<List<Map<String, dynamic>>>.broadcast(
       onListen: () {
-        if (initialFallback != null && initialFallback.isNotEmpty) {
+        if (initialFallback != null) {
           controller.add(initialFallback);
         }
         refetch();
