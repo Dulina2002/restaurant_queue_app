@@ -5,14 +5,17 @@ import '../../../../services/restaurant_database_service.dart';
 import '../../data/models/physical_table_model.dart';
 
 class QuickTurnTablesSheet extends StatefulWidget {
-  const QuickTurnTablesSheet({super.key});
+  /// Restaurant whose tables are shown and turned.
+  final String restaurantId;
 
-  static Future<void> show(BuildContext context) {
+  const QuickTurnTablesSheet({super.key, required this.restaurantId});
+
+  static Future<void> show(BuildContext context, {required String restaurantId}) {
     return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => const QuickTurnTablesSheet(),
+      builder: (context) => QuickTurnTablesSheet(restaurantId: restaurantId),
     );
   }
 
@@ -24,13 +27,71 @@ class _QuickTurnTablesSheetState extends State<QuickTurnTablesSheet> {
   final RestaurantDatabaseService _firestoreService = RestaurantDatabaseService();
   final Set<String> _selectedTableIds = {};
   bool _initialized = false;
+  bool _isSubmitting = false;
+  late final Stream<List<PhysicalTable>> _tablesStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _tablesStream = _firestoreService.streamTables(restaurantId: widget.restaurantId);
+  }
+
+  Future<void> _confirmTurn(List<String> tableIds, String tableNames) async {
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _isSubmitting = true);
+    try {
+      await _firestoreService.bulkQuickTurnTables(tableIds);
+      final called = await _firestoreService.callNextWaitingParties(widget.restaurantId, tableIds.length);
+      if (!mounted) return;
+      navigator.pop();
+      AppToast.showSuccess(
+        messenger.context,
+        called > 0
+            ? '$tableNames marked Available! $called waiting ${called == 1 ? 'party' : 'parties'} notified.'
+            : '$tableNames marked Available! No parties are waiting.',
+        title: 'Tables Turned',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
+      AppToast.showError(context, 'Could not turn tables: $e', title: 'Error');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<PhysicalTable>>(
-      stream: _firestoreService.streamTables(restaurantId: 'ocean_bistro'),
+      stream: _tablesStream,
       builder: (context, snapshot) {
-        final allTables = snapshot.data ?? PhysicalTable.mockList();
+        if (snapshot.hasError && snapshot.data == null) {
+          return Container(
+            height: 200,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            alignment: Alignment.center,
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              'Could not load tables: ${snapshot.error}',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.textSecondary),
+            ),
+          );
+        }
+        if (snapshot.data == null) {
+          return Container(
+            height: 200,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            alignment: Alignment.center,
+            child: const CircularProgressIndicator(color: AppColors.primary),
+          );
+        }
+        final allTables = snapshot.data!;
         final dirtyTables = allTables.where((t) => t.status != TableStatus.available).toList();
 
         if (!_initialized && dirtyTables.isNotEmpty) {
@@ -147,7 +208,7 @@ class _QuickTurnTablesSheetState extends State<QuickTurnTablesSheet> {
                               child: Text(
                                 dirtyTables.isEmpty
                                     ? 'All physical tables are currently available!'
-                                    : '$selectedCount tables auto-selected for fast turn. Confirming will mark available & notify waiting parties.',
+                                    : '$selectedCount ${selectedCount == 1 ? 'table' : 'tables'} auto-selected for fast turn. Confirming will mark available & call waiting parties.',
                                 style: const TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w500,
@@ -336,20 +397,12 @@ class _QuickTurnTablesSheetState extends State<QuickTurnTablesSheet> {
                   child: SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      onPressed: selectedCount == 0
+                      onPressed: selectedCount == 0 || _isSubmitting
                           ? null
-                          : () async {
-                              for (final tableId in _selectedTableIds) {
-                                await _firestoreService.updateTableStatus(tableId, TableStatus.available);
-                              }
-                              if (!context.mounted) return;
-                              Navigator.pop(context);
-                              AppToast.showSuccess(
-                                context,
-                                '$selectedNumbers marked Available! Queue notified.',
-                                title: 'Tables Turned',
-                              );
-                            },
+                          : () => _confirmTurn(
+                                dirtyTables.where((t) => _selectedTableIds.contains(t.id)).map((t) => t.id).toList(),
+                                selectedNumbers,
+                              ),
                       icon: const Icon(Icons.bolt, size: 20),
                       label: Text(
                         selectedCount == 0

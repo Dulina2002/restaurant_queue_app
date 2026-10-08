@@ -249,49 +249,55 @@ class RestaurantDetailsScreen extends StatelessWidget {
                             stream: RestaurantDatabaseService().streamTables(restaurantId: restaurant.id),
                             builder: (context, snapshot) {
                               final tables = snapshot.data ?? [];
-                              final tablesFor2 = tables.where((t) => t.seats == 2).toList();
-                              final tablesFor4 = tables.where((t) => t.seats == 4).toList();
-                              final tablesFor6 = tables.where((t) => t.seats == 6).toList();
-                              final tablesFor8Plus = tables.where((t) => t.seats >= 8).toList();
-
-                              final hasAvail2 = tablesFor2.isEmpty || tablesFor2.any((t) => t.status == TableStatus.available);
-                              final hasAvail4 = tablesFor4.isEmpty || tablesFor4.any((t) => t.status == TableStatus.available);
-                              final hasAvail6 = tablesFor6.isEmpty || tablesFor6.any((t) => t.status == TableStatus.available);
-
+                              if (tables.isEmpty) {
+                                return Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.surface,
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(color: AppColors.border),
+                                  ),
+                                  child: const Text(
+                                    'No tables configured for this restaurant.',
+                                    style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                );
+                              }
                               return Column(
-                                children: [
-                                  _buildTableAvailabilityCard(
-                                    title: 'Table for 2',
-                                    subtitle: 'Up to 2 guests',
-                                    statusText: hasAvail2 ? 'Available' : 'Occupied',
-                                    statusColor: hasAvail2 ? const Color(0xFF10B981) : const Color(0xFFEF4444),
-                                    bgColor: hasAvail2 ? const Color(0xFFE8F5E9) : const Color(0xFFFFEBEE),
-                                  ),
-                                  const SizedBox(height: 10),
-                                  _buildTableAvailabilityCard(
-                                    title: 'Table for 4',
-                                    subtitle: 'Up to 4 guests',
-                                    statusText: hasAvail4 ? 'Available' : 'Occupied',
-                                    statusColor: hasAvail4 ? const Color(0xFF10B981) : const Color(0xFFEF4444),
-                                    bgColor: hasAvail4 ? const Color(0xFFE8F5E9) : const Color(0xFFFFEBEE),
-                                  ),
-                                  const SizedBox(height: 10),
-                                  _buildTableAvailabilityCard(
-                                    title: 'Table for 6',
-                                    subtitle: 'Up to 6 guests',
-                                    statusText: hasAvail6 ? 'Few Available' : 'Waitlist Only',
-                                    statusColor: hasAvail6 ? const Color(0xFFF59E0B) : const Color(0xFFEF4444),
-                                    bgColor: hasAvail6 ? const Color(0xFFFFFBEB) : const Color(0xFFFFEBEE),
-                                  ),
-                                  const SizedBox(height: 10),
-                                  _buildTableAvailabilityCard(
-                                    title: 'Private Dining (8-12)',
-                                    subtitle: 'Up to 12 guests',
-                                    statusText: tablesFor8Plus.any((t) => t.status == TableStatus.available) ? 'Available' : 'Requires 24h Advance',
-                                    statusColor: tablesFor8Plus.any((t) => t.status == TableStatus.available) ? const Color(0xFF10B981) : const Color(0xFFEF4444),
-                                    bgColor: tablesFor8Plus.any((t) => t.status == TableStatus.available) ? const Color(0xFFE8F5E9) : const Color(0xFFFFEBEE),
-                                  ),
-                                ],
+                                children: tables.map((t) {
+                                  final isAvailable = t.status == TableStatus.available;
+                                  final statusText = isAvailable ? 'Available' : 'Occupied / Reserved';
+                                  final statusColor = isAvailable ? const Color(0xFF10B981) : const Color(0xFFEF4444);
+                                  final bgColor = isAvailable ? const Color(0xFFE8F5E9) : const Color(0xFFFFEBEE);
+
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 10),
+                                    child: InkWell(
+                                      onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) => ReserveTableStepperScreen(
+                                              restaurant: restaurant,
+                                              profile: profile,
+                                              initialTable: t,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      borderRadius: BorderRadius.circular(14),
+                                      child: _buildTableAvailabilityCard(
+                                        title: t.name,
+                                        subtitle: 'Up to ${t.seats} guests',
+                                        statusText: statusText,
+                                        statusColor: statusColor,
+                                        bgColor: bgColor,
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
                               );
                             },
                           ),

@@ -48,6 +48,20 @@ class AuthService {
 
   // --- Fixed Predefined Staff Roles & Credentials ---
   static final Map<String, _FixedStaffCredential> _fixedStaff = {
+    // Customer
+    'customer123@gmail.com': const _FixedStaffCredential(
+      password: 'customer@123',
+      role: UserRole.customer,
+      fullName: 'John Guest',
+      phoneNumber: '+94 77 123 4567',
+    ),
+    'customer@dinequeue.com': const _FixedStaffCredential(
+      password: 'customer@123',
+      role: UserRole.customer,
+      fullName: 'John Guest',
+      phoneNumber: '+94 77 123 4567',
+    ),
+
     // Receptionist
     'reciptionist123@gmail.com': const _FixedStaffCredential(
       password: 'reciption@123',
@@ -579,18 +593,7 @@ class AuthService {
       return _localFallbackProfile;
     }
 
-    final supaUser = _supabase?.auth.currentUser;
-    if (supaUser != null) {
-      final prof = await getProfile(
-        supaUser.id,
-        defaultEmail: supaUser.email,
-        userMetadata: supaUser.userMetadata,
-      );
-      _localFallbackProfile = prof;
-      return prof;
-    }
-
-    // Check device local session
+    // Try device local session first to eliminate network latency on reload
     try {
       final prefs = await SharedPreferences.getInstance();
       final activeEmail = prefs.getString(_activeUserEmailKey);
@@ -603,6 +606,17 @@ class AuthService {
         }
       }
     } catch (_) {}
+
+    final supaUser = _supabase?.auth.currentUser;
+    if (supaUser != null) {
+      final prof = await getProfile(
+        supaUser.id,
+        defaultEmail: supaUser.email,
+        userMetadata: supaUser.userMetadata,
+      );
+      _localFallbackProfile = prof;
+      return prof;
+    }
 
     return null;
   }

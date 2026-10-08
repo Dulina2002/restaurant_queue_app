@@ -282,7 +282,7 @@ class _SignInScreenState extends State<SignInScreen> {
                             ),
                           ),
                   ),
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 24),
 
                   // Create Account Link
                   Row(

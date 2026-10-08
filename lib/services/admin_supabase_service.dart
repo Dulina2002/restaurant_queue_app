@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user_role.dart';
 import 'supabase_service.dart';
@@ -162,36 +161,74 @@ class AdminSupabaseService {
     return deletedRows.isNotEmpty;
   }
 
-  Future<List<Map<String, dynamic>>?> loadUsers() async {
+  Map<String, dynamic> _mapUser(dynamic row) => {
+        'id': row['id'],
+        'name': row['full_name'] ?? 'User',
+        'email': row['email'] ?? '',
+        'role': row['role'] == null
+            ? 'Profile missing'
+            : row['role'] == 'admin'
+                ? 'Admin'
+                : UserRole.fromString(row['role']).displayName,
+        'suspended': row['suspended'] == true,
+      };
+
+  Future<dynamic> _usersRequest(Map<String, dynamic> body) async {
     final client = _client;
-    if (client == null) return null;
-
-    try {
-      final rows = await client
-          .from('profiles')
-          .select(
-            'id,full_name,role',
-          )
-          .timeout(const Duration(seconds: 15));
-
-      return rows
-          .map((row) => <String, dynamic>{
-                'id': row['id'].toString(),
-                'name': row['full_name']?.toString() ?? 'User',
-                'email': 'Email not available',
-                'role': UserRole.fromString(row['role']?.toString()) ==
-                        UserRole.admin
-                    ? 'Admin'
-                    : UserRole.fromString(row['role']?.toString()).displayName,
-                'suspended': false,
-              })
-          .toList();
-    } catch (error, stackTrace) {
-      if (kDebugMode) {
-        debugPrint('Admin Supabase profiles read failed: $error');
-        debugPrintStack(stackTrace: stackTrace);
-      }
-      rethrow;
+    final token = client?.auth.currentSession?.accessToken;
+    if (client == null || token == null) {
+      throw StateError('Sign in with Supabase to manage users.');
     }
+    try {
+      final response = await client.functions.invoke('admin-users',
+          body: body, headers: {'Authorization': 'Bearer $token'});
+      final payload = response.data;
+      if (payload is! Map || payload['success'] != true) {
+        throw StateError(payload is Map
+            ? payload['error']?.toString() ?? 'Admin request failed.'
+            : 'Invalid Admin response.');
+      }
+      return payload['data'];
+    } on FunctionException catch (error) {
+      final details = error.details;
+      throw StateError(details is Map
+          ? details['error']?.toString() ??
+              'Admin request failed (${error.status}).'
+          : 'Admin request failed (${error.status}). Check function deployment and permissions.');
+    }
+  }
+
+  Future<List<Map<String, dynamic>>?> loadUsers() async {
+    if (_client == null) return null;
+    final rows = await _usersRequest({'action': 'list'}) as List;
+    return rows.map(_mapUser).toList();
+  }
+
+  Future<Map<String, dynamic>> inviteUser(
+          {required String email,
+          required String fullName,
+          required String role}) async =>
+      _mapUser(await _usersRequest({
+        'action': 'invite',
+        'email': email,
+        'full_name': fullName,
+        'role': role.toLowerCase()
+      }));
+
+  Future<Map<String, dynamic>> changeUserRole(
+          {required String id, required String role}) async =>
+      _mapUser(await _usersRequest({
+        'action': 'change_role',
+        'user_id': id,
+        'role': role.toLowerCase()
+      }));
+
+  Future<Map<String, dynamic>> setUserSuspended(
+          {required String id, required bool suspended}) async =>
+      _mapUser(await _usersRequest(
+          {'action': suspended ? 'suspend' : 'activate', 'user_id': id}));
+
+  Future<void> deleteUser(String id) async {
+    await _usersRequest({'action': 'delete', 'user_id': id});
   }
 }

@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import '../../../models/user_profile.dart';
-import '../../../models/user_role.dart';
+import '../../../models/review_model.dart';
+import '../../../models/restaurant_model.dart';
 import '../../../services/auth_service.dart';
+import '../../../services/restaurant_database_service.dart';
 import '../../../shared/theme/app_colors.dart';
+import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/user_avatar.dart';
 import '../../../features/profile/presentation/screens/edit_profile_screen.dart';
 import '../../home_screen.dart';
-import '../../receptionist/receptionist_dashboard_screen.dart';
-import '../../../features/manager/presentation/screens/manager_dashboard_screen.dart';
-import '../../admin/admin_dashboard_screen.dart';
 import 'customer_notifications_sheet.dart';
 
 class CustomerProfileView extends StatefulWidget {
@@ -60,189 +60,9 @@ class _CustomerProfileViewState extends State<CustomerProfileView> {
     }
   }
 
-  void _showRoleSwitchSheet() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (sheetContext) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Switch Workspace Role',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              'Select a role to preview the app dashboard for that user type:',
-              style: TextStyle(fontSize: 13, color: AppColors.textMuted),
-            ),
-            const SizedBox(height: 20),
-
-            _buildRoleOption(
-              title: 'Customer',
-              subtitle: 'Browse restaurants, book tables, join virtual waitlist',
-              roleColor: const Color(0xFFF27B50),
-              icon: Icons.person_outline_rounded,
-              isSelected: true,
-              onTap: () => Navigator.pop(sheetContext),
-            ),
-            const SizedBox(height: 10),
-
-            _buildRoleOption(
-              title: 'Receptionist / Host',
-              subtitle: 'Manage live queue, call guests, oversee physical tables',
-              roleColor: const Color(0xFF3B82F6),
-              icon: Icons.table_restaurant_outlined,
-              isSelected: false,
-              onTap: () {
-                Navigator.pop(sheetContext);
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => ReceptionistDashboardScreen(
-                      profile: _currentProfile ??
-                          widget.profile ??
-                          UserProfile(
-                            id: 'rec_1',
-                            fullName: 'Host Front Desk',
-                            email: 'receptionist@dinequeue.com',
-                            role: UserRole.receptionist,
-                            createdAt: DateTime.now(),
-                          ),
-                    ),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 10),
-
-            _buildRoleOption(
-              title: 'Manager',
-              subtitle: 'AI optimizer, live menu 86-ing, floor analytics & turns',
-              roleColor: const Color(0xFF10B981),
-              icon: Icons.dashboard_outlined,
-              isSelected: false,
-              onTap: () {
-                Navigator.pop(sheetContext);
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => ManagerDashboardScreen(
-                      profile: _currentProfile ??
-                          widget.profile ??
-                          UserProfile(
-                            id: 'mgr_1',
-                            fullName: 'Restaurant Manager',
-                            email: 'manager@oceanbistro.com',
-                            role: UserRole.manager,
-                            createdAt: DateTime.now(),
-                          ),
-                    ),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 10),
-
-            _buildRoleOption(
-              title: 'Admin',
-              subtitle: 'System users, multi-tenant restaurants & enterprise configs',
-              roleColor: const Color(0xFF8B5CF6),
-              icon: Icons.admin_panel_settings_outlined,
-              isSelected: false,
-              onTap: () {
-                Navigator.pop(sheetContext);
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => AdminDashboardScreen(
-                      profile: _currentProfile ??
-                          widget.profile ??
-                          UserProfile(
-                            id: 'adm_1',
-                            fullName: 'System Admin',
-                            email: 'admin@dinequeue.com',
-                            role: UserRole.admin,
-                            createdAt: DateTime.now(),
-                          ),
-                    ),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 12),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRoleOption({
-    required String title,
-    required String subtitle,
-    required Color roleColor,
-    required IconData icon,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: isSelected ? roleColor.withValues(alpha: 0.08) : Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isSelected ? roleColor : AppColors.border,
-            width: isSelected ? 1.5 : 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: roleColor.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, color: roleColor, size: 20),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: isSelected ? roleColor : AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
-                  ),
-                ],
-              ),
-            ),
-            if (isSelected)
-              Icon(Icons.check_circle_rounded, color: roleColor, size: 20),
-          ],
-        ),
-      ),
-    );
-  }
-
   void _showReviewsSheet() {
+    final userId = _currentProfile?.id ?? 'guest_id';
+    
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
@@ -275,85 +95,257 @@ class _CustomerProfileViewState extends State<CustomerProfileView> {
                 ],
               ),
               const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFEF3C7),
-                        borderRadius: BorderRadius.circular(10),
+              
+              StreamBuilder<List<ReviewModel>>(
+                stream: RestaurantDatabaseService().streamUserReviews(userId),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+                    );
+                  }
+                  
+                  final reviews = snapshot.data ?? [];
+                  if (reviews.isEmpty) {
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 32),
+                      child: Center(
+                        child: Text(
+                          'You haven\'t reviewed any restaurants yet.',
+                          style: TextStyle(color: AppColors.textMuted, fontSize: 14),
+                        ),
                       ),
-                      child: const Icon(Icons.star_rounded, color: Color(0xFFD97706), size: 24),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
-                          Text(
-                            'Ocean Bistro — 5.0 ★',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    );
+                  }
+
+                  return Column(
+                    children: reviews.map((review) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
                           ),
-                          SizedBox(height: 2),
-                          Text(
-                            '"Exceptional seafood risotto and swift seating with DineQueue!"',
-                            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFEF3C7),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Icon(Icons.star_rounded, color: Color(0xFFD97706), size: 24),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '${review.restaurantName} — ${review.rating.toStringAsFixed(1)} ★',
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '"${review.comment}"',
+                                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFEF3C7),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(Icons.star_rounded, color: Color(0xFFD97706), size: 24),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
-                          Text(
-                            'The Mango Tree — 4.5 ★',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                          ),
-                          SizedBox(height: 2),
-                          Text(
-                            '"Delicious butter chicken and courteous service."',
-                            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+                        ),
+                      );
+                    }).toList(),
+                  );
+                },
               ),
               const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _showAddReviewSheet();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text('Add a Review', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ),
+              const SizedBox(height: 10),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  void _showAddReviewSheet() {
+    final userId = _currentProfile?.id ?? 'guest_id';
+    String? selectedRestaurantId;
+    String? selectedRestaurantName;
+    double rating = 5.0;
+    final commentController = TextEditingController();
+    bool isSubmitting = false;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) {
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(ctx).viewInsets.bottom,
+            ),
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Write a Review',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 20, color: AppColors.textMuted),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    FutureBuilder<List<RestaurantModel>>(
+                      future: RestaurantDatabaseService().getActiveRestaurants(),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        final restaurants = snapshot.data ?? [];
+                        if (restaurants.isEmpty) {
+                          return const Text('No restaurants available to review.', style: TextStyle(color: AppColors.textMuted));
+                        }
+                        
+                        if (selectedRestaurantId == null && restaurants.isNotEmpty) {
+                          selectedRestaurantId = restaurants.first.id;
+                          selectedRestaurantName = restaurants.first.name;
+                        }
+
+                        return DropdownButtonFormField<String>(
+                          value: selectedRestaurantId,
+                          decoration: InputDecoration(
+                            labelText: 'Select Restaurant',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          items: restaurants.map((r) {
+                            return DropdownMenuItem(
+                              value: r.id,
+                              child: Text(r.name),
+                            );
+                          }).toList(),
+                          onChanged: (val) {
+                            setState(() {
+                              selectedRestaurantId = val;
+                              selectedRestaurantName = restaurants.firstWhere((r) => r.id == val).name;
+                            });
+                          },
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 24),
+                    const Text('Rating', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(5, (index) {
+                        return IconButton(
+                          icon: Icon(
+                            index < rating ? Icons.star_rounded : Icons.star_border_rounded,
+                            color: const Color(0xFFD97706),
+                            size: 36,
+                          ),
+                          onPressed: () => setState(() => rating = index + 1.0),
+                        );
+                      }),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: commentController,
+                      maxLines: 4,
+                      decoration: InputDecoration(
+                        labelText: 'Your Experience',
+                        hintText: 'Tell us about your visit...',
+                        alignLabelWithHint: true,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: isSubmitting || selectedRestaurantId == null
+                            ? null
+                            : () async {
+                                if (commentController.text.trim().isEmpty) {
+                                  AppToast.showError(context, 'Please enter a review comment.');
+                                  return;
+                                }
+                                setState(() => isSubmitting = true);
+                                try {
+                                  final newReview = ReviewModel(
+                                    id: 'rev_${DateTime.now().millisecondsSinceEpoch}',
+                                    userId: userId,
+                                    restaurantId: selectedRestaurantId!,
+                                    restaurantName: selectedRestaurantName!,
+                                    rating: rating,
+                                    comment: commentController.text.trim(),
+                                    createdAt: DateTime.now(),
+                                  );
+                                  await RestaurantDatabaseService().addReview(newReview);
+                                  if (!ctx.mounted) return;
+                                  Navigator.pop(ctx);
+                                  AppToast.showSuccess(context, 'Review submitted successfully!');
+                                } catch (e) {
+                                  setState(() => isSubmitting = false);
+                                  AppToast.showError(context, 'Failed to submit review: $e');
+                                }
+                              },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: isSubmitting
+                            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                            : const Text('Submit Review', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -415,69 +407,14 @@ class _CustomerProfileViewState extends State<CustomerProfileView> {
         ? activeProfile!.phoneNumber!
         : '+94 77 123 4567';
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // --- 1. Top Green Header Bar ---
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-                decoration: const BoxDecoration(
-                  color: Color(0xFF143823),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    // Role Badge + Tap to switch text
-                    GestureDetector(
-                      onTap: _showRoleSwitchSheet,
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF27B50),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: const Text(
-                              'CUSTOMER',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Tap to switch role',
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.55),
-                              fontSize: 11,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Text(
-                      'DineQueue',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.3,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              Padding(
+    return Material(
+      color: Colors.white,
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
                 child: Column(
                   children: [
@@ -539,60 +476,7 @@ class _CustomerProfileViewState extends State<CustomerProfileView> {
                     ),
                     const SizedBox(height: 24),
 
-                    // --- 3. Current Role Switcher Card ---
-                    GestureDetector(
-                      onTap: _showRoleSwitchSheet,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFF7ED),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFFFFEDD5)),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF27B50),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              alignment: Alignment.center,
-                              child: const Icon(Icons.person, color: Colors.white, size: 22),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: const [
-                                  Text(
-                                    'Current Role: Customer',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFFEA580C),
-                                    ),
-                                  ),
-                                  SizedBox(height: 2),
-                                  Text(
-                                    'Tap to switch between Customer, Receptionist, Manager & Admin',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: AppColors.textSecondary,
-                                      height: 1.3,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-
-                    // --- 4. Settings Menu Items List ---
+                    // --- 3. Settings Menu Items List ---
                     _buildMenuItem(
                       icon: Icons.person_outline_rounded,
                       title: 'Edit Profile',
@@ -710,8 +594,7 @@ class _CustomerProfileViewState extends State<CustomerProfileView> {
             ],
           ),
         ),
-      ),
-    );
+      );
   }
 
   Widget _buildMenuItem({

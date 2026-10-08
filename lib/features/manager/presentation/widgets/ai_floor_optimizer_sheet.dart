@@ -1,18 +1,20 @@
 import 'package:flutter/material.dart';
 import '../../../../shared/theme/app_colors.dart';
-import '../../../../shared/widgets/app_toast.dart';
 import '../../../../services/restaurant_database_service.dart';
 import '../../data/models/physical_table_model.dart';
 
 class AiFloorOptimizerSheet extends StatefulWidget {
-  const AiFloorOptimizerSheet({super.key});
+  /// Restaurant whose live floor is analysed.
+  final String restaurantId;
 
-  static Future<void> show(BuildContext context) {
+  const AiFloorOptimizerSheet({super.key, required this.restaurantId});
+
+  static Future<void> show(BuildContext context, {required String restaurantId}) {
     return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => const AiFloorOptimizerSheet(),
+      builder: (context) => AiFloorOptimizerSheet(restaurantId: restaurantId),
     );
   }
 
@@ -22,13 +24,38 @@ class AiFloorOptimizerSheet extends StatefulWidget {
 
 class _AiFloorOptimizerSheetState extends State<AiFloorOptimizerSheet> {
   final RestaurantDatabaseService _firestoreService = RestaurantDatabaseService();
+  late final Stream<List<PhysicalTable>> _tablesStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _tablesStream = _firestoreService.streamTables(restaurantId: widget.restaurantId);
+  }
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<PhysicalTable>>(
-      stream: _firestoreService.streamTables(restaurantId: 'ocean_bistro'),
+      stream: _tablesStream,
       builder: (context, snapshot) {
-        final tables = snapshot.data ?? PhysicalTable.mockList();
+        if (snapshot.data == null) {
+          return Container(
+            height: 200,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            alignment: Alignment.center,
+            padding: const EdgeInsets.all(24),
+            child: snapshot.hasError
+                ? Text(
+                    'Could not load tables: ${snapshot.error}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: AppColors.textSecondary),
+                  )
+                : const CircularProgressIndicator(color: AppColors.primary),
+          );
+        }
+        final tables = snapshot.data!;
 
         final availableCount = tables.where((t) => t.status == TableStatus.available).length;
         final occupiedCount = tables.where((t) => t.status == TableStatus.occupied).length;
@@ -154,7 +181,7 @@ class _AiFloorOptimizerSheetState extends State<AiFloorOptimizerSheet> {
                                   Row(
                                     children: [
                                       const Text(
-                                        'Optimal Floor Velocity',
+                                        'Live Floor Load',
                                         style: TextStyle(
                                           fontSize: 14,
                                           fontWeight: FontWeight.w700,
@@ -180,9 +207,15 @@ class _AiFloorOptimizerSheetState extends State<AiFloorOptimizerSheet> {
                                     ],
                                   ),
                                   const SizedBox(height: 4),
-                                  const Text(
-                                    'Tables are distributed for max turnover speed.',
-                                    style: TextStyle(
+                                  Text(
+                                    totalTables == 0
+                                        ? 'No tables configured for this restaurant yet.'
+                                        : loadPercentage < 40
+                                            ? 'Plenty of free capacity. Walk-ins can be seated immediately.'
+                                            : loadPercentage < 80
+                                                ? 'Floor is busy. Turn finished tables quickly to keep waits short.'
+                                                : 'Floor is near capacity. Prioritise turning occupied tables.',
+                                    style: const TextStyle(
                                       fontSize: 12,
                                       color: AppColors.textSecondary,
                                     ),
@@ -246,17 +279,10 @@ class _AiFloorOptimizerSheetState extends State<AiFloorOptimizerSheet> {
                   child: SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        AppToast.showSuccess(
-                          context,
-                          'AI Optimal floor plan applied successfully!',
-                          title: 'Floor Plan Updated',
-                        );
-                      },
+                      onPressed: () => Navigator.pop(context),
                       icon: const Icon(Icons.check_circle_outline, size: 20),
                       label: const Text(
-                        'Apply & Close',
+                        'Close Report',
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.bold,
