@@ -838,7 +838,7 @@ class _LiveMenuTabWidgetState extends State<LiveMenuTabWidget> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Restaurant Selector Pills
+                    // Restaurant Selector Dropdown
                     const Text(
                       'Restaurant',
                       style: TextStyle(
@@ -848,30 +848,53 @@ class _LiveMenuTabWidgetState extends State<LiveMenuTabWidget> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    Row(
-                      children: widget.restaurants.map((restaurant) {
-                        final rest = restaurant.name;
-                        final isSel = selectedRestaurantId == restaurant.id;
-                        return GestureDetector(
-                          onTap: () => setSheetState(() => selectedRestaurantId = restaurant.id),
-                          child: Container(
-                            margin: const EdgeInsets.only(right: 8),
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: isSel ? AppColors.primary : Colors.grey.shade100,
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Text(
-                              rest,
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
-                                color: isSel ? Colors.white : AppColors.textSecondary,
+                    DropdownButtonFormField<String>(
+                      value: widget.restaurants.any((r) => r.id == selectedRestaurantId)
+                          ? selectedRestaurantId
+                          : (widget.restaurants.isNotEmpty ? widget.restaurants.first.id : null),
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                        ),
+                        prefixIcon: const Icon(Icons.storefront_rounded, color: AppColors.primary, size: 20),
+                      ),
+                      items: widget.restaurants.isEmpty
+                          ? [
+                              DropdownMenuItem<String>(
+                                value: selectedRestaurantId,
+                                child: Text(selectedRestaurantId),
                               ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
+                            ]
+                          : widget.restaurants.map((restaurant) {
+                              return DropdownMenuItem<String>(
+                                value: restaurant.id,
+                                child: Text(
+                                  restaurant.name,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                      onChanged: (newId) {
+                        if (newId != null) {
+                          setSheetState(() => selectedRestaurantId = newId);
+                        }
+                      },
                     ),
                     const SizedBox(height: 16),
 
@@ -898,13 +921,14 @@ class _LiveMenuTabWidgetState extends State<LiveMenuTabWidget> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    Row(
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
                       children: _categoryOptions.map((cat) {
                         final isSel = selectedCategory == cat;
                         return GestureDetector(
                           onTap: () => setSheetState(() => selectedCategory = cat),
                           child: Container(
-                            margin: const EdgeInsets.only(right: 8),
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
                               color: isSel ? AppColors.primary : Colors.grey.shade100,
