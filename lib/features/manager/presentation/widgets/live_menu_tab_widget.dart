@@ -1,18 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../../../models/restaurant_model.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_toast.dart';
 import '../../../../services/restaurant_database_service.dart';
 import '../../data/models/live_menu_dish_model.dart';
 
 class LiveMenuTabWidget extends StatefulWidget {
-  final String? selectedRestaurant;
-  final List<String>? availableRestaurants;
+  /// All restaurants available in the picker.
+  final List<RestaurantModel> restaurants;
+
+  /// Id of the restaurant selected in the dashboard header.
+  final String selectedRestaurantId;
 
   const LiveMenuTabWidget({
     super.key,
-    this.selectedRestaurant,
-    this.availableRestaurants,
+    required this.restaurants,
+    required this.selectedRestaurantId,
   });
 
   @override
@@ -20,8 +24,12 @@ class LiveMenuTabWidget extends StatefulWidget {
 }
 
 class _LiveMenuTabWidgetState extends State<LiveMenuTabWidget> {
+  static const String _allFilter = 'All';
+
   final RestaurantDatabaseService _firestoreService = RestaurantDatabaseService();
   late String _selectedRestaurantFilter;
+  late Stream<List<LiveMenuDish>> _menuStream;
+
   String _selectedCategoryFilter = 'All Categories';
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
@@ -36,22 +44,29 @@ class _LiveMenuTabWidgetState extends State<LiveMenuTabWidget> {
     'Beverages',
   ];
 
-  List<String> get _filterOptions {
-    final list = <String>['All'];
-    if (widget.selectedRestaurant != null && widget.selectedRestaurant != 'All') {
-      list.add(widget.selectedRestaurant!);
+  final List<String> _categoryOptions = [
+    'Starters',
+    'Mains',
+    'Desserts',
+    'Beverages',
+  ];
+
+  RestaurantModel? _restaurantById(String id) {
+    for (final r in widget.restaurants) {
+      if (r.id == id) return r;
     }
-    return list;
+    return null;
   }
 
-  List<String> get _allAvailableRestaurants {
-    return widget.availableRestaurants ?? ['Ocean Bistro', 'The Mango Tree', 'Nihonbashi'];
-  }
+  String _restaurantName(String id) => _restaurantById(id)?.name ?? id;
+
+  List<String> get _filterIds => [_allFilter, widget.selectedRestaurantId];
 
   @override
   void initState() {
     super.initState();
-    _selectedRestaurantFilter = widget.selectedRestaurant ?? 'All';
+    _selectedRestaurantFilter = widget.selectedRestaurantId;
+    _menuStream = _firestoreService.streamLiveMenu(restaurantId: _selectedRestaurantFilter);
   }
 
   @override
@@ -63,19 +78,17 @@ class _LiveMenuTabWidgetState extends State<LiveMenuTabWidget> {
   @override
   void didUpdateWidget(LiveMenuTabWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.selectedRestaurant != null && widget.selectedRestaurant != oldWidget.selectedRestaurant) {
-      setState(() {
-        _selectedRestaurantFilter = widget.selectedRestaurant!;
-      });
+    if (widget.selectedRestaurantId != oldWidget.selectedRestaurantId) {
+      _setRestaurantFilter(widget.selectedRestaurantId);
     }
   }
 
-  final List<String> _categoryOptions = [
-    'Starters',
-    'Mains',
-    'Desserts',
-    'Beverages',
-  ];
+  void _setRestaurantFilter(String id) {
+    setState(() {
+      _selectedRestaurantFilter = id;
+      _menuStream = _firestoreService.streamLiveMenu(restaurantId: id);
+    });
+  }
 
   void _toggleAvailability(String id, bool val) async {
     try {
@@ -83,7 +96,7 @@ class _LiveMenuTabWidgetState extends State<LiveMenuTabWidget> {
       if (!mounted) return;
       AppToast.showSuccess(
         context,
-        val ? 'Dish marked AVAILABLE in Firestore' : 'Dish marked 86\'D in Firestore',
+        val ? 'Dish marked AVAILABLE in database' : 'Dish marked 86\'D in database',
         title: 'Menu Status Updated',
         duration: const Duration(seconds: 2),
       );
@@ -103,7 +116,7 @@ class _LiveMenuTabWidgetState extends State<LiveMenuTabWidget> {
       if (!mounted) return;
       AppToast.showSuccess(
         context,
-        'Dish added to Firestore Live Menu',
+        'Dish added to Live Menu',
         title: 'Dish Added',
       );
     } catch (e) {
@@ -122,7 +135,7 @@ class _LiveMenuTabWidgetState extends State<LiveMenuTabWidget> {
       if (!mounted) return;
       AppToast.showSuccess(
         context,
-        'Dish updated in Firestore Live Menu',
+        'Dish updated in Live Menu',
         title: 'Dish Updated',
       );
     } catch (e) {
@@ -141,7 +154,7 @@ class _LiveMenuTabWidgetState extends State<LiveMenuTabWidget> {
       if (!mounted) return;
       AppToast.showSuccess(
         context,
-        'Dish removed from Firestore',
+        'Dish removed from database',
         title: 'Dish Removed',
       );
     } catch (e) {
@@ -157,9 +170,9 @@ class _LiveMenuTabWidgetState extends State<LiveMenuTabWidget> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<LiveMenuDish>>(
-      stream: _firestoreService.streamLiveMenu(restaurantId: _selectedRestaurantFilter),
+      stream: _menuStream,
       builder: (context, snapshot) {
-        final rawDishes = snapshot.data ?? LiveMenuDish.mockList();
+        final rawDishes = snapshot.data ?? const <LiveMenuDish>[];
 
         final availCount = rawDishes.where((d) => d.isAvailable).length;
         final outOfStockCount = rawDishes.where((d) => !d.isAvailable).length;
@@ -180,7 +193,8 @@ class _LiveMenuTabWidgetState extends State<LiveMenuTabWidget> {
           }
           return true;
         }).toList();
-        final isLoading = snapshot.connectionState == ConnectionState.waiting;
+        final isLoading = snapshot.data == null && !snapshot.hasError;
+        final loadError = snapshot.data == null ? snapshot.error : null;
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -364,10 +378,11 @@ class _LiveMenuTabWidgetState extends State<LiveMenuTabWidget> {
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
-                  ..._filterOptions.map((rest) {
-                    final isSelected = _selectedRestaurantFilter == rest;
+                  ..._filterIds.map((restId) {
+                    final isSelected = _selectedRestaurantFilter == restId;
+                    final rest = restId == _allFilter ? 'All' : _restaurantName(restId);
                     return GestureDetector(
-                      onTap: () => setState(() => _selectedRestaurantFilter = rest),
+                      onTap: () => _setRestaurantFilter(restId),
                       child: Container(
                         margin: const EdgeInsets.only(right: 8),
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
@@ -429,6 +444,31 @@ class _LiveMenuTabWidgetState extends State<LiveMenuTabWidget> {
                 child: Padding(
                   padding: EdgeInsets.all(24.0),
                   child: CircularProgressIndicator(color: AppColors.primary),
+                ),
+              )
+            else if (loadError != null)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Column(
+                  children: [
+                    const Icon(Icons.cloud_off_rounded, color: AppColors.textMuted),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Could not load menu: $loadError',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                    ),
+                    TextButton(
+                      onPressed: () => _setRestaurantFilter(_selectedRestaurantFilter),
+                      child: const Text('Retry'),
+                    ),
+                  ],
                 ),
               )
             else if (dishes.isEmpty)
@@ -603,7 +643,8 @@ class _LiveMenuTabWidgetState extends State<LiveMenuTabWidget> {
                 scale: 0.7,
                 child: Switch(
                   value: dish.isAvailable,
-                  activeColor: AppColors.primary,
+                  activeTrackColor: const Color(0xFFC8E6C9),
+                  activeThumbColor: AppColors.primary,
                   onChanged: (val) => _toggleAvailability(dish.id, val),
                 ),
               ),
@@ -615,7 +656,7 @@ class _LiveMenuTabWidgetState extends State<LiveMenuTabWidget> {
                   ),
                   const SizedBox(width: 8),
                   GestureDetector(
-                    onTap: () => _deleteDish(dish.id),
+                    onTap: () => _confirmDeleteDish(dish),
                     child: const Icon(Icons.delete_outline, size: 16, color: Colors.redAccent),
                   ),
                 ],
@@ -672,8 +713,8 @@ class _LiveMenuTabWidgetState extends State<LiveMenuTabWidget> {
                 scale: 0.8,
                 child: Switch(
                   value: dish.isAvailable,
-                  activeColor: AppColors.primary,
                   activeTrackColor: const Color(0xFFC8E6C9),
+                  activeThumbColor: AppColors.primary,
                   onChanged: (val) => _toggleAvailability(dish.id, val),
                 ),
               ),
@@ -700,7 +741,7 @@ class _LiveMenuTabWidgetState extends State<LiveMenuTabWidget> {
 
           // Subtitle Line: Category • Rs. Price • Restaurant
           Text(
-            '${dish.category}  -  Rs. ${dish.price.toInt()}  ${dish.restaurant}',
+            '${dish.category}  -  Rs. ${dish.price.toInt()}  ${dish.restaurant.isNotEmpty ? dish.restaurant : _restaurantName(dish.restaurantId)}',
             style: const TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w500,
@@ -744,7 +785,9 @@ class _LiveMenuTabWidgetState extends State<LiveMenuTabWidget> {
 
   void _showAddOrEditDishDialog({LiveMenuDish? dish}) {
     final isEditing = dish != null;
-    String selectedRestaurant = isEditing ? dish.restaurant : 'Ocean Bistro';
+    String selectedRestaurantId = isEditing
+        ? dish.restaurantId
+        : (_selectedRestaurantFilter == _allFilter ? widget.selectedRestaurantId : _selectedRestaurantFilter);
     String selectedCategory = isEditing ? dish.category : 'Mains';
 
     final nameController = TextEditingController(text: isEditing ? dish.name : '');
@@ -806,10 +849,11 @@ class _LiveMenuTabWidgetState extends State<LiveMenuTabWidget> {
                     ),
                     const SizedBox(height: 8),
                     Row(
-                      children: _allAvailableRestaurants.map((rest) {
-                        final isSel = selectedRestaurant == rest;
+                      children: widget.restaurants.map((restaurant) {
+                        final rest = restaurant.name;
+                        final isSel = selectedRestaurantId == restaurant.id;
                         return GestureDetector(
-                          onTap: () => setSheetState(() => selectedRestaurant = rest),
+                          onTap: () => setSheetState(() => selectedRestaurantId = restaurant.id),
                           child: Container(
                             margin: const EdgeInsets.only(right: 8),
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -949,10 +993,14 @@ class _LiveMenuTabWidgetState extends State<LiveMenuTabWidget> {
                               return;
                             }
 
+                            final restObj = _restaurantById(selectedRestaurantId);
+                            final rName = restObj?.name ?? selectedRestaurantId;
+
                             if (isEditing) {
                               _editDish(dish.copyWith(
+                                restaurantId: selectedRestaurantId,
                                 name: name,
-                                restaurant: selectedRestaurant,
+                                restaurant: rName,
                                 category: selectedCategory,
                                 price: price,
                                 description: desc,
@@ -960,9 +1008,9 @@ class _LiveMenuTabWidgetState extends State<LiveMenuTabWidget> {
                             } else {
                               _addDish(LiveMenuDish(
                                 id: DateTime.now().millisecondsSinceEpoch.toString(),
-                                restaurantId: 'ocean_bistro',
+                                restaurantId: selectedRestaurantId,
                                 name: name,
-                                restaurant: selectedRestaurant,
+                                restaurant: rName,
                                 category: selectedCategory,
                                 price: price,
                                 description: desc,

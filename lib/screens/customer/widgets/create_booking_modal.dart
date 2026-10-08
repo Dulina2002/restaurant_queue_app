@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../features/manager/data/models/physical_table_model.dart';
 import '../../../models/restaurant_model.dart';
 import '../../../models/reservation_model.dart';
 import '../../../models/user_profile.dart';
@@ -43,6 +44,7 @@ class CreateBookingModal extends StatefulWidget {
 class _CreateBookingModalState extends State<CreateBookingModal> {
   final RestaurantDatabaseService _firestoreService = RestaurantDatabaseService();
   RestaurantModel? _selectedRestaurant;
+  PhysicalTable? _selectedTable;
   DateTime _selectedDate = DateTime.now();
   String _selectedTimeSlot = '7:30 PM';
   int _partySize = 2;
@@ -88,6 +90,17 @@ class _CreateBookingModalState extends State<CreateBookingModal> {
 
     setState(() => _isLoading = true);
 
+    final guestName = (widget.profile?.fullName.isNotEmpty == true) ? widget.profile!.fullName : 'Guest';
+    final userNotes = _specialRequestsController.text.trim();
+    final notesList = <String>[];
+    if (_selectedTable != null) {
+      notesList.add('Table: ${_selectedTable!.name} (${_selectedTable!.zone})');
+    }
+    if (userNotes.isNotEmpty) {
+      notesList.add(userNotes);
+    }
+    final combinedNotes = notesList.isNotEmpty ? notesList.join(' • ') : null;
+
     try {
       final reservation = await _firestoreService.createReservation(
         ReservationModel(
@@ -95,15 +108,24 @@ class _CreateBookingModalState extends State<CreateBookingModal> {
           restaurantId: _selectedRestaurant!.id,
           restaurantName: _selectedRestaurant!.name,
           userId: (widget.profile?.id.isNotEmpty == true) ? widget.profile!.id : 'guest_id',
-          guestName: (widget.profile?.fullName.isNotEmpty == true) ? widget.profile!.fullName : 'Guest',
+          guestName: guestName,
           reservationCode: '',
           date: _formatDate(_selectedDate),
           time: _selectedTimeSlot,
           partySize: _partySize,
           status: 'confirmed',
+          specialNotes: combinedNotes,
           createdAt: DateTime.now(),
         ),
       );
+
+      if (_selectedTable != null) {
+        await _firestoreService.setTablesStatus(
+          [_selectedTable!.id],
+          TableStatus.reserved,
+          guestName: guestName,
+        );
+      }
 
       if (!mounted) return;
       setState(() => _isLoading = false);
@@ -113,7 +135,7 @@ class _CreateBookingModalState extends State<CreateBookingModal> {
 
       AppToast.showSuccess(
         context,
-        'Table booked at ${_selectedRestaurant!.name}! Ticket: ${reservation.reservationCode}',
+        '${_selectedTable != null ? "${_selectedTable!.name} " : ""}booked at ${_selectedRestaurant!.name}! Code: ${reservation.reservationCode}',
         title: 'Reservation Confirmed',
       );
     } catch (e) {
@@ -232,7 +254,10 @@ class _CreateBookingModalState extends State<CreateBookingModal> {
                         }).toList(),
                         onChanged: (val) {
                           if (val != null && uniqueMap.containsKey(val)) {
-                            setState(() => _selectedRestaurant = uniqueMap[val]);
+                            setState(() {
+                              _selectedRestaurant = uniqueMap[val];
+                              _selectedTable = null;
+                            });
                           }
                         },
                       ),
@@ -353,7 +378,147 @@ class _CreateBookingModalState extends State<CreateBookingModal> {
                 ),
               ],
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
+
+            // --- Physical Table Selector (Manager Database Data) ---
+            if (_selectedRestaurant != null) ...[
+              const Text(
+                'Select Physical Table',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Available tables are highlighted. Occupied or reserved tables are blocked.',
+                style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+              ),
+              const SizedBox(height: 10),
+              StreamBuilder<List<PhysicalTable>>(
+                stream: _firestoreService.streamTables(restaurantId: _selectedRestaurant!.id),
+                builder: (context, snapshot) {
+                  final tables = snapshot.data ?? [];
+                  if (tables.isEmpty) {
+                    return Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: const Text(
+                        'No physical tables found for this venue.',
+                        style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+                      ),
+                    );
+                  }
+
+                  return GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      childAspectRatio: 2.1,
+                      crossAxisSpacing: 8,
+                      mainAxisSpacing: 8,
+                    ),
+                    itemCount: tables.length,
+                    itemBuilder: (context, index) {
+                      final table = tables[index];
+                      final isAvailable = table.status == TableStatus.available;
+                      final isSelected = _selectedTable?.id == table.id;
+
+                      return InkWell(
+                        onTap: isAvailable
+                            ? () => setState(() => _selectedTable = table)
+                            : null, // Blocked if occupied or reserved!
+                        borderRadius: BorderRadius.circular(12),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? const Color(0xFFE6F4EA)
+                                : (isAvailable ? Colors.white : const Color(0xFFF3F4F6)),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isSelected
+                                  ? AppColors.primary
+                                  : (isAvailable ? AppColors.border : Colors.grey.shade300),
+                              width: isSelected ? 2.0 : 1.0,
+                            ),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      table.name,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: isAvailable ? AppColors.textPrimary : Colors.grey.shade600,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  if (isSelected)
+                                    const Icon(Icons.check_circle, size: 16, color: AppColors.primary)
+                                  else if (!isAvailable)
+                                    Icon(Icons.lock_rounded, size: 14, color: Colors.grey.shade500),
+                                ],
+                              ),
+                              const SizedBox(height: 2),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    '${table.seats} seats',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: isAvailable ? AppColors.textMuted : Colors.grey.shade500,
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
+                                    decoration: BoxDecoration(
+                                      color: isAvailable
+                                          ? const Color(0xFFD1FAE5)
+                                          : (table.status == TableStatus.occupied
+                                              ? const Color(0xFFFEE2E2)
+                                              : const Color(0xFFFEF3C7)),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      isAvailable
+                                          ? 'AVAILABLE'
+                                          : (table.status == TableStatus.occupied ? 'OCCUPIED' : 'RESERVED'),
+                                      style: TextStyle(
+                                        fontSize: 8,
+                                        fontWeight: FontWeight.bold,
+                                        color: isAvailable
+                                            ? const Color(0xFF047857)
+                                            : (table.status == TableStatus.occupied
+                                                ? const Color(0xFFB91C1C)
+                                                : const Color(0xFFB45309)),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+              const SizedBox(height: 20),
+            ],
 
             // Confirm Booking Button
             SizedBox(

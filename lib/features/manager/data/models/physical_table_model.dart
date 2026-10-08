@@ -168,6 +168,24 @@ class PhysicalTable {
         guestName: 'VIP Group',
         status: TableStatus.occupied,
       ),
+      const PhysicalTable(
+        id: '9',
+        restaurantId: 'nihonbashi',
+        name: 'Sushi Bar 02',
+        zone: 'Bar Seating',
+        seats: 2,
+        guestName: 'No Guest',
+        status: TableStatus.available,
+      ),
+      const PhysicalTable(
+        id: '10',
+        restaurantId: 'nihonbashi',
+        name: 'Tatami Room 2',
+        zone: 'VIP Room',
+        seats: 4,
+        guestName: 'No Guest',
+        status: TableStatus.available,
+      ),
     ];
   }
 }

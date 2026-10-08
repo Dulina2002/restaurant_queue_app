@@ -14,11 +14,13 @@ import 'booking_confirmation_screen.dart';
 class ReserveTableStepperScreen extends StatefulWidget {
   final RestaurantModel restaurant;
   final UserProfile? profile;
+  final PhysicalTable? initialTable;
 
   const ReserveTableStepperScreen({
     super.key,
     required this.restaurant,
     this.profile,
+    this.initialTable,
   });
 
   @override
@@ -42,6 +44,10 @@ class _ReserveTableStepperScreenState extends State<ReserveTableStepperScreen> {
   @override
   void initState() {
     super.initState();
+    _selectedTable = widget.initialTable;
+    if (_selectedTable != null) {
+      _partySize = _selectedTable!.seats;
+    }
     final now = DateTime.now();
     _displayMonth = DateTime(now.year, now.month);
     _reservationsSub = SupabaseService()
@@ -233,8 +239,9 @@ class _ReserveTableStepperScreenState extends State<ReserveTableStepperScreen> {
     {'time': '9:30 PM'},
   ];
 
-  // Step 3: Guests
+  // Step 3: Guests & Physical Table
   int _partySize = 4;
+  PhysicalTable? _selectedTable;
 
   // Step 4: Special Requests & Pre-orders
   final Set<String> _selectedSpecialRequests = {'Window seat'};
@@ -284,7 +291,11 @@ class _ReserveTableStepperScreenState extends State<ReserveTableStepperScreen> {
     }
     setState(() => _isSubmitting = true);
 
+    final guestName = (widget.profile?.fullName.isNotEmpty == true) ? widget.profile!.fullName : 'Guest';
     final notesList = <String>[];
+    if (_selectedTable != null) {
+      notesList.add('Table: ${_selectedTable!.name} (${_selectedTable!.zone})');
+    }
     if (_selectedSpecialRequests.isNotEmpty) {
       notesList.add('Requests: ${_selectedSpecialRequests.join(", ")}');
     }
@@ -303,7 +314,7 @@ class _ReserveTableStepperScreenState extends State<ReserveTableStepperScreen> {
           restaurantId: widget.restaurant.id,
           restaurantName: widget.restaurant.name,
           userId: (widget.profile?.id.isNotEmpty == true) ? widget.profile!.id : 'guest_id',
-          guestName: (widget.profile?.fullName.isNotEmpty == true) ? widget.profile!.fullName : 'Guest',
+          guestName: guestName,
           reservationCode: '',
           date: selectedDateStr,
           time: _selectedTime,
@@ -313,6 +324,14 @@ class _ReserveTableStepperScreenState extends State<ReserveTableStepperScreen> {
           createdAt: DateTime.now(),
         ),
       );
+
+      if (_selectedTable != null) {
+        await _firestoreService.setTablesStatus(
+          [_selectedTable!.id],
+          TableStatus.reserved,
+          guestName: guestName,
+        );
+      }
 
       if (!mounted) return;
       setState(() => _isSubmitting = false);
@@ -788,6 +807,7 @@ class _ReserveTableStepperScreenState extends State<ReserveTableStepperScreen> {
   // --- STEP 3: HOW MANY GUESTS? ---
   // ==========================================
   Widget _buildGuestsStep() {
+    final maxGuests = _selectedTable != null ? _selectedTable!.seats : 12;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -842,8 +862,8 @@ class _ReserveTableStepperScreenState extends State<ReserveTableStepperScreen> {
                 ),
                 const SizedBox(width: 28),
                 IconButton(
-                  icon: const Icon(Icons.add_circle_outline_rounded, size: 36, color: Color(0xFF10B981)),
-                  onPressed: _partySize < 12 ? () => setState(() => _partySize++) : null,
+                  icon: Icon(Icons.add_circle_outline_rounded, size: 36, color: _partySize < maxGuests ? const Color(0xFF10B981) : AppColors.textMuted.withValues(alpha: 0.5)),
+                  onPressed: _partySize < maxGuests ? () => setState(() => _partySize++) : null,
                 ),
               ],
             ),
@@ -861,18 +881,23 @@ class _ReserveTableStepperScreenState extends State<ReserveTableStepperScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [2, 4, 6, 8].map((count) {
             final isSelected = _partySize == count;
+            final isEnabled = count <= maxGuests;
             return Expanded(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4),
                 child: GestureDetector(
-                  onTap: () => setState(() => _partySize = count),
+                  onTap: isEnabled ? () => setState(() => _partySize = count) : null,
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     decoration: BoxDecoration(
-                      color: isSelected ? const Color(0xFF0D3B2E) : Colors.white,
+                      color: isSelected 
+                          ? const Color(0xFF0D3B2E) 
+                          : (isEnabled ? Colors.white : const Color(0xFFF3F4F6)),
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
-                        color: isSelected ? const Color(0xFF0D3B2E) : AppColors.border,
+                        color: isSelected 
+                            ? const Color(0xFF0D3B2E) 
+                            : (isEnabled ? AppColors.border : Colors.grey.shade300),
                       ),
                     ),
                     alignment: Alignment.center,
@@ -881,7 +906,9 @@ class _ReserveTableStepperScreenState extends State<ReserveTableStepperScreen> {
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.bold,
-                        color: isSelected ? Colors.white : AppColors.textPrimary,
+                        color: isSelected 
+                            ? Colors.white 
+                            : (isEnabled ? AppColors.textPrimary : Colors.grey.shade400),
                       ),
                     ),
                   ),
@@ -915,6 +942,146 @@ class _ReserveTableStepperScreenState extends State<ReserveTableStepperScreen> {
             ],
           ),
         ),
+        const SizedBox(height: 24),
+
+        if (widget.initialTable == null) ...[
+          // --- Live Physical Tables Selection ---
+          const Text(
+            'Select Available Table',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Only available tables are selectable. Occupied or reserved tables are blocked.',
+            style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+          ),
+          const SizedBox(height: 12),
+
+        StreamBuilder<List<PhysicalTable>>(
+          stream: _firestoreService.streamTables(restaurantId: widget.restaurant.id),
+          builder: (context, snapshot) {
+            final tables = snapshot.data ?? [];
+            if (tables.isEmpty) {
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: const Text(
+                  'No physical tables listed yet.',
+                  style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+                ),
+              );
+            }
+
+            return GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                childAspectRatio: 2.1,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+              ),
+              itemCount: tables.length,
+              itemBuilder: (context, index) {
+                final table = tables[index];
+                final isAvailable = table.status == TableStatus.available;
+                final isSelected = _selectedTable?.id == table.id;
+
+                return InkWell(
+                  onTap: isAvailable
+                      ? () => setState(() => _selectedTable = table)
+                      : null, // Blocked if occupied or reserved!
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? const Color(0xFFE6F4EA)
+                          : (isAvailable ? Colors.white : const Color(0xFFF3F4F6)),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: isSelected
+                            ? const Color(0xFF10B981)
+                            : (isAvailable ? AppColors.border : Colors.grey.shade300),
+                        width: isSelected ? 2.0 : 1.0,
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                table.name,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: isAvailable ? AppColors.textPrimary : Colors.grey.shade600,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (isSelected)
+                              const Icon(Icons.check_circle, size: 16, color: Color(0xFF10B981))
+                            else if (!isAvailable)
+                              Icon(Icons.lock_rounded, size: 14, color: Colors.grey.shade500),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              '${table.seats} seats • ${table.zone}',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: isAvailable ? AppColors.textMuted : Colors.grey.shade500,
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: isAvailable
+                                    ? const Color(0xFFD1FAE5)
+                                    : (table.status == TableStatus.occupied
+                                        ? const Color(0xFFFEE2E2)
+                                        : const Color(0xFFFEF3C7)),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                isAvailable
+                                    ? 'AVAILABLE'
+                                    : (table.status == TableStatus.occupied ? 'OCCUPIED' : 'RESERVED'),
+                                style: TextStyle(
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.bold,
+                                  color: isAvailable
+                                      ? const Color(0xFF047857)
+                                      : (table.status == TableStatus.occupied
+                                          ? const Color(0xFFB91C1C)
+                                          : const Color(0xFFB45309)),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        ),
+        ],
       ],
     );
   }
@@ -974,7 +1141,7 @@ class _ReserveTableStepperScreenState extends State<ReserveTableStepperScreen> {
               const SizedBox(height: 12),
               _buildReviewRow(Icons.people_outline_rounded, 'Party Size', '$_partySize Guests'),
               const SizedBox(height: 12),
-              _buildReviewRow(Icons.table_restaurant_outlined, 'Selected Table', 'Table for $_partySize'),
+              _buildReviewRow(Icons.table_restaurant_outlined, 'Selected Table', _selectedTable != null ? '${_selectedTable!.name} (${_selectedTable!.zone})' : 'Table for $_partySize'),
             ],
           ),
         ),

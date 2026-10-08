@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/user_profile.dart';
 import '../models/user_role.dart';
@@ -8,7 +9,7 @@ import 'customer/customer_dashboard_screen.dart';
 import 'manager/manager_dashboard_screen.dart';
 import 'receptionist/receptionist_dashboard_screen.dart';
 
-class AuthGate extends StatelessWidget {
+class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
 
   static Widget getScreenForRole(UserProfile profile) {
@@ -25,34 +26,59 @@ class AuthGate extends StatelessWidget {
   }
 
   @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  final AuthService _authService = AuthService();
+  Future<UserProfile?>? _profileFuture;
+  StreamSubscription<dynamic>? _authSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+    _authSub = _authService.onAuthStateChange.listen((_) {
+      if (mounted) {
+        setState(() {
+          _profileFuture = _authService.getCurrentUserProfile();
+        });
+      }
+    });
+  }
+
+  void _loadProfile() {
+    _profileFuture = _authService.getCurrentUserProfile();
+  }
+
+  @override
+  void dispose() {
+    _authSub?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final authService = AuthService();
+    return FutureBuilder<UserProfile?>(
+      future: _profileFuture,
+      builder: (context, profileSnapshot) {
+        if (profileSnapshot.connectionState == ConnectionState.waiting && !profileSnapshot.hasData) {
+          return const Scaffold(
+            backgroundColor: Color(0xFF0B1910),
+            body: Center(
+              child: CircularProgressIndicator(
+                color: Color(0xFFF27B50),
+              ),
+            ),
+          );
+        }
 
-    return StreamBuilder<dynamic>(
-      stream: authService.onAuthStateChange,
-      builder: (context, snapshot) {
-        return FutureBuilder<UserProfile?>(
-          future: authService.getCurrentUserProfile(),
-          builder: (context, profileSnapshot) {
-            if (profileSnapshot.connectionState == ConnectionState.waiting) {
-              return const Scaffold(
-                backgroundColor: Color(0xFF0B1910),
-                body: Center(
-                  child: CircularProgressIndicator(
-                    color: Color(0xFFF27B50),
-                  ),
-                ),
-              );
-            }
+        final userProfile = profileSnapshot.data;
+        if (userProfile == null) {
+          return const HomeScreen();
+        }
 
-            final userProfile = profileSnapshot.data;
-            if (userProfile == null) {
-              return const HomeScreen();
-            }
-
-            return AuthGate.getScreenForRole(userProfile);
-          },
-        );
+        return AuthGate.getScreenForRole(userProfile);
       },
     );
   }

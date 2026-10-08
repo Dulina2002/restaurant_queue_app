@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import '../shared/widgets/demo_quick_launch_bar.dart';
 import 'how_it_works_screen.dart';
 import 'sign_in_screen.dart';
 
@@ -370,7 +370,20 @@ class HomeScreen extends StatelessWidget {
                         ],
                       ),
 
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 36),
+
+                      DemoQuickLaunchBar(
+                        onRoleSelected: (role) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const SignInScreen(),
+                            ),
+                          );
+                        },
+                      ),
+
+                      const SizedBox(height: 20),
                     ],
                   ),
                 ),

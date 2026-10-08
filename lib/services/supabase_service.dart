@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/restaurant_model.dart';
 import '../models/queue_entry_model.dart';
 import '../models/reservation_model.dart';
+import '../models/review_model.dart';
 import '../features/manager/data/models/physical_table_model.dart';
 import '../features/manager/data/models/live_menu_dish_model.dart';
 import 'reservation_storage_service.dart';
@@ -102,42 +103,36 @@ class SupabaseService {
   final StreamController<List<QueueEntryModel>> _queueStreamController = StreamController<List<QueueEntryModel>>.broadcast();
   final StreamController<List<ReservationModel>> _reservationsStreamController = StreamController<List<ReservationModel>>.broadcast();
 
+  final List<ReviewModel> _fallbackReviews = [
+    ReviewModel(
+      id: 'rev_1',
+      userId: 'current_customer_id',
+      restaurantId: 'ocean_bistro',
+      restaurantName: 'Ocean Bistro',
+      rating: 5.0,
+      comment: 'Exceptional seafood risotto and swift seating with DineQueue!',
+      createdAt: DateTime.now().subtract(const Duration(days: 2)),
+    ),
+    ReviewModel(
+      id: 'rev_2',
+      userId: 'current_customer_id',
+      restaurantId: 'mango_tree',
+      restaurantName: 'The Mango Tree',
+      rating: 4.5,
+      comment: 'Delicious butter chicken and courteous service.',
+      createdAt: DateTime.now().subtract(const Duration(days: 15)),
+    ),
+  ];
+  final StreamController<List<ReviewModel>> _reviewsStreamController = StreamController<List<ReviewModel>>.broadcast();
+
   // ==========================================
   // --- 1. RESTAURANTS ---
   // ==========================================
 
   Stream<List<RestaurantModel>> streamActiveRestaurants() {
-    final client = _client;
-    if (client == null) {
-      return Stream.value(_fallbackRestaurants);
-    }
-    try {
-      return client
-          .from('restaurants')
-          .stream(primaryKey: ['id'])
-          .map((data) {
-            if (data.isEmpty) return _fallbackRestaurants;
-            return data.map((json) => RestaurantModel(
-              id: json['id'].toString(),
-              name: json['name'] as String? ?? 'Restaurant',
-              cuisine: json['cuisine'] as String? ?? 'General',
-              tag: json['tag'] as String? ?? '',
-              location: json['location'] as String? ?? '',
-              rating: (json['rating'] is num) ? (json['rating'] as num).toDouble() : double.tryParse(json['rating']?.toString() ?? '4.5') ?? 4.5,
-              reviewsCount: (json['reviews_count'] is num) ? (json['reviews_count'] as num).toInt() : int.tryParse(json['reviews_count']?.toString() ?? '0') ?? 0,
-              isActive: json['is_active'] as bool? ?? true,
-              isQueueAvailable: json['is_queue_available'] as bool? ?? true,
-              estWait: json['est_wait'] as String? ?? 'Direct Seating',
-              waitlistCount: (json['waitlist_count'] is num) ? (json['waitlist_count'] as num).toInt() : 0,
-            )).toList();
-          })
-          .handleError((e) {
-            debugPrint('Supabase restaurants stream error: $e');
-            return _fallbackRestaurants;
-          });
-    } catch (_) {
-      return Stream.value(_fallbackRestaurants);
-    }
+    return streamManagedRestaurants().map(
+      (list) => list.where((r) => r.isActive).toList(),
+    );
   }
 
   // ==========================================
@@ -180,28 +175,48 @@ class SupabaseService {
           .from('queue_entries')
           .stream(primaryKey: ['id'])
           .map((data) {
-            final active = data
-                .where((row) =>
-                    row['user_id']?.toString() == effectiveUid &&
-                    (row['status'] == 'waiting' || row['status'] == 'called'))
-                .map((row) => QueueEntryModel(
-                      id: row['id'].toString(),
-                      restaurantId: row['restaurant_id']?.toString() ?? 'ocean_bistro',
-                      restaurantName: row['restaurant_name']?.toString() ?? 'Ocean Bistro',
-                      userId: row['user_id']?.toString() ?? effectiveUid,
-                      guestName: row['guest_name']?.toString() ?? 'Guest',
-                      partySize: (row['party_size'] is num) ? (row['party_size'] as num).toInt() : 2,
-                      phoneNumber: row['phone_number']?.toString() ?? '',
-                      status: QueueStatus.fromString(row['status']?.toString()),
-                      queueNumber: row['queue_number']?.toString() ?? 'Q-101',
-                      position: (row['position'] is num) ? (row['position'] as num).toInt() : 1,
-                      estimatedWaitMinutes: (row['estimated_wait_minutes'] is num)
-                          ? (row['estimated_wait_minutes'] as num).toInt()
-                          : 5,
-                      createdAt: row['created_at'] != null ? DateTime.tryParse(row['created_at'].toString()) : null,
-                    ))
+            final allEntries = data.map((row) => QueueEntryModel(
+                  id: row['id'].toString(),
+                  restaurantId: row['restaurant_id']?.toString() ?? 'ocean_bistro',
+                  restaurantName: row['restaurant_name']?.toString() ?? 'Ocean Bistro',
+                  userId: row['user_id']?.toString() ?? effectiveUid,
+                  guestName: row['guest_name']?.toString() ?? 'Guest',
+                  partySize: (row['party_size'] is num) ? (row['party_size'] as num).toInt() : 2,
+                  phoneNumber: row['phone_number']?.toString() ?? '',
+                  status: QueueStatus.fromString(row['status']?.toString()),
+                  queueNumber: row['queue_number']?.toString() ?? 'Q-101',
+                  position: (row['position'] is num) ? (row['position'] as num).toInt() : 1,
+                  estimatedWaitMinutes: (row['estimated_wait_minutes'] is num)
+                      ? (row['estimated_wait_minutes'] as num).toInt()
+                      : 5,
+                  createdAt: row['created_at'] != null ? DateTime.tryParse(row['created_at'].toString()) : null,
+                )).toList();
+
+            final myActiveEntries = allEntries
+                .where((q) =>
+                    q.userId == effectiveUid &&
+                    (q.status == QueueStatus.waiting || q.status == QueueStatus.called))
                 .toList();
-            return active.isNotEmpty ? active.first : null;
+            
+            if (myActiveEntries.isEmpty) return null;
+
+            final myEntry = myActiveEntries.first;
+            final restaurantQueue = allEntries
+                .where((q) =>
+                    q.restaurantId == myEntry.restaurantId &&
+                    (q.status == QueueStatus.waiting || q.status == QueueStatus.called))
+                .toList();
+            
+            restaurantQueue.sort((a, b) =>
+                (a.createdAt ?? DateTime.now()).compareTo(b.createdAt ?? DateTime.now()));
+            
+            final dynamicPos = restaurantQueue.indexWhere((q) => q.id == myEntry.id) + 1;
+            final calculatedPos = dynamicPos > 0 ? dynamicPos : myEntry.position;
+
+            return myEntry.copyWith(
+              position: calculatedPos,
+              estimatedWaitMinutes: calculatedPos * 5,
+            );
           })
           .handleError((_) => null);
     } catch (_) {
@@ -218,11 +233,31 @@ class SupabaseService {
     required String phoneNumber,
   }) async {
     final effectiveUid = (userId.isNotEmpty && userId != 'guest_id') ? userId : 'current_customer_id';
-    final activeCount = _fallbackQueue
+    var activeCount = _fallbackQueue
         .where((q) => q.restaurantId == restaurantId && (q.status == QueueStatus.waiting || q.status == QueueStatus.called))
         .length;
+    var queueNumber = 'Q-${_fallbackQueue.length + 101}';
+
+    // Prefer the real database numbers so positions/ticket numbers stay
+    // consistent with what the manager and receptionist see.
+    final lookupClient = _client;
+    if (lookupClient != null) {
+      try {
+        final rows = await lookupClient.from('queue_entries').select('restaurant_id,status,queue_number');
+        activeCount = rows
+            .where((r) => r['restaurant_id']?.toString() == restaurantId && (r['status'] == 'waiting' || r['status'] == 'called'))
+            .length;
+        var maxTicket = 100;
+        for (final r in rows) {
+          final n = int.tryParse((r['queue_number']?.toString() ?? '').replaceAll(RegExp(r'[^0-9]'), ''));
+          if (n != null && n > maxTicket) maxTicket = n;
+        }
+        queueNumber = 'Q-${maxTicket + 1}';
+      } catch (e) {
+        debugPrint('Supabase joinQueue lookup error: $e');
+      }
+    }
     final currentPos = activeCount + 1;
-    final queueNumber = 'Q-${_fallbackQueue.length + 101}';
     final entry = QueueEntryModel(
       id: 'q_${DateTime.now().millisecondsSinceEpoch}',
       restaurantId: restaurantId,
@@ -256,8 +291,9 @@ class SupabaseService {
           'queue_number': queueNumber,
           'position': currentPos,
           'estimated_wait_minutes': currentPos * 5,
-          'created_at': DateTime.now().toIso8601String(),
+          'created_at': DateTime.now().toUtc().toIso8601String(),
         });
+        _notifyChanged('queue_entries');
       } catch (e) {
         debugPrint('Supabase joinQueue insert error: $e');
       }
@@ -275,67 +311,12 @@ class SupabaseService {
       try {
         await client.from('queue_entries').update({
           'status': 'cancelled',
-          'updated_at': DateTime.now().toIso8601String(),
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
         }).match({'id': queueId});
       } catch (e) {
         debugPrint('Supabase leaveQueue update error: $e');
       }
-    }
-  }
-
-  /// Stream full live queue for a restaurant (receptionist view)
-  Stream<List<QueueEntryModel>> streamRestaurantQueue({String restaurantId = 'ocean_bistro'}) {
-    final client = _client;
-    if (client == null) {
-      Future.microtask(() => _queueStreamController.add(List.from(_fallbackQueue)));
-      return _queueStreamController.stream.map((list) => list
-          .where((q) =>
-              (q.restaurantId == restaurantId || restaurantId == 'ocean_bistro') &&
-              q.status != QueueStatus.seated &&
-              q.status != QueueStatus.cancelled)
-          .toList());
-    }
-
-    try {
-      return client
-          .from('queue_entries')
-          .stream(primaryKey: ['id'])
-          .map((data) {
-            final list = data
-                .where((row) =>
-                    (row['restaurant_id']?.toString() == restaurantId || restaurantId == 'ocean_bistro') &&
-                    row['status'] != 'seated' &&
-                    row['status'] != 'cancelled')
-                .map((row) => QueueEntryModel(
-                      id: row['id'].toString(),
-                      restaurantId: row['restaurant_id']?.toString() ?? restaurantId,
-                      restaurantName: row['restaurant_name']?.toString() ?? 'Ocean Bistro',
-                      userId: row['user_id']?.toString(),
-                      guestName: row['guest_name']?.toString() ?? 'Guest',
-                      partySize: (row['party_size'] is num) ? (row['party_size'] as num).toInt() : 2,
-                      phoneNumber: row['phone_number']?.toString() ?? '',
-                      status: QueueStatus.fromString(row['status']?.toString()),
-                      queueNumber: row['queue_number']?.toString() ?? 'Q-101',
-                      position: (row['position'] is num) ? (row['position'] as num).toInt() : 1,
-                      estimatedWaitMinutes: (row['estimated_wait_minutes'] is num)
-                          ? (row['estimated_wait_minutes'] as num).toInt()
-                          : 5,
-                      createdAt: row['created_at'] != null ? DateTime.tryParse(row['created_at'].toString()) : null,
-                    ))
-                .toList();
-            return list.isEmpty
-                ? _fallbackQueue
-                    .where((q) => q.status != QueueStatus.seated && q.status != QueueStatus.cancelled)
-                    .toList()
-                : list;
-          })
-          .handleError((_) => _fallbackQueue
-              .where((q) => q.status != QueueStatus.seated && q.status != QueueStatus.cancelled)
-              .toList());
-    } catch (_) {
-      return Stream.value(_fallbackQueue
-          .where((q) => q.status != QueueStatus.seated && q.status != QueueStatus.cancelled)
-          .toList());
+      _notifyChanged('queue_entries');
     }
   }
 
@@ -437,42 +418,42 @@ class SupabaseService {
     }
   }
 
-  /// Live stream of ALL non-cancelled reservations for a restaurant (used for availability).
-  Stream<List<ReservationModel>> streamRestaurantReservations(String restaurantId) async* {
-    final client = _client;
-    List<ReservationModel> fallbackFor() => _fallbackReservations
-        .where((r) => r.restaurantId == restaurantId && r.status.toLowerCase() != 'cancelled')
+  /// Live stream of ALL non-cancelled reservations for a restaurant
+  /// ('All' = every restaurant). Used for availability and manager analytics.
+  Stream<List<ReservationModel>> streamRestaurantReservations(String restaurantId) {
+    final all = _isAll(restaurantId);
+    final fallbackJson = _fallbackReservations
+        .where((r) => (all || r.restaurantId == restaurantId))
+        .map((r) => r.toJson())
         .toList();
+    bool keep(ReservationModel r) => r.status.toLowerCase() != 'cancelled';
 
-    if (client == null) {
-      yield fallbackFor();
-      yield* _reservationsStreamController.stream.map((_) => fallbackFor());
-      return;
+    if (_client == null) {
+      List<ReservationModel> local() =>
+          _fallbackReservations.where((r) => (all || r.restaurantId == restaurantId) && keep(r)).toList();
+      Future.microtask(() => _reservationsStreamController.add(List.from(_fallbackReservations)));
+      return _reservationsStreamController.stream.map((_) => local());
     }
 
-    try {
-      yield* client.from('reservations').stream(primaryKey: ['id']).map((data) {
-        return data
-            .where((row) => row['restaurant_id']?.toString() == restaurantId && row['status']?.toString().toLowerCase() != 'cancelled')
-            .map((row) => ReservationModel(
-                  id: row['id'].toString(),
-                  restaurantId: restaurantId,
-                  restaurantName: row['restaurant_name']?.toString() ?? '',
-                  userId: row['user_id']?.toString() ?? '',
-                  guestName: row['guest_name']?.toString() ?? 'Guest',
-                  reservationCode: row['reservation_code']?.toString() ?? '',
-                  date: row['date']?.toString() ?? '',
-                  time: row['time']?.toString() ?? '',
-                  partySize: (row['party_size'] is num) ? (row['party_size'] as num).toInt() : 2,
-                  status: row['status']?.toString() ?? 'confirmed',
-                  specialNotes: row['special_notes']?.toString(),
-                ))
-            .toList();
-      });
-    } catch (e) {
-      debugPrint('Supabase restaurant reservations stream error: $e');
-      yield fallbackFor();
-    }
+    return _liveRows('reservations', restaurantId: all ? null : restaurantId, initialFallback: fallbackJson).map((rows) {
+      return rows
+          .map((row) => ReservationModel(
+                id: row['id'].toString(),
+                restaurantId: row['restaurant_id']?.toString() ?? '',
+                restaurantName: row['restaurant_name']?.toString() ?? '',
+                userId: row['user_id']?.toString() ?? '',
+                guestName: row['guest_name']?.toString() ?? 'Guest',
+                reservationCode: row['reservation_code']?.toString() ?? '',
+                date: row['date']?.toString() ?? '',
+                time: row['time']?.toString() ?? '',
+                partySize: (row['party_size'] is num) ? (row['party_size'] as num).toInt() : 2,
+                status: row['status']?.toString() ?? 'confirmed',
+                specialNotes: row['special_notes']?.toString(),
+                createdAt: row['created_at'] != null ? DateTime.tryParse(row['created_at'].toString())?.toLocal() : null,
+              ))
+          .where(keep)
+          .toList();
+    });
   }
 
   Future<ReservationModel> createReservation(ReservationModel reservation) async {
@@ -517,11 +498,12 @@ class SupabaseService {
           'party_size': item.partySize,
           'status': 'confirmed',
           'special_notes': item.specialNotes,
-          'created_at': item.createdAt?.toIso8601String() ?? DateTime.now().toIso8601String(),
+          'created_at': (item.createdAt ?? DateTime.now()).toUtc().toIso8601String(),
         });
       } catch (e) {
         debugPrint('Supabase createReservation error: $e');
       }
+      _notifyChanged('reservations');
     }
 
     return item;
@@ -540,11 +522,12 @@ class SupabaseService {
       try {
         await client.from('reservations').update({
           'status': 'cancelled',
-          'updated_at': DateTime.now().toIso8601String(),
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
         }).match({'id': reservationId});
       } catch (e) {
         debugPrint('Supabase cancelReservation error: $e');
       }
+      _notifyChanged('reservations');
     }
   }
 
@@ -565,196 +548,768 @@ class SupabaseService {
           'party_size': reservation.partySize,
           'status': reservation.status,
           'special_notes': reservation.specialNotes,
-          'updated_at': DateTime.now().toIso8601String(),
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
         }).match({'id': reservation.id});
       } catch (e) {
         debugPrint('Supabase updateReservation error: $e');
       }
+      _notifyChanged('reservations');
     }
     return reservation;
   }
 
   // ==========================================
-  // --- 4. TABLES & MENU STREAMING ---
+  // --- 4. LIVE DATABASE STREAMS (TABLES, MENU, RESTAURANTS, QUEUE) ---
   // ==========================================
 
-  Stream<List<PhysicalTable>> streamTables({String? restaurantId}) {
-    final showAll = restaurantId == null || restaurantId == 'All' || restaurantId.isEmpty;
-    final targetId = _mapRestaurantToId(restaurantId ?? '');
-    final client = _client;
-    if (client == null) {
-      return Stream.value(
-        showAll
-            ? PhysicalTable.mockList()
-            : PhysicalTable.mockList().where((t) => t.restaurantId == restaurantId || t.restaurantId == targetId).toList(),
-      );
-    }
+  /// Emits a table name whenever this device mutates that table so every
+  /// active stream can refetch immediately (without waiting for realtime).
+  final StreamController<String> _localChanges = StreamController<String>.broadcast();
 
-    try {
-      return client
-          .from('tables')
-          .stream(primaryKey: ['id'])
-          .map((data) {
-            final list = data
-                .where((row) => showAll || row['restaurant_id']?.toString() == restaurantId || row['restaurant_id']?.toString() == targetId)
-                .map((row) => PhysicalTable(
-                      id: row['id'].toString(),
-                      restaurantId: row['restaurant_id']?.toString() ?? 'ocean_bistro',
-                      name: row['name']?.toString() ?? '',
-                      seats: (row['seats'] is num) ? (row['seats'] as num).toInt() : 2,
-                      guestName: row['guest_name']?.toString() ?? 'No Guest',
-                      status: TableStatus.fromString(row['status']?.toString()),
-                    ))
-                .toList();
-            return list.isEmpty
-                ? (showAll
-                    ? PhysicalTable.mockList()
-                    : PhysicalTable.mockList().where((t) => t.restaurantId == restaurantId || t.restaurantId == targetId).toList())
-                : list;
-          })
-          .handleError((_) => showAll
-              ? PhysicalTable.mockList()
-              : PhysicalTable.mockList().where((t) => t.restaurantId == restaurantId || t.restaurantId == targetId).toList());
-    } catch (_) {
-      return Stream.value(showAll
-          ? PhysicalTable.mockList()
-          : PhysicalTable.mockList().where((t) => t.restaurantId == restaurantId || t.restaurantId == targetId).toList());
-    }
+  void _notifyChanged(String table) {
+    if (!_localChanges.isClosed) _localChanges.add(table);
   }
 
-  Future<PhysicalTable> addTable(PhysicalTable table) async {
+  bool _isAll(String? id) => id == null || id.isEmpty || id == 'All';
+
+  /// Builds a live stream of raw rows for [table], optionally scoped to one
+  /// restaurant. It combines three sources so the UI never goes stale:
+  ///  1. an initial / on-demand REST fetch,
+  ///  2. Supabase realtime change events,
+  ///  3. a slow safety-net poll (covers tables not published to realtime).
+  /// Yields [initialFallback] immediately on listen so screen renders in 0ms.
+  Stream<List<Map<String, dynamic>>> _liveRows(
+    String table, {
+    String? restaurantId,
+    List<Map<String, dynamic>>? initialFallback,
+  }) {
+    final client = _client;
+    if (client == null) return Stream.value(initialFallback ?? const []);
+
+    late final StreamController<List<Map<String, dynamic>>> controller;
+    StreamSubscription<List<Map<String, dynamic>>>? realtimeSub;
+    StreamSubscription<String>? localSub;
+    Timer? poller;
+    var fetching = false;
+
+    Future<void> refetch() async {
+      if (fetching || controller.isClosed) return;
+      fetching = true;
+      try {
+        final base = client.from(table).select();
+        final rows = restaurantId == null ? await base : await base.eq('restaurant_id', restaurantId);
+        if (!controller.isClosed) {
+          final mapped = rows.map((r) => Map<String, dynamic>.from(r)).toList();
+          controller.add(mapped);
+        }
+      } catch (e) {
+        debugPrint('Supabase fetch ($table) error: $e');
+        if (!controller.isClosed) {
+          if (initialFallback != null && initialFallback.isNotEmpty) {
+            controller.add(initialFallback);
+          } else {
+            controller.addError(e);
+          }
+        }
+      } finally {
+        fetching = false;
+      }
+    }
+
+    controller = StreamController<List<Map<String, dynamic>>>.broadcast(
+      onListen: () {
+        if (initialFallback != null && initialFallback.isNotEmpty) {
+          controller.add(initialFallback);
+        }
+        refetch();
+        try {
+          final builder = client.from(table).stream(primaryKey: ['id']);
+          final source = restaurantId == null ? builder : builder.eq('restaurant_id', restaurantId);
+          realtimeSub = source.listen(
+            (rows) {
+              if (!controller.isClosed) {
+                var mapped = rows.map((r) => Map<String, dynamic>.from(r)).toList();
+                if (restaurantId != null) {
+                  mapped = mapped.where((r) => r['restaurant_id'] == restaurantId).toList();
+                }
+                controller.add(mapped);
+              }
+            },
+            onError: (Object e) => debugPrint('Supabase realtime ($table) error: $e'),
+          );
+        } catch (e) {
+          debugPrint('Supabase realtime ($table) setup error: $e');
+        }
+        localSub = _localChanges.stream.where((t) => t == table).listen((_) => refetch());
+        poller = Timer.periodic(const Duration(seconds: 15), (_) => refetch());
+      },
+      onCancel: () async {
+        poller?.cancel();
+        await realtimeSub?.cancel();
+        await localSub?.cancel();
+      },
+    );
+    return controller.stream;
+  }
+
+  int _naturalCompare(String a, String b) {
+    final re = RegExp(r'(\d+)|(\D+)');
+    final pa = re.allMatches(a.toLowerCase()).map((m) => m.group(0)!).toList();
+    final pb = re.allMatches(b.toLowerCase()).map((m) => m.group(0)!).toList();
+    for (var i = 0; i < pa.length && i < pb.length; i++) {
+      final na = int.tryParse(pa[i]);
+      final nb = int.tryParse(pb[i]);
+      final c = (na != null && nb != null) ? na.compareTo(nb) : pa[i].compareTo(pb[i]);
+      if (c != 0) return c;
+    }
+    return pa.length.compareTo(pb.length);
+  }
+
+  // ---------- Restaurants (manager) ----------
+
+  RestaurantModel _restaurantFromRow(Map<String, dynamic> json) {
+    return RestaurantModel(
+      id: json['id'].toString(),
+      name: json['name'] as String? ?? 'Restaurant',
+      cuisine: json['cuisine'] as String? ?? 'General',
+      tag: json['tag'] as String? ?? '',
+      location: json['location'] as String? ?? '',
+      rating: (json['rating'] is num)
+          ? (json['rating'] as num).toDouble()
+          : double.tryParse(json['rating']?.toString() ?? '4.5') ?? 4.5,
+      reviewsCount: (json['reviews_count'] is num) ? (json['reviews_count'] as num).toInt() : 0,
+      isActive: json['is_active'] as bool? ?? true,
+      isQueueAvailable: json['is_queue_available'] as bool? ?? true,
+      estWait: json['est_wait'] as String? ?? 'Direct Seating',
+      waitlistCount: (json['waitlist_count'] is num) ? (json['waitlist_count'] as num).toInt() : 0,
+    );
+  }
+
+  Future<RestaurantModel?> getRestaurant(String id) async {
     final client = _client;
     if (client != null) {
       try {
-        await client.from('tables').upsert({
-          'id': table.id,
-          'restaurant_id': table.restaurantId,
-          'name': table.name,
-          'seats': table.seats,
-          'guest_name': table.guestName,
-          'status': table.status.value,
-        });
+        final row = await client.from('restaurants').select().eq('id', id).maybeSingle();
+        if (row != null) {
+          return _restaurantFromRow(Map<String, dynamic>.from(row));
+        }
       } catch (e) {
-        debugPrint('Supabase addTable error: $e');
+        debugPrint('Supabase getRestaurant error: $e');
       }
     }
+    try {
+      return _fallbackRestaurants.firstWhere((r) => r.id == id);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Every restaurant row in the database (the manager can manage them all).
+  Stream<List<RestaurantModel>> streamManagedRestaurants() async* {
+    final fallbackJson = _fallbackRestaurants.map((r) => r.toJson()).toList();
+    if (_client == null) {
+      yield List.from(_fallbackRestaurants);
+      yield* _localChanges.stream
+          .where((t) => t == 'restaurants')
+          .map((_) => List<RestaurantModel>.from(_fallbackRestaurants));
+      return;
+    }
+    yield* _liveRows('restaurants', initialFallback: fallbackJson).map((rows) {
+      final list = rows.map(_restaurantFromRow).toList();
+      list.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      return list;
+    });
+  }
+
+
+  /// Registers a brand new restaurant in the database.
+  Future<RestaurantModel> addRestaurant(String name) async {
+    final cleanName = name.trim();
+    var baseId = cleanName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_').replaceAll(RegExp(r'^_+|_+$'), '');
+    if (baseId.isEmpty) baseId = 'restaurant';
+
+    final client = _client;
+    if (client == null) {
+      var id = baseId;
+      var n = 2;
+      while (_fallbackRestaurants.any((r) => r.id == id)) {
+        id = '${baseId}_${n++}';
+      }
+      final created = RestaurantModel(
+        id: id,
+        name: cleanName,
+        cuisine: 'General',
+        tag: 'New Restaurant',
+        location: '',
+        rating: 4.5,
+        reviewsCount: 0,
+        estWait: 'Direct Seating',
+        waitlistCount: 0,
+      );
+      _fallbackRestaurants.add(created);
+      _notifyChanged('restaurants');
+      return created;
+    }
+
+    final existing = await client.from('restaurants').select('id');
+    final usedIds = existing.map((r) => r['id'].toString()).toSet();
+    var id = baseId;
+    var n = 2;
+    while (usedIds.contains(id)) {
+      id = '${baseId}_${n++}';
+    }
+
+    final created = RestaurantModel(
+      id: id,
+      name: cleanName,
+      cuisine: 'General',
+      tag: 'New Restaurant',
+      location: '',
+      rating: 4.5,
+      reviewsCount: 0,
+      estWait: 'Direct Seating',
+      waitlistCount: 0,
+    );
+    try {
+      await client.from('restaurants').insert(created.toJson()..remove('created_at'));
+      final defaultTables = [
+        PhysicalTable(id: '${id}_t1', restaurantId: id, name: 'Table 01', zone: 'Main Dining', seats: 2, guestName: 'No Guest', status: TableStatus.available),
+        PhysicalTable(id: '${id}_t2', restaurantId: id, name: 'Table 02', zone: 'Main Dining', seats: 4, guestName: 'No Guest', status: TableStatus.available),
+        PhysicalTable(id: '${id}_t3', restaurantId: id, name: 'Table 03', zone: 'Terrace', seats: 4, guestName: 'No Guest', status: TableStatus.available),
+        PhysicalTable(id: '${id}_t4', restaurantId: id, name: 'Table 04', zone: 'VIP Area', seats: 6, guestName: 'No Guest', status: TableStatus.available),
+      ];
+      for (final table in defaultTables) {
+        try {
+          await addTable(table);
+        } catch (_) {}
+      }
+    } catch (e) {
+      debugPrint('Supabase addRestaurant error: $e');
+      rethrow;
+    }
+    _notifyChanged('restaurants');
+    return created;
+  }
+
+  // ---------- Live restaurant queue (manager / receptionist) ----------
+
+  QueueEntryModel _queueFromRow(Map<String, dynamic> row, {String? fallbackRestaurantId}) {
+    return QueueEntryModel(
+      id: row['id'].toString(),
+      restaurantId: row['restaurant_id']?.toString() ?? fallbackRestaurantId ?? '',
+      restaurantName: row['restaurant_name']?.toString() ?? '',
+      userId: row['user_id']?.toString(),
+      guestName: row['guest_name']?.toString() ?? 'Guest',
+      partySize: (row['party_size'] is num) ? (row['party_size'] as num).toInt() : 2,
+      phoneNumber: row['phone_number']?.toString() ?? '',
+      status: QueueStatus.fromString(row['status']?.toString()),
+      queueNumber: row['queue_number']?.toString() ?? '',
+      position: (row['position'] is num) ? (row['position'] as num).toInt() : 1,
+      estimatedWaitMinutes:
+          (row['estimated_wait_minutes'] is num) ? (row['estimated_wait_minutes'] as num).toInt() : 5,
+      createdAt: row['created_at'] != null ? DateTime.tryParse(row['created_at'].toString())?.toLocal() : null,
+      updatedAt: row['updated_at'] != null ? DateTime.tryParse(row['updated_at'].toString())?.toLocal() : null,
+    );
+  }
+
+  /// Live queue rows for one restaurant ('All' = every restaurant), oldest first.
+  /// With [activeOnly] seated and cancelled parties are excluded.
+  Stream<List<QueueEntryModel>> streamQueueEntries(String restaurantId, {bool activeOnly = true}) {
+    final all = _isAll(restaurantId);
+    final fallbackJson = _fallbackQueue
+        .where((q) => (all || q.restaurantId == restaurantId))
+        .map((q) => q.toJson())
+        .toList();
+    bool keep(QueueEntryModel q) =>
+        !activeOnly || (q.status != QueueStatus.seated && q.status != QueueStatus.cancelled);
+    List<QueueEntryModel> sorted(List<QueueEntryModel> l) {
+      l.sort((a, b) => (a.createdAt ?? DateTime.now()).compareTo(b.createdAt ?? DateTime.now()));
+      return l;
+    }
+
+    if (_client == null) {
+      List<QueueEntryModel> local(List<QueueEntryModel> list) =>
+          sorted(list.where((q) => (all || q.restaurantId == restaurantId) && keep(q)).toList());
+      Future.microtask(() => _queueStreamController.add(List.from(_fallbackQueue)));
+      return _queueStreamController.stream.map(local);
+    }
+
+    return _liveRows('queue_entries', restaurantId: all ? null : restaurantId, initialFallback: fallbackJson)
+        .map((rows) => sorted(rows.map((r) => _queueFromRow(r)).where(keep).toList()));
+  }
+
+  Stream<List<QueueEntryModel>> streamRestaurantQueue({String restaurantId = 'All'}) =>
+      streamQueueEntries(restaurantId);
+
+  Future<void> updateQueueStatus(String queueId, QueueStatus status) async {
+    final idx = _fallbackQueue.indexWhere((q) => q.id == queueId);
+    if (idx != -1) {
+      _fallbackQueue[idx] = _fallbackQueue[idx].copyWith(status: status);
+      _queueStreamController.add(List.from(_fallbackQueue));
+    }
+    final client = _client;
+    if (client == null) return;
+    try {
+      await client.from('queue_entries').update({
+        'status': status.value,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', queueId);
+    } catch (e) {
+      debugPrint('Supabase updateQueueStatus error: $e');
+      rethrow;
+    }
+    _notifyChanged('queue_entries');
+  }
+
+  /// Oldest waiting/called party for a restaurant, or null when nobody waits.
+  Future<QueueEntryModel?> getNextWaitingParty(String restaurantId) async {
+    final client = _client;
+    if (client == null) {
+      final list = _fallbackQueue
+          .where((q) => q.restaurantId == restaurantId && (q.status == QueueStatus.waiting || q.status == QueueStatus.called))
+          .toList()
+        ..sort((a, b) => (a.createdAt ?? DateTime.now()).compareTo(b.createdAt ?? DateTime.now()));
+      return list.isEmpty ? null : list.first;
+    }
+    final rows = await client
+        .from('queue_entries')
+        .select()
+        .eq('restaurant_id', restaurantId)
+        .inFilter('status', ['waiting', 'called'])
+        .order('created_at', ascending: true)
+        .limit(1);
+    if (rows.isEmpty) return null;
+    return _queueFromRow(Map<String, dynamic>.from(rows.first));
+  }
+
+  /// Parties that are still `waiting` (not yet called) for a restaurant, oldest first.
+  Future<List<QueueEntryModel>> getWaitingParties(String restaurantId) async {
+    final client = _client;
+    if (client == null) {
+      return _fallbackQueue
+          .where((q) => q.restaurantId == restaurantId && q.status == QueueStatus.waiting)
+          .toList()
+        ..sort((a, b) => (a.createdAt ?? DateTime.now()).compareTo(b.createdAt ?? DateTime.now()));
+    }
+    final rows = await client
+        .from('queue_entries')
+        .select()
+        .eq('restaurant_id', restaurantId)
+        .eq('status', 'waiting')
+        .order('created_at', ascending: true);
+    return rows.map((r) => _queueFromRow(Map<String, dynamic>.from(r))).toList();
+  }
+
+  Future<int> callNextWaitingParties(String restaurantId, int count) async {
+    if (count <= 0) return 0;
+    final waiting = await getWaitingParties(restaurantId);
+    final toCall = waiting.take(count).toList();
+    for (final party in toCall) {
+      await updateQueueStatus(party.id, QueueStatus.called);
+    }
+    return toCall.length;
+  }
+
+  // ---------- Tables ----------
+
+  final List<PhysicalTable> _fallbackTables = List<PhysicalTable>.from(PhysicalTable.mockList());
+
+  List<PhysicalTable> _ensureFallbackTables(String? restaurantId) {
+    if (_isAll(restaurantId)) {
+      return List<PhysicalTable>.from(_fallbackTables);
+    }
+    final rId = restaurantId ?? 'ocean_bistro';
+    return _fallbackTables.where((t) => t.restaurantId == rId).toList();
+  }
+
+  /// The `zone` column is optional in the deployed schema. Once Supabase
+  /// reports it missing we stop sending it so table writes keep working.
+  bool _tablesZoneColumnSupported = true;
+
+  PhysicalTable _tableFromRow(Map<String, dynamic> row) {
+    return PhysicalTable(
+      id: row['id'].toString(),
+      restaurantId: row['restaurant_id']?.toString() ?? '',
+      name: row['name']?.toString() ?? '',
+      zone: row['zone']?.toString() ?? 'Main Dining',
+      seats: (row['seats'] is num) ? (row['seats'] as num).toInt() : 2,
+      guestName: row['guest_name']?.toString() ?? 'No Guest',
+      status: TableStatus.fromString(row['status']?.toString()),
+    );
+  }
+
+  Stream<List<PhysicalTable>> streamTables({String? restaurantId}) {
+    final showAll = _isAll(restaurantId);
+    final client = _client;
+    if (client == null) {
+      final fallbackList = _ensureFallbackTables(restaurantId);
+      return Stream.value(fallbackList);
+    }
+    // Don't use initialFallback from mock data when connected to the live database,
+    // to prevent the customer UI from showing tables that don't actually exist
+    return _liveRows('tables', restaurantId: showAll ? null : restaurantId).map((rows) {
+      final dbTables = rows.map(_tableFromRow).toList();
+      dbTables.sort((a, b) => _naturalCompare(a.name, b.name));
+      return dbTables;
+    });
+  }
+
+  Future<List<PhysicalTable>> getTables({String? restaurantId}) async {
+    final client = _client;
+    if (client != null) {
+      try {
+        final showAll = _isAll(restaurantId);
+        final base = client.from('tables').select();
+        final rows = showAll ? await base : await base.eq('restaurant_id', restaurantId!);
+        final list = (rows as List).map((r) => _tableFromRow(Map<String, dynamic>.from(r))).toList();
+        list.sort((a, b) => _naturalCompare(a.name, b.name));
+        return list;
+      } catch (e) {
+        debugPrint('Supabase getTables error: $e');
+      }
+    }
+    return _ensureFallbackTables(restaurantId);
+  }
+
+
+  Future<PhysicalTable> addTable(PhysicalTable table) async {
+    final idx = _fallbackTables.indexWhere((t) => t.id == table.id);
+    if (idx != -1) {
+      _fallbackTables[idx] = table;
+    } else {
+      _fallbackTables.add(table);
+    }
+
+    final client = _client;
+    if (client == null) {
+      _notifyChanged('tables');
+      return table;
+    }
+
+    final payload = <String, dynamic>{
+      'id': table.id,
+      'restaurant_id': table.restaurantId,
+      'name': table.name,
+      'seats': table.seats,
+      'guest_name': table.guestName,
+      'status': table.status.value,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    };
+
+    try {
+      if (_tablesZoneColumnSupported) {
+        try {
+          await client.from('tables').upsert({...payload, 'zone': table.zone});
+        } on PostgrestException catch (e) {
+          if (e.code == 'PGRST204' || e.message.toLowerCase().contains('zone')) {
+            _tablesZoneColumnSupported = false;
+            await client.from('tables').upsert(payload);
+          } else {
+            rethrow;
+          }
+        }
+      } else {
+        await client.from('tables').upsert(payload);
+      }
+    } catch (e) {
+      debugPrint('Supabase addTable error: $e');
+    }
+    _notifyChanged('tables');
     return table;
   }
 
-  Future<PhysicalTable> updateTable(PhysicalTable table) async {
-    return addTable(table);
-  }
+  Future<PhysicalTable> updateTable(PhysicalTable table) => addTable(table);
 
   Future<void> deleteTable(String id) async {
+    _fallbackTables.removeWhere((t) => t.id == id);
+    final client = _client;
+    if (client == null) {
+      _notifyChanged('tables');
+      return;
+    }
+    try {
+      await client.from('tables').delete().eq('id', id);
+    } catch (e) {
+      debugPrint('Supabase deleteTable error: $e');
+    }
+    _notifyChanged('tables');
+  }
+
+  /// Sets [status] on every table in [ids]. Freed tables clear their guest.
+  Future<void> setTablesStatus(List<String> ids, TableStatus status, {String? guestName}) async {
+    if (ids.isEmpty) return;
+    for (final id in ids) {
+      final idx = _fallbackTables.indexWhere((t) => t.id == id);
+      if (idx != -1) {
+        _fallbackTables[idx] = _fallbackTables[idx].copyWith(
+          status: status,
+          guestName: guestName ?? (status == TableStatus.available ? 'No Guest' : _fallbackTables[idx].guestName),
+        );
+      }
+    }
+
+    final client = _client;
+    if (client == null) {
+      _notifyChanged('tables');
+      return;
+    }
+    final values = <String, dynamic>{
+      'status': status.value,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    };
+    if (status == TableStatus.available) {
+      values['guest_name'] = 'No Guest';
+    } else if (guestName != null) {
+      values['guest_name'] = guestName;
+    }
+    try {
+      await client.from('tables').update(values).inFilter('id', ids);
+    } catch (e) {
+      debugPrint('Supabase setTablesStatus error: $e');
+    }
+    _notifyChanged('tables');
+  }
+
+  Future<PhysicalTable?> getTable(String id) async {
     final client = _client;
     if (client != null) {
       try {
-        await client.from('tables').delete().eq('id', id);
+        final row = await client.from('tables').select().eq('id', id).maybeSingle();
+        if (row != null) return _tableFromRow(Map<String, dynamic>.from(row));
       } catch (e) {
-        debugPrint('Supabase deleteTable error: $e');
+        debugPrint('Supabase getTable error: $e');
       }
+    }
+    try {
+      return _fallbackTables.firstWhere((t) => t.id == id);
+    } catch (_) {
+      return null;
     }
   }
 
-  String _mapRestaurantToId(String name) {
-    final lower = name.toLowerCase();
-    if (lower.contains('ocean')) return 'ocean_bistro';
-    if (lower.contains('mango')) return 'mango_tree';
-    if (lower.contains('nihon')) return 'nihonbashi';
-    return name;
+  Future<void> seatGuestAtTable({
+    required String tableId,
+    required String guestName,
+    String? queueId,
+  }) async {
+    await setTablesStatus([tableId], TableStatus.occupied, guestName: guestName);
+    if (queueId != null && queueId.isNotEmpty) {
+      await updateQueueStatus(queueId, QueueStatus.seated);
+    }
+  }
+
+  Future<QueueEntryModel?> seatNextQueueParty({required String tableId}) async {
+    final table = await getTable(tableId);
+    if (table == null) return null;
+    final partyToSeat = await getNextWaitingParty(table.restaurantId);
+    if (partyToSeat == null) return null;
+
+    await seatGuestAtTable(
+      tableId: tableId,
+      guestName: partyToSeat.guestName,
+      queueId: partyToSeat.id,
+    );
+    return partyToSeat;
+  }
+
+  Future<void> bulkQuickTurnTables(List<String> tableIds) async {
+    await setTablesStatus(tableIds, TableStatus.available);
+  }
+
+  // ---------- Live menu ----------
+
+  final List<LiveMenuDish> _fallbackDishes = List<LiveMenuDish>.from(LiveMenuDish.mockList());
+
+  List<LiveMenuDish> _ensureFallbackDishes(String? restaurantId) {
+    final showAll = _isAll(restaurantId);
+    if (showAll) return List<LiveMenuDish>.from(_fallbackDishes);
+    final rId = restaurantId ?? 'ocean_bistro';
+    final existing = _fallbackDishes.where((d) => d.restaurantId == rId).toList();
+    if (existing.isNotEmpty) return existing;
+    return [];
+  }
+
+  LiveMenuDish _dishFromRow(Map<String, dynamic> row) {
+    return LiveMenuDish(
+      id: row['id'].toString(),
+      restaurantId: row['restaurant_id']?.toString() ?? '',
+      name: row['name']?.toString() ?? '',
+      restaurant: row['restaurant']?.toString() ?? '',
+      category: row['category']?.toString() ?? 'Mains',
+      price: (row['price'] is num)
+          ? (row['price'] as num).toDouble()
+          : double.tryParse(row['price']?.toString() ?? '0') ?? 0.0,
+      description: row['description']?.toString() ?? '',
+      isAvailable: row['is_available'] as bool? ?? true,
+    );
   }
 
   Stream<List<LiveMenuDish>> streamMenuDishes({String? restaurantId}) {
-    final showAll = restaurantId == null || restaurantId == 'All' || restaurantId.isEmpty;
+    final showAll = _isAll(restaurantId);
+    final fallbackList = _ensureFallbackDishes(restaurantId);
+    final fallbackJson = fallbackList.map((d) => d.toJson()).toList();
     final client = _client;
     if (client == null) {
-      return Stream.value(
-        showAll
-            ? LiveMenuDish.mockList()
-            : LiveMenuDish.mockList().where((d) => d.restaurantId == restaurantId || d.restaurant == restaurantId).toList(),
-      );
+      return Stream.value(fallbackList);
     }
-
-    try {
-      return client
-          .from('menu_items')
-          .stream(primaryKey: ['id'])
-          .map((data) {
-            final list = data
-                .where((row) => showAll || row['restaurant_id']?.toString() == restaurantId || row['restaurant']?.toString() == restaurantId)
-                .map((row) => LiveMenuDish(
-                      id: row['id'].toString(),
-                      restaurantId: row['restaurant_id']?.toString() ?? 'ocean_bistro',
-                      name: row['name']?.toString() ?? '',
-                      restaurant: row['restaurant']?.toString() ?? 'Ocean Bistro',
-                      category: row['category']?.toString() ?? 'Mains',
-                      price: (row['price'] is num) ? (row['price'] as num).toDouble() : double.tryParse(row['price']?.toString() ?? '0') ?? 0.0,
-                      description: row['description']?.toString() ?? '',
-                      isAvailable: row['is_available'] as bool? ?? true,
-                    ))
-                .toList();
-            return list.isEmpty
-                ? (showAll
-                    ? LiveMenuDish.mockList()
-                    : LiveMenuDish.mockList().where((d) => d.restaurantId == restaurantId || d.restaurant == restaurantId).toList())
-                : list;
-          })
-          .handleError((_) => showAll
-              ? LiveMenuDish.mockList()
-              : LiveMenuDish.mockList().where((d) => d.restaurantId == restaurantId || d.restaurant == restaurantId).toList());
-    } catch (_) {
-      return Stream.value(showAll
-          ? LiveMenuDish.mockList()
-          : LiveMenuDish.mockList().where((d) => d.restaurantId == restaurantId || d.restaurant == restaurantId).toList());
-    }
+    return _liveRows('menu_items', restaurantId: showAll ? null : restaurantId, initialFallback: fallbackJson).map((rows) {
+      final dbDishes = rows.map(_dishFromRow).toList();
+      dbDishes.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      return dbDishes;
+    });
   }
 
+
   Future<LiveMenuDish> addMenuItem(LiveMenuDish dish) async {
-    final client = _client;
-    if (client != null) {
-      try {
-        await client.from('menu_items').upsert({
-          'id': dish.id,
-          'restaurant_id': dish.restaurantId,
-          'name': dish.name,
-          'restaurant': dish.restaurant,
-          'category': dish.category,
-          'price': dish.price,
-          'description': dish.description,
-          'is_available': dish.isAvailable,
-        });
-      } catch (e) {
-        debugPrint('Supabase addMenuItem error: $e');
-      }
+    final idx = _fallbackDishes.indexWhere((d) => d.id == dish.id);
+    if (idx != -1) {
+      _fallbackDishes[idx] = dish;
+    } else {
+      _fallbackDishes.add(dish);
     }
+
+    final client = _client;
+    if (client == null) {
+      _notifyChanged('menu_items');
+      return dish;
+    }
+    try {
+      await client.from('menu_items').upsert({
+        'id': dish.id,
+        'restaurant_id': dish.restaurantId,
+        'name': dish.name,
+        'restaurant': dish.restaurant,
+        'category': dish.category,
+        'price': dish.price,
+        'description': dish.description,
+        'is_available': dish.isAvailable,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      });
+    } catch (e) {
+      debugPrint('Supabase addMenuItem error: $e');
+    }
+    _notifyChanged('menu_items');
     return dish;
   }
 
-  Future<LiveMenuDish> updateMenuItem(LiveMenuDish dish) async {
-    return addMenuItem(dish);
-  }
+  Future<LiveMenuDish> updateMenuItem(LiveMenuDish dish) => addMenuItem(dish);
 
   Future<void> deleteMenuItem(String id) async {
+    _fallbackDishes.removeWhere((d) => d.id == id);
     final client = _client;
-    if (client != null) {
-      try {
-        await client.from('menu_items').delete().eq('id', id);
-      } catch (e) {
-        debugPrint('Supabase deleteMenuItem error: $e');
-      }
+    if (client == null) {
+      _notifyChanged('menu_items');
+      return;
     }
+    try {
+      await client.from('menu_items').delete().eq('id', id);
+    } catch (e) {
+      debugPrint('Supabase deleteMenuItem error: $e');
+    }
+    _notifyChanged('menu_items');
   }
 
-  Future<void> toggleDishAvailability(String id, bool currentStatus) async {
+  Future<void> setDishAvailability(String id, bool available) async {
+    final idx = _fallbackDishes.indexWhere((d) => d.id == id);
+    if (idx != -1) {
+      _fallbackDishes[idx] = _fallbackDishes[idx].copyWith(isAvailable: available);
+    }
+
+    final client = _client;
+    if (client == null) {
+      _notifyChanged('menu_items');
+      return;
+    }
+    try {
+      await client.from('menu_items').update({
+        'is_available': available,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', id);
+    } catch (e) {
+      debugPrint('Supabase setDishAvailability error: $e');
+    }
+    _notifyChanged('menu_items');
+  }
+
+  Future<void> toggleDishAvailability(String id, bool currentStatus) =>
+      setDishAvailability(id, !currentStatus);
+
+  // ==========================================
+  // --- REVIEWS ---
+  // ==========================================
+
+  Stream<List<ReviewModel>> streamUserReviews(String userId) {
+    final effectiveUid = (userId.isNotEmpty && userId != 'guest_id') ? userId : 'current_customer_id';
+    
+    final client = _client;
+    if (client == null) {
+      Future.microtask(() => _reviewsStreamController.add(List.from(_fallbackReviews)));
+      return _reviewsStreamController.stream.map((list) {
+        final active = list.where((r) => r.userId == effectiveUid).toList();
+        active.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        return active;
+      });
+    }
+
+    final controller = StreamController<List<ReviewModel>>.broadcast();
+    StreamSubscription? supabaseSub;
+    StreamSubscription? fallbackSub;
+
+    controller.onListen = () {
+      try {
+        supabaseSub = client.from('reviews').stream(primaryKey: ['id']).listen(
+          (data) {
+            final active = data
+                .where((row) => row['user_id']?.toString() == effectiveUid)
+                .map((row) => ReviewModel.fromJson(row))
+                .toList();
+            active.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+            controller.add(active);
+          },
+          onError: (e) {
+            // Table doesn't exist or RLS issue -> switch to fallback
+            Future.microtask(() => _reviewsStreamController.add(List.from(_fallbackReviews)));
+            fallbackSub = _reviewsStreamController.stream.listen((fallbackList) {
+              final active = fallbackList.where((r) => r.userId == effectiveUid).toList();
+              active.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+              controller.add(active);
+            });
+          },
+        );
+      } catch (_) {
+        // Fallback immediately
+        Future.microtask(() => _reviewsStreamController.add(List.from(_fallbackReviews)));
+        fallbackSub = _reviewsStreamController.stream.listen((fallbackList) {
+          final active = fallbackList.where((r) => r.userId == effectiveUid).toList();
+          active.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          controller.add(active);
+        });
+      }
+    };
+
+    controller.onCancel = () {
+      supabaseSub?.cancel();
+      fallbackSub?.cancel();
+    };
+
+    return controller.stream;
+  }
+
+  Future<void> addReview(ReviewModel review) async {
     final client = _client;
     if (client != null) {
       try {
-        await client.from('menu_items').update({
-          'is_available': !currentStatus,
-        }).eq('id', id);
+        await client.from('reviews').insert(review.toJson());
+        return; // Success, realtime will handle it
       } catch (e) {
-        debugPrint('Supabase toggleDishAvailability error: $e');
+        debugPrint('Supabase addReview error: $e');
+        throw Exception(e.toString()); // Bubble up so UI shows the error toast
       }
     }
+    
+    // Fallback logic only if client is null (no Supabase configured at all)
+    _fallbackReviews.add(review);
+    _reviewsStreamController.add(List.from(_fallbackReviews));
   }
 }
+
