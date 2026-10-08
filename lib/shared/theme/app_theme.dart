@@ -5,6 +5,13 @@ class AppTheme {
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,
+      fontFamily: 'Segoe UI',
+      fontFamilyFallback: const [
+        'Segoe UI',
+        'Roboto',
+        'Arial',
+        'sans-serif',
+      ],
       brightness: Brightness.light,
       scaffoldBackgroundColor: AppColors.background,
       primaryColor: AppColors.primary,
