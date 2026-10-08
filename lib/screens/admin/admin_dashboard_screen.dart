@@ -19,6 +19,9 @@ class AdminDashboardScreen extends StatefulWidget {
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   final AuthService _authService = AuthService();
+  late final AdminSupabaseService _adminService =
+      widget.adminService ?? AdminSupabaseService();
+  bool _restaurantMutationPending = false;
   bool _isSigningOut = false;
   bool _loading = true;
   String _restaurantSource = 'Loading restaurants';
@@ -53,7 +56,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Future<void> _loadAdminData() async {
-    final service = widget.adminService ?? AdminSupabaseService();
+    final service = _adminService;
     await Future.wait([_loadRestaurants(service), _loadUsers(service)]);
     if (mounted) setState(() => _loading = false);
   }
@@ -202,7 +205,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   style: const TextStyle(color: Colors.grey, fontSize: 12)),
               const SizedBox(height: 8),
               const Text(
-                'Preview mode: all changes apply to this session only. No database records or accounts are changed.',
+                'Restaurant changes are saved to Supabase. Price and phone remain session-only. Other Admin actions remain local previews.',
                 style: TextStyle(color: Colors.deepOrange, fontSize: 12),
               ),
               const SizedBox(height: 16),
@@ -604,7 +607,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             ),
             ElevatedButton(
               style: _greenButtonStyle(),
-              onPressed: () {
+              onPressed: () async {
                 final name = nameController.text.trim();
                 final cuisine = cuisineController.text.trim();
 
@@ -613,28 +616,32 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   return;
                 }
 
-                setState(() {
-                  restaurants.add({
-                    'name': name,
-                    'cuisine': cuisine,
-                    'price': priceController.text.trim().isEmpty
-                        ? r'$$'
-                        : priceController.text.trim(),
-                    'address': addressController.text.trim().isEmpty
-                        ? 'Address not provided'
-                        : addressController.text.trim(),
-                    'phone': phoneController.text.trim().isEmpty
-                        ? 'Not provided'
-                        : phoneController.text.trim(),
-                    'waitTime': waitTimeController.text.trim().isEmpty
+                final localFields = <String, String>{
+                  'price': priceController.text.trim().isEmpty
+                      ? r'$$'
+                      : priceController.text.trim(),
+                  'phone': phoneController.text.trim().isEmpty
+                      ? 'Not provided'
+                      : phoneController.text.trim(),
+                };
+                final saved = await _runRestaurantMutation(() async {
+                  final row = await _adminService.addRestaurant(
+                    name: name,
+                    cuisine: cuisine,
+                    location: addressController.text.trim(),
+                    estimatedWait: waitTimeController.text.trim().isEmpty
                         ? '0m'
                         : waitTimeController.text.trim(),
-                    'status': 'Tables Available',
-                  });
-                });
-
-                Navigator.pop(dialogContext);
-                _showMessage('$name added successfully');
+                  );
+                  if (row == null) {
+                    throw StateError('Supabase is not configured.');
+                  }
+                  if (!mounted) return;
+                  setState(() => restaurants.add({...row, ...localFields}));
+                }, '$name added successfully');
+                if (saved && dialogContext.mounted) {
+                  Navigator.pop(dialogContext);
+                }
               },
               child: const Text('Add Partner'),
             ),
@@ -697,7 +704,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             ),
             ElevatedButton(
               style: _greenButtonStyle(),
-              onPressed: () {
+              onPressed: () async {
                 final name = nameController.text.trim();
                 final cuisine = cuisineController.text.trim();
 
@@ -706,17 +713,33 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   return;
                 }
 
-                setState(() {
-                  restaurants[index]['name'] = name;
-                  restaurants[index]['cuisine'] = cuisine;
-                  restaurants[index]['price'] = priceController.text.trim();
-                  restaurants[index]['address'] = addressController.text.trim();
-                  restaurants[index]['phone'] = phoneController.text.trim();
-                  restaurants[index]['waitTime'] = waitController.text.trim();
-                });
-
-                Navigator.pop(dialogContext);
-                _showMessage('$name updated successfully');
+                final localFields = <String, String>{
+                  'price': priceController.text.trim(),
+                  'phone': phoneController.text.trim(),
+                };
+                final saved = await _runRestaurantMutation(() async {
+                  final id = _restaurantId(restaurant);
+                  final row = await _adminService.updateRestaurant(
+                    id: id,
+                    name: name,
+                    cuisine: cuisine,
+                    location: addressController.text.trim(),
+                    estimatedWait: waitController.text.trim(),
+                  );
+                  if (row == null) {
+                    throw StateError('Supabase is not configured.');
+                  }
+                  if (!mounted) return;
+                  final current =
+                      restaurants.indexWhere((item) => item['id'] == id);
+                  if (current >= 0) {
+                    setState(
+                        () => restaurants[current] = {...row, ...localFields});
+                  }
+                }, '$name updated successfully');
+                if (saved && dialogContext.mounted) {
+                  Navigator.pop(dialogContext);
+                }
               },
               child: const Text('Save Changes'),
             ),
@@ -727,7 +750,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   void _showDeleteRestaurantDialog(int index) {
-    final name = restaurants[index]['name']!;
+    final restaurant = restaurants[index];
+    final name = restaurant['name']!;
 
     showDialog<void>(
       context: context,
@@ -754,13 +778,21 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 backgroundColor: Colors.deepOrange,
                 foregroundColor: Colors.white,
               ),
-              onPressed: () {
-                setState(() {
-                  restaurants.removeAt(index);
-                });
-
-                Navigator.pop(dialogContext);
-                _showMessage('$name deleted');
+              onPressed: () async {
+                final saved = await _runRestaurantMutation(() async {
+                  final id = _restaurantId(restaurant);
+                  final deleted = await _adminService.deleteRestaurant(id);
+                  if (!deleted) {
+                    throw StateError(
+                        'Restaurant was not deleted. Check Supabase configuration and Admin permissions.');
+                  }
+                  if (!mounted) return;
+                  setState(() =>
+                      restaurants.removeWhere((item) => item['id'] == id));
+                }, '$name deleted');
+                if (saved && dialogContext.mounted) {
+                  Navigator.pop(dialogContext);
+                }
               },
               icon: const Icon(Icons.delete_outline),
               label: const Text('Delete'),
@@ -771,18 +803,57 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-  void _toggleRestaurantStatus(int index) {
-    setState(() {
-      if (restaurants[index]['status'] == 'Tables Available') {
-        restaurants[index]['status'] = 'Few Tables Left';
-        restaurants[index]['waitTime'] = '15m';
-      } else {
-        restaurants[index]['status'] = 'Tables Available';
-        restaurants[index]['waitTime'] = '0m';
+  Future<void> _toggleRestaurantStatus(int index) async {
+    final restaurant = restaurants[index];
+    await _runRestaurantMutation(() async {
+      final id = _restaurantId(restaurant);
+      final row = await _adminService.toggleRestaurantAvailability(
+        id: id,
+        makeAvailable: restaurant['status'] != 'Tables Available',
+      );
+      if (row == null) throw StateError('Supabase is not configured.');
+      if (!mounted) return;
+      final current = restaurants.indexWhere((item) => item['id'] == id);
+      if (current >= 0) {
+        setState(() => restaurants[current] = {
+              ...row,
+              'price': restaurant['price'] ?? 'Not provided',
+              'phone': restaurant['phone'] ?? 'Not provided',
+            });
       }
-    });
+    }, '${restaurant['name']} status updated');
+  }
 
-    _showMessage('${restaurants[index]['name']} status updated');
+  String _restaurantId(Map<String, String> restaurant) {
+    final id = restaurant['id'];
+    if (id == null || id.trim().isEmpty) {
+      throw StateError(
+          'This example restaurant has no database ID. Reload a Supabase restaurant before changing it.');
+    }
+    return id;
+  }
+
+  Future<bool> _runRestaurantMutation(
+      Future<void> Function() operation, String successMessage) async {
+    if (_restaurantMutationPending) return false;
+    _restaurantMutationPending = true;
+    try {
+      await operation();
+      if (!mounted) return false;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(successMessage)));
+      return true;
+    } catch (error, stackTrace) {
+      debugPrint('Admin restaurant operation failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Restaurant change failed: $error')));
+      }
+      return false;
+    } finally {
+      _restaurantMutationPending = false;
+    }
   }
 
   // ============================================================
