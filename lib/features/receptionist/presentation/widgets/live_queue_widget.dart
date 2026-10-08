@@ -1,93 +1,151 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../../../models/queue_entry_model.dart' as db;
 import '../../../../services/supabase_service.dart';
+import '../../../../services/receptionist_context.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_toast.dart';
 import '../../data/models/queue_entry_model.dart';
-import '../../../../core/utils/shared_mock_data.dart';
 import 'seat_table_dialog.dart';
 import '../../data/models/floor_table_model.dart';
 
 class LiveQueueWidget extends StatefulWidget {
-  const LiveQueueWidget({super.key});
+  final String? restaurantId;
+  final String? restaurantName;
+
+  const LiveQueueWidget({
+    super.key,
+    this.restaurantId,
+    this.restaurantName,
+  });
 
   @override
   State<LiveQueueWidget> createState() => _LiveQueueWidgetState();
 }
 
 class _LiveQueueWidgetState extends State<LiveQueueWidget> {
-  List<QueueEntry> get _queue => SharedMockData().queue;
+  List<QueueEntry> _queue = [];
+  bool _isLoading = true;
   StreamSubscription<dynamic>? _queueSub;
+
+  String get _currentRestaurantId =>
+      widget.restaurantId ?? ReceptionistContext().activeRestaurantId;
+
+  String get _currentRestaurantName =>
+      widget.restaurantName ?? ReceptionistContext().activeRestaurantName;
 
   @override
   void initState() {
     super.initState();
-    _queueSub = SupabaseService().streamRestaurantQueue().listen((list) {
+    _subscribeToQueue();
+    ReceptionistContext().activeRestaurantNotifier.addListener(_onRestaurantChanged);
+  }
+
+  void _onRestaurantChanged() {
+    if (mounted) {
+      _subscribeToQueue();
+    }
+  }
+
+  void _subscribeToQueue() {
+    _queueSub?.cancel();
+    setState(() => _isLoading = true);
+
+    final restaurantId = _currentRestaurantId;
+    _queueSub = SupabaseService()
+        .streamRestaurantQueue(restaurantId: restaurantId)
+        .listen((list) {
       if (!mounted) return;
-      if (list.isNotEmpty) {
-        setState(() {
-          final existingIds = _queue.map((e) => e.id).toSet();
-          for (final item in list) {
-            if (!existingIds.contains(item.id)) {
-              _queue.add(QueueEntry(
-                id: item.id,
-                queueNumber: item.queueNumber,
-                guestName: item.guestName,
-                partySize: item.partySize,
-                waitingMinutes: 0,
-                position: item.position,
-              ));
+      setState(() {
+        _isLoading = false;
+        _queue = list.map((item) {
+          int waitMins = item.estimatedWaitMinutes;
+          if (item.createdAt != null) {
+            final diff = DateTime.now().difference(item.createdAt!.toLocal()).inMinutes;
+            if (diff >= 0 && diff < 120) {
+              waitMins = diff;
             }
           }
-          _recalculatePositions();
-        });
-      }
+          return QueueEntry(
+            id: item.id,
+            queueNumber: item.queueNumber,
+            guestName: item.guestName,
+            partySize: item.partySize,
+            waitingMinutes: waitMins,
+            position: item.position,
+          );
+        }).toList();
+        _recalculatePositions();
+      });
+    }, onError: (_) {
+      if (mounted) setState(() => _isLoading = false);
     });
   }
 
   @override
   void dispose() {
     _queueSub?.cancel();
+    ReceptionistContext().activeRestaurantNotifier.removeListener(_onRestaurantChanged);
     super.dispose();
   }
 
   void _seatAtTable(QueueEntry entry) async {
-    final selectedTable = await SeatTableDialog.show(context, entry: entry);
+    final restaurantId = _currentRestaurantId;
+    final selectedTable = await SeatTableDialog.show(
+      context,
+      entry: entry,
+      restaurantId: restaurantId,
+    );
     if (selectedTable != null) {
+      await SupabaseService().updateQueueStatus(
+        queueId: entry.id,
+        status: db.QueueStatus.seated,
+        restaurantId: restaurantId,
+      );
+
+      await SupabaseService().updateFloorTableStatus(
+        restaurantId: restaurantId,
+        tableId: selectedTable.id,
+        status: FloorTableStatus.occupied,
+        guestName: entry.guestName,
+      );
+
       setState(() {
         _queue.removeWhere((e) => e.id == entry.id);
         _recalculatePositions();
-        
-        // Update table status in SharedMockData
-        final tables = SharedMockData().tables;
-        final index = tables.indexWhere((t) => t.id == selectedTable.id);
-        if (index != -1) {
-          tables[index] = tables[index].copyWith(
-            status: FloorTableStatus.occupied,
-            guestName: entry.guestName,
-          );
-        }
       });
+
       if (mounted) {
         AppToast.showSuccess(
           context,
-          '${entry.guestName} seated at ${selectedTable.name}!',
+          '${entry.guestName} seated at ${selectedTable.name} in $_currentRestaurantName!',
           title: 'Guest Seated',
         );
       }
     }
   }
 
-  void _notify(QueueEntry entry) {
-    AppToast.show(
-      context,
-      message: 'Notification sent to ${entry.guestName} (${entry.queueNumber})',
-      title: 'Notification Sent',
-      type: ToastType.info,
+  void _notify(QueueEntry entry) async {
+    final restaurantId = _currentRestaurantId;
+    await SupabaseService().updateQueueStatus(
+      queueId: entry.id,
+      status: db.QueueStatus.called,
+      restaurantId: restaurantId,
     );
+
+    if (mounted) {
+      AppToast.show(
+        context,
+        message: 'Notification sent to ${entry.guestName} (${entry.queueNumber})',
+        title: 'Notification Sent',
+        type: ToastType.info,
+      );
+    }
   }
 
   void _removeFromQueue(QueueEntry entry) {
+    final restaurantId = _currentRestaurantId;
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -110,15 +168,19 @@ class _LiveQueueWidgetState extends State<LiveQueueWidget> {
             child: const Text('Cancel', style: TextStyle(color: Color(0xFF6B7280))),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
               setState(() {
                 _queue.removeWhere((e) => e.id == entry.id);
                 _recalculatePositions();
               });
-              SupabaseService().leaveQueue(queueId: entry.id, restaurantId: 'ocean_bistro');
+              await SupabaseService().leaveQueue(
+                queueId: entry.id,
+                restaurantId: restaurantId,
+              );
+              if (!mounted) return;
               AppToast.show(
-                context,
+                this.context,
                 message: '${entry.guestName} removed from queue.',
                 title: 'Queue Updated',
                 type: ToastType.warning,
@@ -151,60 +213,114 @@ class _LiveQueueWidgetState extends State<LiveQueueWidget> {
         // Header Row: Title & Estimated Time
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Live Waitlist Queue',
-              style: TextStyle(
-                color: Color(0xFF111827),
-                fontSize: 22,
-                fontWeight: FontWeight.w900,
-                letterSpacing: -0.5,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Live Waitlist Queue',
+                    style: TextStyle(
+                      color: Color(0xFF111827),
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF7ED),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: const Color(0xFFFFEDD5)),
+                        ),
+                        child: Text(
+                          _currentRestaurantName,
+                          style: const TextStyle(
+                            color: Color(0xFFC2410C),
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '${_queue.length} ${_queue.length == 1 ? 'party' : 'parties'} waiting',
+                        style: const TextStyle(
+                          color: Color(0xFF64748B),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
-            const Text(
-              'Est. 15m',
-              style: TextStyle(
-                color: Color(0xFFF27B50),
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: _queue.isEmpty ? const Color(0xFFF0FDF4) : const Color(0xFFFFF7ED),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: _queue.isEmpty ? const Color(0xFFBBF7D0) : const Color(0xFFFFEDD5),
+                ),
+              ),
+              child: Text(
+                _queue.isEmpty ? 'Direct Seating' : 'Est. ${_queue.length * 5}m wait',
+                style: TextStyle(
+                  color: _queue.isEmpty ? const Color(0xFF16A34A) : const Color(0xFFEA580C),
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 4),
-        Text(
-          '${_queue.length} parties waiting for tables',
-          style: const TextStyle(
-            color: Color(0xFF6B7280),
-            fontSize: 13,
-            fontWeight: FontWeight.w400,
-          ),
-        ),
         const SizedBox(height: 20),
 
         // Queue Cards List
-        if (_queue.isEmpty)
+        if (_isLoading)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 60),
+            child: Center(
+              child: CircularProgressIndicator(
+                color: Color(0xFFFF6B35),
+              ),
+            ),
+          )
+        else if (_queue.isEmpty)
           Container(
-            padding: const EdgeInsets.symmetric(vertical: 60),
+            padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 20),
             alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
             child: Column(
-              children: const [
-                Icon(Icons.check_circle_outline, size: 52, color: Color(0xFF2E9B60)),
-                SizedBox(height: 14),
+              children: [
+                const Icon(Icons.check_circle_outline, size: 52, color: Color(0xFF10B981)),
+                const SizedBox(height: 14),
                 Text(
-                  'No parties in queue!',
-                  style: TextStyle(
+                  'No parties in queue for $_currentRestaurantName!',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF111827),
+                    color: Color(0xFF1E293B),
                   ),
                 ),
-                SizedBox(height: 4),
-                Text(
-                  'All waiting guests have been seated.',
-                  style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+                const SizedBox(height: 4),
+                const Text(
+                  'All waiting guests have been seated. New waitlist entries will appear live.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
                 ),
               ],
             ),
@@ -232,7 +348,7 @@ class _LiveQueueWidgetState extends State<LiveQueueWidget> {
         border: Border.all(color: const Color(0xFFF3F4F6), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.015),
+            color: Colors.black.withValues(alpha: 0.015),
             blurRadius: 8,
             offset: const Offset(0, 4),
           ),
@@ -247,19 +363,26 @@ class _LiveQueueWidgetState extends State<LiveQueueWidget> {
             children: [
               // Circle Avatar with Queue Number
               Container(
-                width: 44,
-                height: 44,
+                width: 48,
+                height: 48,
                 decoration: const BoxDecoration(
                   color: Color(0xFFF27B50),
                   shape: BoxShape.circle,
                 ),
                 alignment: Alignment.center,
-                child: Text(
-                  entry.queueNumber,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
+                padding: const EdgeInsets.all(4),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    entry.queueNumber,
+                    maxLines: 1,
+                    style: const TextStyle(
+                      fontFamily: 'Segoe UI',
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0,
+                    ),
                   ),
                 ),
               ),
