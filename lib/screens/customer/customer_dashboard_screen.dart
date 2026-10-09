@@ -1205,12 +1205,28 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
               }
 
               return GestureDetector(
-                onTap: () {
+                onTap: () async {
+                  RestaurantModel? matched;
+                  try {
+                    matched = await _firestoreService.getRestaurant(res.restaurantId);
+                    if (matched == null) {
+                      final all = await _firestoreService.getActiveRestaurants();
+                      matched = all.cast<RestaurantModel?>().firstWhere(
+                        (r) =>
+                            r != null &&
+                            ((res.restaurantId.isNotEmpty && r.id == res.restaurantId) ||
+                                r.name.toLowerCase() == res.restaurantName.toLowerCase()),
+                        orElse: () => null,
+                      );
+                    }
+                  } catch (_) {}
+                  if (!context.mounted) return;
                   Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (context) => ReservationDetailsScreen(
                         reservation: res,
+                        restaurant: matched,
                         profile: widget.profile,
                       ),
                     ),

@@ -53,6 +53,9 @@ void main() {
     );
 
     expect(find.text('Manager Dashboard'), findsOneWidget);
+    expect(find.text('Ayesha Perera'), findsOneWidget);
+    expect(find.text('MANAGER'), findsOneWidget);
+    expect(find.text('DineQueue'), findsOneWidget);
     expect(find.text('Profile'), findsOneWidget);
 
     // Tap Profile

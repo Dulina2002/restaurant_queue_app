@@ -1,7 +1,10 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:restaurant_queue_app/models/reservation_model.dart';
+import 'package:restaurant_queue_app/models/restaurant_model.dart';
 import 'package:restaurant_queue_app/models/user_role.dart';
+import 'package:restaurant_queue_app/screens/customer/booking/reservation_details_screen.dart';
 import 'package:restaurant_queue_app/services/restaurant_database_service.dart';
 import 'package:restaurant_queue_app/services/auth_service.dart';
 
@@ -123,6 +126,98 @@ void main() {
 
       expect(upcoming, isEmpty);
       expect(history.any((r) => r.id == 'persisted_rsv_777' && r.status == 'cancelled'), isTrue);
+    });
+
+    testWidgets('ReservationDetailsScreen renders long Special Notes without overflow', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 2.5;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      const restaurant = RestaurantModel(
+        id: 'sugarfish',
+        name: 'SUGARFISH',
+        cuisine: 'Sushi',
+        tag: 'Japanese • Sushi',
+        location: 'No. 25, Galle Road, Colombo 03, Sri Lanka',
+        rating: 4.5,
+        reviewsCount: 10,
+        estWait: '0m',
+        waitlistCount: 0,
+        imageUrl: 'https://images.unsplash.com/photo-1579027989536-b7b1f875659b',
+      );
+
+      final reservationWithLongNotes = ReservationModel(
+        id: 'rsv_overflow_test',
+        restaurantId: 'sugarfish',
+        restaurantName: 'SUGARFISH',
+        userId: 'user_test',
+        guestName: 'Dulina nadit',
+        reservationCode: '#RSV802224',
+        date: 'Tuesday, 13 October',
+        time: '6:00 PM',
+        partySize: 6,
+        status: 'confirmed',
+        assignedTable: 'Table 04 (Indoor Window)',
+        specialNotes: 'Table: Table 01 (Main Dining) • Request: Window table near flowers please and high chair needed for infant',
+        createdAt: DateTime.now(),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ReservationDetailsScreen(
+            reservation: reservationWithLongNotes,
+            restaurant: restaurant,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Reservation Details'), findsOneWidget);
+      expect(find.text('Special Notes'), findsOneWidget);
+      expect(find.text('Table: Table 01 (Main Dining) • Request: Window table near flowers please and high chair needed for infant'), findsOneWidget);
+      final err = tester.takeException();
+      if (err is FlutterError) {
+        // ignore: avoid_print
+        print('DEBUG OVERFLOW ERROR DEEP: ${err.toStringDeep()}');
+      }
+      expect(err, isNull);
+    });
+
+    testWidgets('ReservationDetailsScreen displays correct tag and image when restaurant is null', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 2.5;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final reservation = ReservationModel(
+        id: 'rsv_null_resto_test',
+        restaurantId: 'sugarfish',
+        restaurantName: 'SUGARFISH',
+        userId: 'user_test',
+        guestName: 'Dulina nadit',
+        reservationCode: '#RSV802224',
+        date: 'Tuesday, 13 October',
+        time: '6:00 PM',
+        partySize: 6,
+        status: 'confirmed',
+        createdAt: DateTime.now(),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ReservationDetailsScreen(
+            reservation: reservation,
+            restaurant: null,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Tag must be correctly resolved to Sushi, NOT the hardcoded Italian fallback
+      expect(find.text('Sushi'), findsOneWidget);
+      expect(find.text('Italian • Seafood'), findsNothing);
+      expect(find.text('SUGARFISH'), findsOneWidget);
     });
   });
 }
