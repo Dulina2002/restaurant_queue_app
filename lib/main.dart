@@ -1,0 +1,69 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/restaurant_database_service.dart';
+import 'services/restaurant_image_storage.dart';
+import 'screens/auth_gate.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  try {
+    await RestaurantImageStorage().init();
+  } catch (_) {}
+
+  try {
+    await dotenv.load(fileName: ".env");
+  } catch (_) {}
+
+  // Initialize Supabase if credentials are present in .env
+  final supabaseUrl = dotenv.env['SUPABASE_URL'];
+  final supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY'];
+  if (supabaseUrl != null && supabaseUrl.isNotEmpty &&
+      supabaseAnonKey != null && supabaseAnonKey.isNotEmpty) {
+    try {
+      await Supabase.initialize(
+        url: supabaseUrl,
+        anonKey: supabaseAnonKey,
+      );
+      debugPrint('Supabase initialized successfully: $supabaseUrl');
+    } catch (e) {
+      debugPrint('Supabase initialization notice: $e');
+    }
+  }
+
+  runApp(const RestaurantQueueApp());
+
+  // Seed sample dataset asynchronously in background
+  try {
+    RestaurantDatabaseService().seedInitialDataIfEmpty();
+  } catch (_) {}
+}
+
+class RestaurantQueueApp extends StatelessWidget {
+  const RestaurantQueueApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'Restaurant Queue App',
+      theme: ThemeData(
+        fontFamily: 'Segoe UI',
+        fontFamilyFallback: const [
+          'Segoe UI',
+          'Roboto',
+          'Arial',
+          'sans-serif',
+        ],
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFFF27B50),
+          brightness: Brightness.light,
+        ),
+        scaffoldBackgroundColor: const Color(0xFFF4F6F8),
+        useMaterial3: true,
+      ),
+      home: const AuthGate(),
+    );
+  }
+}
