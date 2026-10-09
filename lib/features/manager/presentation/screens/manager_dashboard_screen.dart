@@ -8,6 +8,7 @@ import '../../../../services/restaurant_database_service.dart';
 import '../../../../screens/sign_in_screen.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_toast.dart';
+import '../../../../shared/widgets/role_header_widget.dart';
 import '../../../profile/presentation/screens/edit_profile_screen.dart';
 import '../../data/models/manager_dashboard_model.dart';
 import '../widgets/ai_floor_optimizer_sheet.dart';
@@ -407,68 +408,21 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final activeProfile = _currentProfile ?? widget.profile;
+
     return Scaffold(
       backgroundColor: AppColors.background,
+      appBar: RoleHeaderWidget(
+        roleName: 'MANAGER',
+        roleColor: const Color(0xFFF25430),
+        profile: activeProfile,
+        onProfileUpdated: (updated) => setState(() => _currentProfile = updated),
+        onRoleTap: _showRoleSelectorDialog,
+      ),
       body: SafeArea(
+        top: false,
         child: Column(
           children: [
-            // --- Full Width Top Header Bar (Matching Provided Screenshot) ---
-            GestureDetector(
-              onTap: _showRoleSelectorDialog,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: const BoxDecoration(
-                  color: Color(0xFF0D2017),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF25430),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: const Text(
-                            'MANAGER',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        const Text(
-                          'Tap to switch role',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w400,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const Text(
-                      'DineQueue',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        letterSpacing: -0.2,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
             // --- Scrollable Dashboard Content ---
             Expanded(
               child: SingleChildScrollView(

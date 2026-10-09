@@ -37,6 +37,7 @@ class _AddRestaurantScreenState extends State<AddRestaurantScreen> {
   final _capacityController = TextEditingController();
   final _waitController = TextEditingController(text: '0');
   final _descriptionController = TextEditingController();
+  final _customCuisineController = TextEditingController();
   final ImagePicker _picker = ImagePicker();
 
   File? _pickedImageFile;
@@ -89,6 +90,7 @@ class _AddRestaurantScreenState extends State<AddRestaurantScreen> {
     'Japanese • Sushi',
     'Mediterranean',
     'Cafe & Bakery',
+    'Other',
   ];
 
   @override
@@ -101,6 +103,7 @@ class _AddRestaurantScreenState extends State<AddRestaurantScreen> {
     _capacityController.dispose();
     _waitController.dispose();
     _descriptionController.dispose();
+    _customCuisineController.dispose();
     super.dispose();
   }
 
@@ -340,16 +343,16 @@ class _AddRestaurantScreenState extends State<AddRestaurantScreen> {
   Future<void> _handleSave() async {
     if (!_formKey.currentState!.validate()) return;
     final name = _nameController.text.trim();
-    final cuisine = _selectedCuisine ?? 'Italian • Seafood';
+    final customCuisine = _customCuisineController.text.trim();
+    final cuisine = _selectedCuisine == 'Other'
+        ? (customCuisine.isNotEmpty ? customCuisine : 'Custom')
+        : (_selectedCuisine ?? 'Italian • Seafood');
 
     setState(() => _saving = true);
     try {
-      final location = _addressController.text.trim().isEmpty
-          ? '42 Marine Drive, Colombo 03'
-          : _addressController.text.trim();
-      final phone = _phoneController.text.trim().isEmpty
-          ? '+94 11 257 8899'
-          : _phoneController.text.trim();
+      final location = _addressController.text.trim();
+      final phone = _phoneController.text.trim();
+      final email = _emailController.text.trim();
       final rawWait = _waitController.text.trim();
       final waitMinutes = int.tryParse(rawWait.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
       final waitTime = '${waitMinutes}m';
@@ -402,9 +405,7 @@ class _AddRestaurantScreenState extends State<AddRestaurantScreen> {
         'price': r'$$$',
         'address': location,
         'phone': phone,
-        'email': _emailController.text.trim().isEmpty
-            ? 'contact@$name.com'
-            : _emailController.text.trim(),
+        'email': email,
         'openingHours': _hoursController.text.trim().isEmpty
             ? '11:00 AM - 11:00 PM'
             : _hoursController.text.trim(),
@@ -526,14 +527,43 @@ class _AddRestaurantScreenState extends State<AddRestaurantScreen> {
                         icon: const Icon(Icons.keyboard_arrow_down_rounded,
                             color: AdminTheme.textSecondary),
                         items: _cuisines
-                            .map((c) =>
-                                DropdownMenuItem(value: c, child: Text(c)))
+                            .map((c) => DropdownMenuItem(
+                                  value: c,
+                                  child: c == 'Other'
+                                      ? const Row(
+                                          children: [
+                                            Icon(Icons.add_circle_outline,
+                                                size: 16,
+                                                color: AdminTheme.brandGreen),
+                                            SizedBox(width: 8),
+                                            Text('Other (Custom)'),
+                                          ],
+                                        )
+                                      : Text(c),
+                                ))
                             .toList(),
                         onChanged: (val) =>
                             setState(() => _selectedCuisine = val),
                         validator: (value) =>
                             value == null ? 'Please select a cuisine type' : null,
                       ),
+                      if (_selectedCuisine == 'Other') ...[
+                        const SizedBox(height: 14),
+                        _fieldLabel('Custom Cuisine Type'),
+                        TextFormField(
+                          controller: _customCuisineController,
+                          decoration: AdminTheme.inputDecoration(
+                            hintText: 'e.g. Mexican • Street Food',
+                          ),
+                          validator: (value) {
+                            if (_selectedCuisine == 'Other' &&
+                                (value == null || value.trim().isEmpty)) {
+                              return 'Please enter custom cuisine type';
+                            }
+                            return null;
+                          },
+                        ),
+                      ],
                       const SizedBox(height: 14),
                       _fieldLabel('Address'),
                       TextFormField(
@@ -541,6 +571,10 @@ class _AddRestaurantScreenState extends State<AddRestaurantScreen> {
                         decoration: AdminTheme.inputDecoration(
                           hintText: 'Full street address',
                         ),
+                        validator: (value) =>
+                            value == null || value.trim().isEmpty
+                                ? 'Address is required'
+                                : null,
                       ),
                       const SizedBox(height: 14),
                       _fieldLabel('Contact Number'),
@@ -548,8 +582,18 @@ class _AddRestaurantScreenState extends State<AddRestaurantScreen> {
                         controller: _phoneController,
                         keyboardType: TextInputType.phone,
                         decoration: AdminTheme.inputDecoration(
-                          hintText: '+94 11 XXX XXXX',
+                          hintText: 'e.g. 077 123 4567',
                         ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Contact number is required';
+                          }
+                          final digits = value.replaceAll(RegExp(r'[^0-9]'), '');
+                          if (digits.length != 10) {
+                            return 'Contact number must be 10 digits';
+                          }
+                          return null;
+                        },
                       ),
                       const SizedBox(height: 14),
                       _fieldLabel('Email Address'),
@@ -559,6 +603,17 @@ class _AddRestaurantScreenState extends State<AddRestaurantScreen> {
                         decoration: AdminTheme.inputDecoration(
                           hintText: 'contact@restaurant.com',
                         ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Email address is required';
+                          }
+                          final email = value.trim();
+                          final emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+                          if (!emailRegex.hasMatch(email)) {
+                            return 'Please enter a valid email address';
+                          }
+                          return null;
+                        },
                       ),
                       const SizedBox(height: 14),
                       _fieldLabel('Opening Hours'),

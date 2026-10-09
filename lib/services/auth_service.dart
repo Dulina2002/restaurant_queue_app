@@ -1,10 +1,55 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user_profile.dart';
 import '../models/user_role.dart';
+import 'email_service.dart';
+
+class PendingCustomerRegistration {
+  final String email;
+  final String fullName;
+  final String password;
+  final String code;
+  final DateTime createdAt;
+  final DateTime expiresAt;
+  int attempts;
+
+  PendingCustomerRegistration({
+    required this.email,
+    required this.fullName,
+    required this.password,
+    required this.code,
+    required this.createdAt,
+    required this.expiresAt,
+    this.attempts = 0,
+  });
+
+  bool get isExpired => DateTime.now().isAfter(expiresAt);
+
+  Map<String, dynamic> toJson() => {
+        'email': email,
+        'full_name': fullName,
+        'password': password,
+        'code': code,
+        'created_at': createdAt.toIso8601String(),
+        'expires_at': expiresAt.toIso8601String(),
+        'attempts': attempts,
+      };
+
+  factory PendingCustomerRegistration.fromJson(Map<String, dynamic> json) =>
+      PendingCustomerRegistration(
+        email: json['email'] as String,
+        fullName: json['full_name'] as String,
+        password: json['password'] as String,
+        code: json['code'] as String,
+        createdAt: DateTime.parse(json['created_at'] as String),
+        expiresAt: DateTime.parse(json['expires_at'] as String),
+        attempts: json['attempts'] as int? ?? 0,
+      );
+}
 
 class _LocalCustomerAccount {
   final String email;
@@ -50,9 +95,13 @@ class AuthService {
   static const String _userProfilesPrefix = 'dinequeue_user_profile_';
   static const String _emailToIdPrefix = 'dinequeue_email_to_id_';
   static const String _registeredUserPrefix = 'dinequeue_reg_user_';
+  static const String _pendingCustomerPrefix = 'dinequeue_pending_cust_';
 
   // In-memory cache of registered customer accounts
   final Map<String, _LocalCustomerAccount> _inMemoryCustomerAccounts = {};
+
+  // In-memory registry of pending customer email verifications
+  final Map<String, PendingCustomerRegistration> _pendingRegistrations = {};
 
   // --- Fixed Predefined Staff Roles & Credentials ---
   static final Map<String, _FixedStaffCredential> _fixedStaff = {
@@ -315,12 +364,35 @@ class AuthService {
     return null;
   }
 
+  static String? validateConfirmPassword(String? value, String? password) {
+    if (value == null || value.isEmpty) {
+      return 'Please confirm your password';
+    }
+    if (value != password) {
+      return 'Passwords do not match';
+    }
+    return null;
+  }
+
   static String? validateName(String? value) {
     if (value == null || value.trim().isEmpty) {
       return 'Full name is required';
     }
     if (value.trim().length < 2) {
       return 'Name must be at least 2 characters';
+    }
+    return null;
+  }
+
+  static String? validateVerificationCode(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Verification code is required';
+    }
+    final clean = value.trim().replaceAll(RegExp(r'[\s\-]'), '');
+    if (clean.length < 6 ||
+        clean.length > 8 ||
+        !RegExp(r'^[a-zA-Z0-9]{6,8}$').hasMatch(clean)) {
+      return 'Code must be 6 to 8 characters';
     }
     return null;
   }
@@ -336,20 +408,36 @@ class AuthService {
     await _clearActiveLocalSession();
     final supa = _supabase;
     if (supa != null) {
-      final response = await supa.auth
-          .signInWithPassword(email: cleanEmail, password: password);
-      final user = response.user;
-      if (user == null ||
-          response.session == null ||
-          supa.auth.currentUser?.id != user.id) {
-        throw const AuthException(
-            'Sign-in did not establish an authenticated session.');
-      }
       try {
-        return await _authenticatedProfile(supa, user);
-      } catch (_) {
-        // A session without an authoritative profile must not enter a dashboard.
-        await supa.auth.signOut(scope: SignOutScope.local);
+        final response = await supa.auth
+            .signInWithPassword(email: cleanEmail, password: password);
+        final user = response.user;
+        if (user == null ||
+            response.session == null ||
+            supa.auth.currentUser?.id != user.id) {
+          throw const AuthException(
+              'Sign-in did not establish an authenticated session.');
+        }
+        try {
+          return await _authenticatedProfile(supa, user);
+        } catch (_) {
+          // A session without an authoritative profile must not enter a dashboard.
+          await supa.auth.signOut(scope: SignOutScope.local);
+          rethrow;
+        }
+      } catch (authErr) {
+        // Staff accounts must always authenticate against Supabase.
+        if (_fixedStaff.containsKey(cleanEmail)) {
+          rethrow;
+        }
+        // Verified customer accounts can fall back to locally verified credentials
+        final customer =
+            await _verifyLocalCustomerAccount(cleanEmail, password);
+        if (customer != null && customer.role == UserRole.customer) {
+          _localFallbackProfile = customer;
+          await _saveProfileLocally(customer);
+          return customer;
+        }
         rethrow;
       }
     }
@@ -365,11 +453,28 @@ class AuthService {
 
   Future<UserProfile> _authenticatedProfile(
       SupabaseClient supa, User user) async {
-    final row = await supa
+    Map<String, dynamic>? row = await supa
         .from('profiles')
         .select('id,full_name,role')
         .eq('id', user.id)
         .maybeSingle();
+
+    if (row == null) {
+      final roleStr = (user.userMetadata?['role'] as String?) ?? 'customer';
+      final nameStr = (user.userMetadata?['full_name'] as String?) ??
+          _nameFromEmail(user.email ?? 'Customer');
+      try {
+        await supa.from('profiles').insert({
+          'id': user.id,
+          'role': roleStr,
+          'full_name': nameStr,
+        });
+        row = {'id': user.id, 'role': roleStr, 'full_name': nameStr};
+      } catch (insertErr) {
+        debugPrint('Notice inserting missing profile: $insertErr');
+      }
+    }
+
     if (row == null ||
         row['id'] != user.id ||
         !['customer', 'receptionist', 'manager', 'admin']
@@ -414,20 +519,36 @@ class AuthService {
     try {
       final supa = _supabase;
       if (supa != null) {
-        final res = await supa.auth.signUp(
-          email: cleanEmail,
-          password: cleanPassword,
-          data: {
-            'full_name': cleanName,
-            'role': UserRole.customer.value,
-          },
-        );
-        if (res.user != null) {
-          finalUserId = res.user!.id;
+        try {
+          final res = await supa.auth.signUp(
+            email: cleanEmail,
+            password: cleanPassword,
+            data: {
+              'full_name': cleanName,
+              'role': UserRole.customer.value,
+            },
+          );
+          if (res.user != null) {
+            finalUserId = res.user!.id;
+          }
+        } catch (signUpErr) {
+          debugPrint('Supabase auth signUp notice: $signUpErr');
+          // If user exists, sign in to establish session and obtain authenticated UUID
+          try {
+            final signRes = await supa.auth.signInWithPassword(
+              email: cleanEmail,
+              password: cleanPassword,
+            );
+            if (signRes.user != null) {
+              finalUserId = signRes.user!.id;
+            }
+          } catch (signErr) {
+            debugPrint('Supabase auth signIn notice: $signErr');
+          }
         }
       }
     } catch (e) {
-      debugPrint('Supabase auth signUp notice: $e');
+      debugPrint('Supabase auth notice: $e');
     }
 
     final newProfile = UserProfile(
@@ -442,25 +563,24 @@ class AuthService {
     try {
       final supa = _supabase;
       if (supa != null) {
-        try {
+        // Only insert if finalUserId is a valid UUID
+        final isUuid = RegExp(
+          r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+        ).hasMatch(finalUserId);
+
+        if (isUuid) {
           await supa.from('profiles').upsert({
-            'id': newProfile.id,
+            'id': finalUserId,
             'role': newProfile.role.value,
             'full_name': newProfile.fullName,
-            'email': newProfile.email,
-            'created_at': DateTime.now().toIso8601String(),
           });
-        } catch (_) {
-          try {
-            await supa.from('profiles').upsert({
-              'id': newProfile.id,
-              'role': newProfile.role.value,
-              'full_name': newProfile.fullName,
-            });
-          } catch (_) {}
+          debugPrint(
+              '✅ [AuthService] Successfully saved profile to Supabase profiles table: $finalUserId ($cleanName)');
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('⚠️ [AuthService] Supabase profiles upsert notice: $e');
+    }
 
     // 3. Save locally in device storage & credentials registry
     _localFallbackProfile = newProfile;
@@ -468,6 +588,288 @@ class AuthService {
     await _saveCustomerCredentialsLocally(
         cleanEmail, cleanPassword, newProfile);
     return newProfile;
+  }
+
+  // --- Customer Email Verification Actions ---
+
+  /// Sends a verification code to the customer's specific email address.
+  /// This code is STRICTLY valid for creating a new customer account.
+  Future<String> sendCustomerVerificationCode({
+    required String email,
+    required String fullName,
+    required String password,
+  }) async {
+    final cleanEmail = email.trim().toLowerCase();
+    final cleanPassword = password.trim();
+    final cleanName = fullName.trim();
+
+    // 1. Validate fields
+    final nameErr = validateName(cleanName);
+    if (nameErr != null) throw Exception(nameErr);
+    final emailErr = validateEmail(cleanEmail);
+    if (emailErr != null) throw Exception(emailErr);
+    final passErr = validatePassword(cleanPassword);
+    if (passErr != null) throw Exception(passErr);
+
+    // 2. Reserved staff check: Staff members cannot register or receive customer codes
+    if (_fixedStaff.containsKey(cleanEmail)) {
+      throw Exception(
+        'This email is reserved for system staff. Staff members do not require customer email verification.',
+      );
+    }
+
+    // 4. Generate 6-digit numeric verification code
+    final random = Random();
+    final code = (100000 + random.nextInt(900000)).toString();
+
+    // 5. Send real OTP email to the customer's specific email address
+    // Priority A: Direct SMTP delivery to customer inbox (if SMTP credentials configured)
+    final emailService = EmailService();
+    bool emailDelivered = false;
+
+    if (emailService.isSmtpConfigured) {
+      emailDelivered = await emailService.sendVerificationEmail(
+        recipientEmail: cleanEmail,
+        recipientName: cleanName,
+        verificationCode: code,
+      );
+    }
+
+    // Priority B: Supabase Auth OTP delivery
+    if (!emailDelivered) {
+      try {
+        final supa = _supabase;
+        if (supa != null) {
+          try {
+            await supa.auth.signUp(
+              email: cleanEmail,
+              password: cleanPassword,
+              data: {
+                'full_name': cleanName,
+                'role': UserRole.customer.value,
+              },
+            );
+            debugPrint(
+                '📧 [AuthService] Successfully sent OTP email via Supabase signUp to $cleanEmail');
+          } catch (signUpErr) {
+            debugPrint('[AuthService] Supabase signUp notice: $signUpErr');
+            // If user already exists in Supabase (unconfirmed from previous attempt), resend confirmation
+            try {
+              await supa.auth.resend(
+                email: cleanEmail,
+                type: OtpType.signup,
+              );
+              debugPrint(
+                  '📧 [AuthService] Successfully resent OTP email via Supabase resend to $cleanEmail');
+            } catch (resendErr) {
+              debugPrint('[AuthService] Supabase resend notice: $resendErr');
+              try {
+                await supa.auth.signInWithOtp(
+                  email: cleanEmail,
+                  shouldCreateUser: true,
+                );
+                debugPrint(
+                    '📧 [AuthService] Successfully sent OTP email via Supabase signInWithOtp to $cleanEmail');
+              } catch (otpErr) {
+                debugPrint('[AuthService] Supabase signInWithOtp notice: $otpErr');
+                final allErrors = '$signUpErr $resendErr $otpErr'.toLowerCase();
+                if (allErrors.contains('rate') ||
+                    allErrors.contains('seconds') ||
+                    allErrors.contains('429')) {
+                  throw Exception(
+                    'Please wait 60 seconds before requesting another verification code.',
+                  );
+                }
+              }
+            }
+          }
+        }
+      } catch (e) {
+        final errText = e.toString().toLowerCase();
+        if (errText.contains('rate') || errText.contains('seconds') || errText.contains('429')) {
+          rethrow;
+        }
+        debugPrint('[AuthService] Email dispatch notice: $e');
+      }
+    }
+
+    // 6. Record pending registration (expires in 10 minutes)
+    final pending = PendingCustomerRegistration(
+      email: cleanEmail,
+      fullName: cleanName,
+      password: cleanPassword,
+      code: code,
+      createdAt: DateTime.now(),
+      expiresAt: DateTime.now().add(const Duration(minutes: 10)),
+    );
+    _pendingRegistrations[cleanEmail] = pending;
+    await _savePendingRegistrationLocally(pending);
+
+    debugPrint(
+        '📧 [AuthService] Customer verification code for $cleanEmail: $code (valid for 10 min)');
+    return code;
+  }
+
+  /// Verifies the 6-digit verification code and completes new customer account creation.
+  /// ONLY valid for creating a new customer account.
+  Future<UserProfile> verifyCustomerRegistration({
+    required String email,
+    required String code,
+  }) async {
+    final cleanEmail = email.trim().toLowerCase();
+    final cleanCode = code.trim().replaceAll(RegExp(r'[\s\-]'), '');
+
+    final codeErr = validateVerificationCode(cleanCode);
+    if (codeErr != null) {
+      throw Exception(codeErr);
+    }
+
+    // Prevent staff emails from using customer verification
+    if (_fixedStaff.containsKey(cleanEmail)) {
+      throw Exception(
+        'This email belongs to system staff and cannot be verified as a customer.',
+      );
+    }
+
+    PendingCustomerRegistration? pending = _pendingRegistrations[cleanEmail];
+    pending ??= await _loadPendingRegistrationLocally(cleanEmail);
+
+    if (pending == null) {
+      throw Exception(
+        'No pending registration found for $cleanEmail. Please request a new verification code.',
+      );
+    }
+
+    if (pending.isExpired) {
+      _pendingRegistrations.remove(cleanEmail);
+      await _clearPendingRegistrationLocally(cleanEmail);
+      throw Exception(
+        'Verification code has expired. Please request a new verification code.',
+      );
+    }
+
+    bool isValid = false;
+    if (cleanCode == pending.code) {
+      isValid = true;
+    }
+
+    // Also attempt verification via Supabase OTP (email / signup)
+    final supa = _supabase;
+    if (supa != null) {
+      try {
+        final res = await supa.auth.verifyOTP(
+          email: cleanEmail,
+          token: cleanCode,
+          type: OtpType.email,
+        );
+        if (res.user != null || res.session != null) {
+          isValid = true;
+          try {
+            await supa.auth.updateUser(
+              UserAttributes(password: pending.password),
+            );
+          } catch (_) {}
+        }
+      } catch (e) {
+        debugPrint('[AuthService] Supabase verifyOTP email notice: $e');
+        try {
+          final res = await supa.auth.verifyOTP(
+            email: cleanEmail,
+            token: cleanCode,
+            type: OtpType.signup,
+          );
+          if (res.user != null || res.session != null) {
+            isValid = true;
+          }
+        } catch (_) {}
+      }
+    }
+
+    if (!isValid) {
+      pending.attempts++;
+      if (pending.attempts >= 5) {
+        _pendingRegistrations.remove(cleanEmail);
+        await _clearPendingRegistrationLocally(cleanEmail);
+        throw Exception(
+          'Too many incorrect attempts. This code has been invalidated. Please request a new code.',
+        );
+      }
+      throw Exception(
+        'Invalid verification code. Please check your email and try again.',
+      );
+    }
+
+    // Verification succeeded! Complete customer registration
+    final profile = await signUp(
+      email: pending.email,
+      password: pending.password,
+      fullName: pending.fullName,
+      role: UserRole.customer,
+    );
+
+    // Clean up pending registration
+    _pendingRegistrations.remove(cleanEmail);
+    await _clearPendingRegistrationLocally(cleanEmail);
+
+    return profile;
+  }
+
+  /// Resends a verification code to the specified customer email address.
+  Future<String> resendCustomerVerificationCode(String email) async {
+    final cleanEmail = email.trim().toLowerCase();
+    PendingCustomerRegistration? pending = _pendingRegistrations[cleanEmail];
+    pending ??= await _loadPendingRegistrationLocally(cleanEmail);
+
+    if (pending == null) {
+      throw Exception(
+        'No pending registration found for $cleanEmail. Please fill out the registration form again.',
+      );
+    }
+
+    return await sendCustomerVerificationCode(
+      email: pending.email,
+      fullName: pending.fullName,
+      password: pending.password,
+    );
+  }
+
+  /// Helper for testing and debugging to retrieve pending verification code.
+  String? getPendingCustomerVerificationCode(String email) {
+    final cleanEmail = email.trim().toLowerCase();
+    return _pendingRegistrations[cleanEmail]?.code;
+  }
+
+  Future<void> _savePendingRegistrationLocally(
+      PendingCustomerRegistration pending) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        '$_pendingCustomerPrefix${pending.email}',
+        jsonEncode(pending.toJson()),
+      );
+    } catch (_) {}
+  }
+
+  Future<PendingCustomerRegistration?> _loadPendingRegistrationLocally(
+      String email) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final str = prefs.getString('$_pendingCustomerPrefix$email');
+      if (str != null) {
+        final decoded = jsonDecode(str) as Map<String, dynamic>;
+        final pending = PendingCustomerRegistration.fromJson(decoded);
+        _pendingRegistrations[email] = pending;
+        return pending;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<void> _clearPendingRegistrationLocally(String email) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('$_pendingCustomerPrefix$email');
+    } catch (_) {}
   }
 
   /// Real sessions always use the UUID-linked database profile, not local roles.

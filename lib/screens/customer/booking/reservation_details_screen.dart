@@ -27,12 +27,75 @@ class ReservationDetailsScreen extends StatefulWidget {
 class _ReservationDetailsScreenState extends State<ReservationDetailsScreen> {
   final RestaurantDatabaseService _firestoreService = RestaurantDatabaseService();
   late ReservationModel _currentReservation;
+  RestaurantModel? _restaurant;
   bool _isCancelling = false;
 
   @override
   void initState() {
     super.initState();
     _currentReservation = widget.reservation;
+    _restaurant = widget.restaurant;
+    _loadRestaurantDetails();
+  }
+
+  Future<void> _loadRestaurantDetails() async {
+    if (_restaurant != null &&
+        _restaurant!.imageUrl != null &&
+        _restaurant!.imageUrl!.isNotEmpty &&
+        _restaurant!.tag.isNotEmpty) {
+      return;
+    }
+    try {
+      RestaurantModel? found;
+      if (_currentReservation.restaurantId.isNotEmpty) {
+        found = await _firestoreService.getRestaurant(_currentReservation.restaurantId);
+      }
+      if (found == null || (found.imageUrl?.isEmpty ?? true) || found.tag.isEmpty) {
+        final all = await _firestoreService.getActiveRestaurants();
+        final match = all.cast<RestaurantModel?>().firstWhere(
+              (r) =>
+                  r != null &&
+                  ((_currentReservation.restaurantId.isNotEmpty && r.id == _currentReservation.restaurantId) ||
+                      r.name.trim().toLowerCase() == _currentReservation.restaurantName.trim().toLowerCase()),
+              orElse: () => null,
+            );
+        if (match != null) {
+          found = match;
+        }
+      }
+      if (found != null && mounted) {
+        setState(() {
+          _restaurant = found;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading restaurant details: $e');
+    }
+  }
+
+  String _resolveTag() {
+    if (_restaurant?.tag != null && _restaurant!.tag.trim().isNotEmpty) {
+      return _restaurant!.tag.trim();
+    }
+    if (_restaurant?.cuisine != null && _restaurant!.cuisine.trim().isNotEmpty) {
+      return _restaurant!.cuisine.trim();
+    }
+    final lower = _currentReservation.restaurantName.toLowerCase();
+    if (lower.contains('sushi') || lower.contains('sugarfish') || lower.contains('japanese')) {
+      return 'Sushi';
+    }
+    if (lower.contains('pizza')) return 'Pizza';
+    if (lower.contains('burger')) return 'Burgers';
+    if (lower.contains('crab') || lower.contains('seafood') || lower.contains('ocean')) {
+      return 'Seafood';
+    }
+    if (lower.contains('bistro') || lower.contains('italian')) {
+      return 'Italian';
+    }
+    if (lower.contains('coffee') || lower.contains('cafe')) {
+      return 'Cafe';
+    }
+    return _currentReservation.restaurantName;
   }
 
   void _confirmCancel() {
@@ -138,9 +201,10 @@ class _ReservationDetailsScreenState extends State<ReservationDetailsScreen> {
                           fit: StackFit.expand,
                           children: [
                             RestaurantImage(
-                              imageUrl: widget.restaurant?.imageUrl,
-                              restaurantName: widget.restaurant?.name,
-                              cuisine: widget.restaurant?.cuisine,
+                              imageUrl: _restaurant?.imageUrl,
+                              restaurantId: _restaurant?.id ?? _currentReservation.restaurantId,
+                              restaurantName: _restaurant?.name ?? _currentReservation.restaurantName,
+                              cuisine: _restaurant?.cuisine ?? _resolveTag(),
                               fit: BoxFit.cover,
                             ),
                             Container(
@@ -165,7 +229,7 @@ class _ReservationDetailsScreenState extends State<ReservationDetailsScreen> {
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Text(
-                                  widget.restaurant?.tag ?? 'Italian • Seafood',
+                                  _resolveTag(),
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 11,
@@ -201,25 +265,29 @@ class _ReservationDetailsScreenState extends State<ReservationDetailsScreen> {
                           // Restaurant Name & Status
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    _currentReservation.restaurantName,
-                                    style: const TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: AppColors.textPrimary,
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _currentReservation.restaurantName,
+                                      style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.textPrimary,
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    'Reservation ID ${_currentReservation.reservationCode}',
-                                    style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
-                                  ),
-                                ],
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Reservation ID ${_currentReservation.reservationCode}',
+                                      style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+                                    ),
+                                  ],
+                                ),
                               ),
+                              const SizedBox(width: 8),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                                 decoration: BoxDecoration(
@@ -227,6 +295,7 @@ class _ReservationDetailsScreenState extends State<ReservationDetailsScreen> {
                                   borderRadius: BorderRadius.circular(14),
                                 ),
                                 child: Row(
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Icon(
                                       isConfirmed ? Icons.check_circle_rounded : Icons.cancel_rounded,
@@ -255,7 +324,13 @@ class _ReservationDetailsScreenState extends State<ReservationDetailsScreen> {
                           const SizedBox(height: 14),
                           _buildDetailRow('Guests', '${_currentReservation.partySize} Guests'),
                           const SizedBox(height: 14),
-                          _buildDetailRow('Assigned Table', 'Table 04 (Indoor Window)'),
+                          _buildDetailRow(
+                            'Assigned Table',
+                            (_currentReservation.assignedTable != null &&
+                                    _currentReservation.assignedTable!.isNotEmpty)
+                                ? _currentReservation.assignedTable!
+                                : 'Table 04 (Indoor Window)',
+                          ),
                           const SizedBox(height: 14),
                           _buildDetailRow('Guest Name', _currentReservation.guestName),
                           if (_currentReservation.specialNotes != null && _currentReservation.specialNotes!.isNotEmpty) ...[
@@ -291,7 +366,7 @@ class _ReservationDetailsScreenState extends State<ReservationDetailsScreen> {
                             MaterialPageRoute(
                               builder: (context) => ModifyReservationScreen(
                                 reservation: _currentReservation,
-                                restaurant: widget.restaurant,
+                                restaurant: _restaurant ?? widget.restaurant,
                                 profile: widget.profile,
                               ),
                             ),
@@ -344,12 +419,24 @@ class _ReservationDetailsScreenState extends State<ReservationDetailsScreen> {
 
   Widget _buildDetailRow(String label, String value) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 13, color: AppColors.textMuted)),
         Text(
-          value,
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+          label,
+          style: const TextStyle(fontSize: 13, color: AppColors.textMuted),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+              height: 1.35,
+            ),
+          ),
         ),
       ],
     );

@@ -6,6 +6,7 @@ import 'package:restaurant_queue_app/models/user_profile.dart';
 import 'package:restaurant_queue_app/models/user_role.dart';
 import 'package:restaurant_queue_app/screens/receptionist/receptionist_dashboard_screen.dart';
 import 'package:restaurant_queue_app/services/supabase_service.dart';
+import 'package:restaurant_queue_app/shared/widgets/role_header_widget.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -120,6 +121,27 @@ void main() {
       // Verify ReassignTableDialog is displayed
       expect(find.byType(ReassignTableDialog), findsOneWidget);
       expect(find.text('Confirm Reassignment'), findsOneWidget);
+    });
+
+    testWidgets('Receptionist header renders in green without logout button', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            appBar: RoleHeaderWidget(
+              roleName: 'RECEPTIONIST',
+              roleColor: Color(0xFFFF6B35),
+              profile: dummyReceptionistProfile,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('RECEPTIONIST'), findsOneWidget);
+      expect(find.text('DineQueue'), findsOneWidget);
+      expect(find.text('Receptionist User'), findsOneWidget);
+      // Logout button must be completely removed from header
+      expect(find.byIcon(Icons.logout_rounded), findsNothing);
     });
   });
 }

@@ -256,6 +256,92 @@ void main() {
       final networkImage = imageWidget.image as NetworkImage;
       expect(networkImage.url, equals(adminUploadedUrl));
     });
+
+    testWidgets('AddRestaurantScreen shows custom cuisine field when Other is selected', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AddRestaurantScreen(
+            profile: dummyAdminProfile,
+            adminService: dummyAdminService,
+            onRestaurantAdded: (_) {},
+          ),
+        ),
+      );
+
+      // Initially, custom cuisine field is not visible
+      expect(find.text('Custom Cuisine Type'), findsNothing);
+
+      // Tap the Cuisine dropdown
+      final dropdown = find.byType(DropdownButtonFormField<String>);
+      expect(dropdown, findsOneWidget);
+      await tester.ensureVisible(dropdown);
+      await tester.tap(dropdown);
+      await tester.pumpAndSettle();
+
+      // Tap 'Other (Custom)'
+      final otherOption = find.text('Other (Custom)').last;
+      expect(otherOption, findsOneWidget);
+      await tester.tap(otherOption);
+      await tester.pumpAndSettle();
+
+      // Custom Cuisine Type label and text field should now be visible
+      expect(find.text('Custom Cuisine Type'), findsOneWidget);
+      expect(find.widgetWithText(TextFormField, 'e.g. Mexican • Street Food'), findsOneWidget);
+    });
+
+    testWidgets('AddRestaurantScreen validates Address, Contact Number (10 digits), and Email fields', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AddRestaurantScreen(
+            profile: dummyAdminProfile,
+            adminService: dummyAdminService,
+            onRestaurantAdded: (_) {},
+          ),
+        ),
+      );
+
+      final saveButton = find.text('+ Save Restaurant');
+      await tester.ensureVisible(saveButton);
+      await tester.tap(saveButton);
+      await tester.pumpAndSettle();
+
+      // Check validation error messages
+      expect(find.text('Address is required'), findsOneWidget);
+      expect(find.text('Contact number is required'), findsOneWidget);
+      expect(find.text('Email address is required'), findsOneWidget);
+
+      // Enter invalid contact number (< 10 digits) and invalid email (missing @)
+      final phoneField = find.widgetWithText(TextFormField, 'e.g. 077 123 4567');
+      await tester.enterText(phoneField, '12345');
+
+      final emailField = find.widgetWithText(TextFormField, 'contact@restaurant.com');
+      await tester.enterText(emailField, 'invalid-email');
+
+      await tester.tap(saveButton);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Contact number must be 10 digits'), findsOneWidget);
+      expect(find.text('Please enter a valid email address'), findsOneWidget);
+
+      // Now enter valid 10 digits and valid email
+      await tester.enterText(phoneField, '0771234567');
+      await tester.enterText(emailField, 'contact@dinequeue.com');
+      await tester.tap(saveButton);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Contact number must be 10 digits'), findsNothing);
+      expect(find.text('Please enter a valid email address'), findsNothing);
+    });
   });
 }
 

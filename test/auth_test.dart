@@ -1,9 +1,11 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:restaurant_queue_app/models/user_role.dart';
 import 'package:restaurant_queue_app/models/user_profile.dart';
 import 'package:restaurant_queue_app/services/auth_service.dart';
 import 'package:restaurant_queue_app/screens/auth_gate.dart';
+import 'package:restaurant_queue_app/screens/sign_up_screen.dart';
 import 'package:restaurant_queue_app/screens/receptionist/receptionist_dashboard_screen.dart';
 import 'package:restaurant_queue_app/screens/customer/customer_dashboard_screen.dart';
 import 'package:restaurant_queue_app/screens/manager/manager_dashboard_screen.dart';
@@ -41,6 +43,26 @@ void main() {
       expect(AuthService.validateName(''), isNotNull);
       expect(AuthService.validateName('A'), isNotNull);
       expect(AuthService.validateName('Alex Morgan'), isNull);
+    });
+
+    test('Confirm password validation requires non-empty and matching password', () {
+      expect(AuthService.validateConfirmPassword('', 'secret123'),
+          'Please confirm your password');
+      expect(AuthService.validateConfirmPassword(null, 'secret123'),
+          'Please confirm your password');
+      expect(AuthService.validateConfirmPassword('wrong', 'secret123'),
+          'Passwords do not match');
+      expect(AuthService.validateConfirmPassword('secret123', 'secret123'), isNull);
+    });
+
+    test('Verification code validation supports 6 to 8 characters', () {
+      expect(AuthService.validateVerificationCode(''), isNotNull);
+      expect(AuthService.validateVerificationCode('12345'), isNotNull);
+      expect(AuthService.validateVerificationCode('123456789'), isNotNull);
+      expect(AuthService.validateVerificationCode('123456'), isNull);
+      expect(AuthService.validateVerificationCode('12345678'), isNull);
+      expect(AuthService.validateVerificationCode('1234-5678'), isNull);
+      expect(AuthService.validateVerificationCode('AB12CD'), isNull);
     });
   });
 
@@ -209,6 +231,139 @@ void main() {
       expect(auth.isAuthenticated, isFalse);
       final profile = await auth.getCurrentUserProfile();
       expect(profile, isNull);
+    });
+  });
+
+  group('SignUpScreen Form Validation & Confirm Password', () {
+    testWidgets('renders Confirm Password field and flags password mismatch',
+        (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: SignUpScreen(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Confirm Password'), findsOneWidget);
+      expect(find.text('Create Diner Account'), findsWidgets);
+
+      // Enter mismatched passwords
+      final textFields = find.byType(TextFormField);
+      expect(textFields, findsNWidgets(4)); // Name, Email, Password, Confirm Password
+
+      // Enter name, email, password, and different confirm password
+      await tester.enterText(textFields.at(0), 'Jane Doe');
+      await tester.enterText(textFields.at(1), 'jane@example.com');
+      await tester.enterText(textFields.at(2), 'password123');
+      await tester.enterText(textFields.at(3), 'mismatched123');
+      await tester.pumpAndSettle();
+
+      expect(find.text('Passwords do not match'), findsOneWidget);
+
+      // Correct confirm password
+      await tester.enterText(textFields.at(3), 'password123');
+      await tester.pumpAndSettle();
+
+      expect(find.text('Passwords do not match'), findsNothing);
+    });
+
+    testWidgets('submitting valid registration transitions to Verify Your Email screen',
+        (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: SignUpScreen(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final textFields = find.byType(TextFormField);
+      await tester.enterText(textFields.at(0), 'Alice Cooper');
+      await tester.enterText(textFields.at(1), 'alice.test@dinequeue.com');
+      await tester.enterText(textFields.at(2), 'password123');
+      await tester.enterText(textFields.at(3), 'password123');
+      await tester.pumpAndSettle();
+
+      // Tap Create Diner Account button
+      final createBtn = find.widgetWithText(ElevatedButton, 'Create Diner Account');
+      expect(createBtn, findsOneWidget);
+      await tester.tap(createBtn);
+      await tester.pumpAndSettle();
+
+      // Verification screen should appear
+      expect(find.text('Verify Your Email'), findsOneWidget);
+      expect(find.text('alice.test@dinequeue.com'), findsOneWidget);
+      expect(find.text('Verify & Complete Registration'), findsOneWidget);
+      expect(find.text('Back to Account Form'), findsOneWidget);
+
+      // Tap edit icon on the email badge to return to registration form
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.edit_outlined));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Create Diner Account'), findsWidgets);
+    });
+  });
+
+  group('Customer Email Verification Workflow', () {
+    test('sendCustomerVerificationCode generates 6-digit code for new customer',
+        () async {
+      final auth = AuthService();
+      final code = await auth.sendCustomerVerificationCode(
+        email: 'newcustomer@dinequeue.com',
+        fullName: 'New Customer',
+        password: 'password123',
+      );
+
+      expect(code, isNotNull);
+      expect(code.length, 6);
+      expect(RegExp(r'^\d{6}$').hasMatch(code), isTrue);
+      expect(auth.getPendingCustomerVerificationCode('newcustomer@dinequeue.com'),
+          code);
+    });
+
+    test('Staff email cannot initiate customer verification code', () async {
+      final auth = AuthService();
+      expect(
+        () => auth.sendCustomerVerificationCode(
+          email: 'admin123@gmail.com',
+          fullName: 'Fake Admin',
+          password: 'password123',
+        ),
+        throwsA(isA<Exception>()),
+      );
+    });
+
+    test('verifyCustomerRegistration rejects invalid code and accepts valid code',
+        () async {
+      final auth = AuthService();
+      const testEmail = 'verify_flow@dinequeue.com';
+      final validCode = await auth.sendCustomerVerificationCode(
+        email: testEmail,
+        fullName: 'Verify Tester',
+        password: 'password123',
+      );
+
+      // Wrong code throws exception
+      expect(
+        () => auth.verifyCustomerRegistration(
+          email: testEmail,
+          code: '000000',
+        ),
+        throwsA(isA<Exception>()),
+      );
+
+      // Valid code creates customer profile
+      final profile = await auth.verifyCustomerRegistration(
+        email: testEmail,
+        code: validCode,
+      );
+
+      expect(profile.email, testEmail);
+      expect(profile.role, UserRole.customer);
+      expect(profile.fullName, 'Verify Tester');
+      expect(auth.getPendingCustomerVerificationCode(testEmail), isNull);
     });
   });
 }

@@ -113,17 +113,22 @@ class _CustomerBookingsViewState extends State<CustomerBookingsView> {
   Widget build(BuildContext context) {
     final userId = (widget.profile?.id.isNotEmpty == true) ? widget.profile!.id : 'guest_id';
 
-    return StreamBuilder<List<ReservationModel>>(
-      stream: _firestoreService.streamUserReservations(userId),
-      builder: (context, snapshot) {
-        final allReservations = snapshot.data ?? [];
-        final upcoming = allReservations.where((r) => r.status.toLowerCase() != 'cancelled' && r.status.toLowerCase() != 'completed').toList();
-        final past = allReservations.where((r) => r.status.toLowerCase() == 'completed').toList();
-        final cancelled = allReservations.where((r) => r.status.toLowerCase() == 'cancelled').toList();
+    return StreamBuilder<List<RestaurantModel>>(
+      stream: _firestoreService.streamActiveRestaurants(),
+      builder: (context, restoSnapshot) {
+        final restaurants = restoSnapshot.data ?? [];
 
-        final currentList = _selectedTab == 0
-            ? upcoming
-            : (_selectedTab == 1 ? past : cancelled);
+        return StreamBuilder<List<ReservationModel>>(
+          stream: _firestoreService.streamUserReservations(userId),
+          builder: (context, snapshot) {
+            final allReservations = snapshot.data ?? [];
+            final upcoming = allReservations.where((r) => r.status.toLowerCase() != 'cancelled' && r.status.toLowerCase() != 'completed').toList();
+            final past = allReservations.where((r) => r.status.toLowerCase() == 'completed').toList();
+            final cancelled = allReservations.where((r) => r.status.toLowerCase() == 'cancelled').toList();
+
+            final currentList = _selectedTab == 0
+                ? upcoming
+                : (_selectedTab == 1 ? past : cancelled);
 
         return SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -206,12 +211,14 @@ class _CustomerBookingsViewState extends State<CustomerBookingsView> {
                 ...currentList.map((res) {
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 16),
-                    child: _buildReservationCard(res),
+                    child: _buildReservationCard(res, restaurants),
                   );
                 }),
             ],
           ),
         );
+      },
+    );
       },
     );
   }
@@ -245,9 +252,20 @@ class _CustomerBookingsViewState extends State<CustomerBookingsView> {
     );
   }
 
-  Widget _buildReservationCard(ReservationModel res) {
+  Widget _buildReservationCard(ReservationModel res, [List<RestaurantModel> restaurants = const []]) {
     final isConfirmed = res.status.toLowerCase() == 'confirmed';
     final isCancelled = res.status.toLowerCase() == 'cancelled';
+
+    RestaurantModel? matchedRestaurant;
+    try {
+      matchedRestaurant = restaurants.cast<RestaurantModel?>().firstWhere(
+        (r) =>
+            r != null &&
+            ((res.restaurantId.isNotEmpty && r.id == res.restaurantId) ||
+                r.name.trim().toLowerCase() == res.restaurantName.trim().toLowerCase()),
+        orElse: () => null,
+      );
+    } catch (_) {}
 
     return GestureDetector(
       onTap: () {
@@ -256,6 +274,7 @@ class _CustomerBookingsViewState extends State<CustomerBookingsView> {
           MaterialPageRoute(
             builder: (context) => ReservationDetailsScreen(
               reservation: res,
+              restaurant: matchedRestaurant,
               profile: widget.profile,
             ),
           ),
@@ -386,6 +405,7 @@ class _CustomerBookingsViewState extends State<CustomerBookingsView> {
                       MaterialPageRoute(
                         builder: (context) => ModifyReservationScreen(
                           reservation: res,
+                          restaurant: matchedRestaurant,
                           profile: widget.profile,
                         ),
                       ),
